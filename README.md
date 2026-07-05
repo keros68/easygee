@@ -10,7 +10,7 @@
 
   面向 AI Agent 的 Google Earth Engine / geemap 工作台插件。
 
-  [能力](#能力) · [结构](#结构) · [使用](#使用) · [安全](#安全)
+  [能力](#能力) · [结构](#结构) · [使用](#使用) · [安全](#安全) · [致谢](#致谢)
 </div>
 
 ## 能力
@@ -100,3 +100,18 @@ python C:\Users\Liang\.codex\skills\.system\plugin-creator\scripts\validate_plug
 EasyGEE 默认把浏览器和凭据当作用户私有空间。Agent 可以生成授权计划、启动本地工具、查询安全摘要，但不能要求用户把 OAuth URL、验证码、token、credential 文件、service account key 或短期 access token 粘贴到聊天、日志、文档或提交里。
 
 GeoMaster 以 skill snapshot 形式内置在插件中，而不是嵌套 git 仓库。这样插件保持自包含、轻量、离线可用，也避免把依赖目录、历史仓库状态或未知远端同步进插件包。
+
+## 致谢
+
+EasyGEE 参考并蒸馏了许多开放资料和项目经验。特别感谢：
+
+- [Google Earth Engine 官方文档](https://developers.google.com/earth-engine)：认证、初始化、配额、导出、客户端/服务端模型和遥感工作流的主要依据。
+- [Earth Engine Data Catalog](https://developers.google.com/earth-engine/datasets/) 与 [Earth Engine STAC Catalog](https://storage.googleapis.com/earthengine-stac/catalog/catalog.json)：EasyGEE 数据目录、数据集介绍和图层搜索的核心来源。
+- [GEE Community Catalog](https://gee-community-catalog.org/) 与 [community_datasets.csv](https://github.com/sadassimov/geemu-skill/blob/main/awesome-gee-community-datasets/community_datasets.csv)：用于扩展官方目录之外的社区数据集。
+- [geemap](https://geemap.org/) / [gee-community/geemap](https://github.com/gee-community/geemap)：GEE Python 交互式地图、Notebook 工作流、导出工具和数据集探索模式的重要参考。
+- [Qiusheng Wu 的 Earth-Engine-Catalog](https://github.com/giswqs/Earth-Engine-Catalog)：轻量机器可读 GEE 数据目录索引。
+- [OpenGeoAgent / GeoAgent](https://github.com/opengeos/GeoAgent)、[GeoLibre](https://github.com/opengeos/GeoLibre)、[leafmap](https://leafmap.org/) 与 [anymap](https://github.com/opengeos/anymap)：启发了 EasyGEE 的地图优先、Agent 驱动和本地优先 GIS 工作台设计。
+- [Insight Maps](https://map.insightmaps.app/)：参考了其紧凑地图工具栏、图层目录和专业 Web GIS 交互风格。
+- [netease-youdao/LobsterAI](https://github.com/netease-youdao/LobsterAI)：README 首屏结构、徽章和语言切换排版的参考。
+
+更完整的来源与归因记录见 [skills/easygee/references/SOURCES.md](./skills/easygee/references/SOURCES.md)。
