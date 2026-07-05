@@ -17,7 +17,7 @@
 
 EasyGEE 把 Google Earth Engine、geemap、GeoMaster 方法知识和本地浏览器地图工作台打包成一个可复用插件。它的目标不是复刻 GEE 网页控制台，而是让 Agent 用一句自然语言完成数据查找、授权引导、配额检查、地图预览和本地/云端地理空间分析编排。
 
-- 查找并解释 GEE Catalog 数据集，支持中英文任务描述。
+- 查找并解释 GEE 官方目录和 GEE Community Catalog 数据集，支持中英文任务描述。
 - 标准化 Earth Engine / geemap 授权流程，不暴露 OAuth token、验证码、凭据文件或 service account key。
 - 查询 Earth Engine 项目配额和用量，并把结果转成 Agent 可读的摘要。
 - 生成轻量 EasyGEE Map Console，用于 AOI 绘制、图层叠加、底图切换和视觉检查。

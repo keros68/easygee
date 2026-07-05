@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import base64
 import concurrent.futures
+import csv
 import hashlib
 import html
 import json
@@ -35,9 +36,10 @@ LEAFLET_CDN = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
 LEAFLET_LOCAL = "leaflet-1.9.4.js"
 GEE_CATALOG_INDEX_URL = "https://raw.githubusercontent.com/giswqs/Earth-Engine-Catalog/master/gee_catalog.json"
 GEE_STAC_ROOT_URL = "https://storage.googleapis.com/earthengine-stac/catalog/catalog.json"
+GEE_COMMUNITY_DATASETS_CSV_URL = "https://raw.githubusercontent.com/sadassimov/geemu-skill/main/awesome-gee-community-datasets/community_datasets.csv"
 GEE_CATALOG_URL_BASE = "https://developers.google.com/earth-engine/datasets/catalog/"
 CATALOG_FETCH_TIMEOUT = 20
-CATALOG_CACHE_VERSION = 2
+CATALOG_CACHE_VERSION = 3
 CATALOG_CACHE_MAX_AGE_HOURS = 168
 CATALOG_FETCH_SECONDS = 45
 CATALOG_MAX_URLS = 5000
@@ -188,6 +190,8 @@ def catalog_entry(
     deprecated: bool = False,
     license_name: str = "",
     description: str = "",
+    source_name: str = "official",
+    sample_code: str = "",
 ) -> dict[str, Any]:
     return {
         "id": dataset_id,
@@ -204,6 +208,8 @@ def catalog_entry(
         "deprecated": deprecated,
         "license": license_name,
         "description": description,
+        "source": source_name,
+        "sampleCode": sample_code,
     }
 
 
@@ -218,6 +224,10 @@ def catalog_cache_dir() -> Path:
 
 def official_stac_cache_path() -> Path:
     return catalog_cache_dir() / "official-stac-catalog.json"
+
+
+def community_catalog_cache_path() -> Path:
+    return catalog_cache_dir() / "community-catalog.json"
 
 
 def cached_official_catalog(max_age_hours: int) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:
@@ -251,6 +261,47 @@ def write_official_catalog_cache(entries: list[dict[str, Any]], source: dict[str
     if not entries:
         return
     path = official_stac_cache_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": CATALOG_CACHE_VERSION,
+        "fetchedAt": datetime.now(timezone.utc).isoformat(),
+        "source": source,
+        "catalog": entries,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
+def cached_community_catalog(max_age_hours: int) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:
+    path = community_catalog_cache_path()
+    if not path.exists():
+        return None
+    try:
+        age_seconds = time.time() - path.stat().st_mtime
+        if max_age_hours > 0 and age_seconds > max_age_hours * 3600:
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload.get("version") != CATALOG_CACHE_VERSION:
+            return None
+        entries = payload.get("catalog")
+        if not isinstance(entries, list) or not entries:
+            return None
+        source = {
+            "source": "GEE Community Catalog cache",
+            "url": GEE_COMMUNITY_DATASETS_CSV_URL,
+            "cachePath": str(path),
+            "fetchedAt": payload.get("fetchedAt") or "",
+            "cached": True,
+            "count": len(entries),
+        }
+        return entries, source
+    except Exception:
+        return None
+
+
+def write_community_catalog_cache(entries: list[dict[str, Any]], source: dict[str, Any]) -> None:
+    if not entries:
+        return
+    path = community_catalog_cache_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "version": CATALOG_CACHE_VERSION,
@@ -450,6 +501,8 @@ def curated_catalog_entries() -> list[dict[str, Any]]:
                 )
     except Exception:
         pass
+    for entry in entries.values():
+        entry["source"] = "curated"
     return list(entries.values())
 
 
@@ -501,6 +554,66 @@ def remote_catalog_entries() -> list[dict[str, Any]]:
     return entries
 
 
+def community_catalog_entries(
+    *,
+    refresh: bool = False,
+    max_age_hours: int = CATALOG_CACHE_MAX_AGE_HOURS,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    cached = None if refresh else cached_community_catalog(max_age_hours)
+    if cached:
+        return cached
+
+    with urllib.request.urlopen(GEE_COMMUNITY_DATASETS_CSV_URL, timeout=CATALOG_FETCH_TIMEOUT) as response:
+        text = response.read().decode("utf-8-sig")
+
+    entries: dict[str, dict[str, Any]] = {}
+    for row in csv.DictReader(text.splitlines()):
+        dataset_id = str(row.get("id") or "").strip()
+        if not dataset_id:
+            continue
+        title = str(row.get("title") or dataset_id).strip()
+        thematic_group = str(row.get("thematic_group") or "").strip()
+        provider = str(row.get("provider") or "").strip()
+        kind = str(row.get("type") or "").strip().lower()
+        tags = " ".join(
+            value
+            for value in [
+                "community catalog",
+                thematic_group,
+                str(row.get("tags") or "").strip(),
+                provider,
+                kind,
+            ]
+            if value
+        )
+        entry = catalog_entry(
+            dataset_id,
+            title,
+            tags,
+            kind.replace("_", " ") or "community catalog",
+            str(row.get("docs_page") or "") or catalog_url_for_id(dataset_id),
+            provider=provider,
+            kind=kind,
+            category=thematic_group,
+            thumbnail=str(row.get("thumbnail") or "").strip(),
+            license_name=str(row.get("license") or "").strip(),
+            description=str(row.get("license_text") or "").strip(),
+            source_name="community",
+            sample_code=str(row.get("sample_code") or "").strip(),
+        )
+        entries[dataset_id] = entry
+
+    catalog = sorted(entries.values(), key=lambda item: (str(item.get("label") or item["id"]).casefold(), item["id"]))
+    source = {
+        "source": "GEE Community Catalog",
+        "url": GEE_COMMUNITY_DATASETS_CSV_URL,
+        "count": len(catalog),
+        "cached": False,
+    }
+    write_community_catalog_cache(catalog, source)
+    return catalog, source
+
+
 def build_catalog(
     layers: list[dict[str, Any]],
     include_remote: bool,
@@ -514,9 +627,10 @@ def build_catalog(
     source_url = GEE_STAC_ROOT_URL
     source_extra: dict[str, Any] = {}
     warnings: list[str] = []
+    source_counts: dict[str, int] = {"curated": len(entries)}
     mode = (catalog_mode or "auto").lower()
     if include_remote and mode != "curated":
-        if mode in {"auto", "official"}:
+        if mode in {"auto", "official", "all"}:
             try:
                 official_entries, official_source = official_stac_catalog_entries(
                     refresh=refresh_catalog,
@@ -525,6 +639,7 @@ def build_catalog(
                 )
                 if official_entries:
                     entries.update({entry["id"]: entry for entry in official_entries})
+                    source_counts["official"] = len(official_entries)
                     source = str(official_source.get("source") or "Google Earth Engine STAC")
                     source_url = str(official_source.get("url") or GEE_STAC_ROOT_URL)
                     source_extra = {
@@ -535,11 +650,36 @@ def build_catalog(
                 warnings.extend(str(warning) for warning in official_source.get("warnings") or [])
             except Exception as exc:
                 warnings.append(f"Official STAC catalog fetch failed: {exc}")
+        if mode in {"auto", "all", "community"}:
+            try:
+                community_entries, community_source = community_catalog_entries(
+                    refresh=refresh_catalog,
+                    max_age_hours=catalog_cache_hours,
+                )
+                if community_entries:
+                    for entry in community_entries:
+                        if entry["id"] in entries:
+                            entries[entry["id"]].setdefault("source", "official")
+                            entries[entry["id"]]["communityUrl"] = entry.get("url") or ""
+                            entries[entry["id"]]["sampleCode"] = entry.get("sampleCode") or entries[entry["id"]].get("sampleCode", "")
+                        else:
+                            entries[entry["id"]] = entry
+                    source_counts["community"] = len(community_entries)
+                    if source == "curated fallback":
+                        source = str(community_source.get("source") or "GEE Community Catalog")
+                        source_url = str(community_source.get("url") or GEE_COMMUNITY_DATASETS_CSV_URL)
+                    else:
+                        source = f"{source} + GEE Community Catalog"
+                if community_source.get("cached"):
+                    source_extra["communityCachePath"] = community_source.get("cachePath")
+            except Exception as exc:
+                warnings.append(f"Community catalog fetch failed: {exc}")
         if mode in {"auto", "giswqs"} and source == "curated fallback":
             try:
                 remote_entries = remote_catalog_entries()
                 if remote_entries:
                     entries.update({entry["id"]: entry for entry in remote_entries})
+                    source_counts["giswqs"] = len(remote_entries)
                     source = "Earth Engine Catalog index"
                     source_url = GEE_CATALOG_INDEX_URL
             except Exception as exc:
@@ -548,11 +688,12 @@ def build_catalog(
             warnings.append("Catalog mode giswqs was requested but did not return entries.")
     elif include_remote:
         source = "curated fallback"
-    if include_remote and mode not in {"auto", "official", "giswqs", "curated"}:
+    if include_remote and mode not in {"auto", "official", "giswqs", "curated", "community", "all"}:
         try:
             remote_entries = remote_catalog_entries()
             if remote_entries:
                 entries.update({entry["id"]: entry for entry in remote_entries})
+                source_counts["giswqs"] = len(remote_entries)
                 source = "Earth Engine Catalog index"
                 source_url = GEE_CATALOG_INDEX_URL
         except Exception as exc:
@@ -584,6 +725,7 @@ def build_catalog(
         "officialRoot": GEE_STAC_ROOT_URL,
         "count": len(catalog),
         "warnings": warnings,
+        "counts": source_counts,
         **source_extra,
     }
 
@@ -2297,6 +2439,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "catalog.typeOther": "其他",
         "catalog.favorites": "收藏夹",
         "catalog.favoriteChip": "收藏 (:count)",
+        "catalog.sourceOfficial": "官方",
+        "catalog.sourceCommunity": "社区",
+        "catalog.sourceCurated": "精选",
         "card.mapClick": "地图点击",
         "card.activeLayer": "当前图层",
         "card.legend": "图例",
@@ -2333,7 +2478,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "data.addTitle": "加入地图",
         "data.favoriteTitle": "收藏数据集",
         "data.unfavoriteTitle": "取消收藏",
-        "data.openCatalog": "打开官方目录",
+        "data.openCatalog": "打开数据目录",
         "data.processing": "正在处理并生成图层",
         "data.generated": "已可视化",
         "data.failed": "生成失败",
@@ -2415,7 +2560,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.datasetBuilding": "正在生成数据集图层：:dataset",
         "log.datasetFailed": "数据集生成失败：:dataset",
         "log.catalogLoaded": "目录已刷新：:count 个数据集",
-        "log.catalogOpened": "已打开官方目录：:dataset",
+        "log.catalogOpened": "已打开数据目录：:dataset",
         "log.favoriteAdded": "已收藏数据集：:dataset",
         "log.favoriteRemoved": "已取消收藏数据集：:dataset",
         "log.layerOn": "已显示图层：:layer",
@@ -2465,6 +2610,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "catalog.typeOther": "Other",
         "catalog.favorites": "Favorites",
         "catalog.favoriteChip": "Favorites (:count)",
+        "catalog.sourceOfficial": "Official",
+        "catalog.sourceCommunity": "Community",
+        "catalog.sourceCurated": "Curated",
         "card.mapClick": "Map Click",
         "card.activeLayer": "Active Layer",
         "card.legend": "Legend",
@@ -2501,7 +2649,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "data.addTitle": "Add to map",
         "data.favoriteTitle": "Favorite dataset",
         "data.unfavoriteTitle": "Remove favorite",
-        "data.openCatalog": "Open official catalog",
+        "data.openCatalog": "Open catalog page",
         "data.processing": "Processing and generating layer",
         "data.generated": "Visualized",
         "data.failed": "Generation failed",
@@ -2583,7 +2731,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.datasetBuilding": "Generating dataset layer: :dataset",
         "log.datasetFailed": "Dataset generation failed: :dataset",
         "log.catalogLoaded": "Catalog refreshed: :count datasets",
-        "log.catalogOpened": "Opened official catalog: :dataset",
+        "log.catalogOpened": "Opened catalog page: :dataset",
         "log.favoriteAdded": "Favorited dataset: :dataset",
         "log.favoriteRemoved": "Removed favorite dataset: :dataset",
         "log.layerOn": "Layer on: :layer",
@@ -2875,22 +3023,32 @@ def render_html(state: dict, leaflet_src: str) -> str:
         precipitation: 'climate-atmosphere',
         'water-vapor': 'climate-atmosphere',
         'surface-ground-water': 'water-ocean',
+        hydrology: 'water-ocean',
         water: 'water-ocean',
         ocean: 'water-ocean',
         oceans: 'water-ocean',
+        'oceans and shorelines': 'water-ocean',
         'vegetation-indices': 'vegetation-ecosystems',
         'forest-biomass': 'vegetation-ecosystems',
         'plant-productivity': 'vegetation-ecosystems',
         ecosystems: 'vegetation-ecosystems',
         agriculture: 'vegetation-ecosystems',
+        'agriculture and food security': 'vegetation-ecosystems',
         'landuse-landcover': 'land-cover',
         'land-cover': 'land-cover',
+        'land use land cover': 'land-cover',
         'elevation-topography': 'terrain',
+        elevation: 'terrain',
+        topography: 'terrain',
         population: 'human-built',
         'infrastructure-boundaries': 'human-built',
         'population-built': 'human-built',
+        'infrastructure and boundaries': 'human-built',
         soil: 'soil-geology',
+        soils: 'soil-geology',
+        geology: 'soil-geology',
         fire: 'hazards',
+        disasters: 'hazards',
         cryosphere: 'cryosphere',
         other: 'other',
       }};
@@ -2964,6 +3122,12 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
     function datasetSearchText(item) {{
       return `${{item.id || ''}} ${{item.label || ''}} ${{item.tags || ''}} ${{item.description || ''}} ${{item.scale || ''}} ${{item.provider || ''}} ${{item.type || ''}} ${{item.category || ''}} ${{item.license || ''}}`.toLowerCase();
+    }}
+    function catalogSourceLabel(item) {{
+      const source = String(item.source || '').toLowerCase();
+      if (source === 'community') return t('catalog.sourceCommunity');
+      if (source === 'curated') return t('catalog.sourceCurated');
+      return t('catalog.sourceOfficial');
     }}
     function expandedDatasetTerms(query) {{
       const lower = query.trim().toLowerCase();
@@ -3396,11 +3560,12 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const typeLabel = catalogTypeLabel(normalizeCatalogType(item));
       const favorite = isFavoriteDataset(item.id);
       const favoriteTitle = favorite ? t('data.unfavoriteTitle') : t('data.favoriteTitle');
+      const sourceLabel = catalogSourceLabel(item);
       return `
         <div class="dataset-item ${{activeDatasetId === item.id ? 'active' : ''}}" data-dataset="${{escapeHtml(item.id)}}" role="button" tabindex="0">
           <div>
             <div class="dataset-name">${{escapeHtml(item.label)}}</div>
-            <div class="dataset-meta">${{escapeHtml(item.id)}} | ${{escapeHtml(typeLabel)}} | ${{escapeHtml(item.scale || item.category || '')}}</div>
+            <div class="dataset-meta">${{escapeHtml(item.id)}} | ${{escapeHtml(typeLabel)}} | ${{escapeHtml(sourceLabel)}} | ${{escapeHtml(item.scale || item.category || '')}}</div>
             ${{tags}}
             ${{provider}}
             <div class="dataset-status ${{statusClass}}">${{escapeHtml(statusText)}}</div>
@@ -4128,7 +4293,7 @@ def main() -> int:
         "--catalog-mode",
         choices=("auto", "official", "giswqs", "curated"),
         default="auto",
-        help="Dataset catalog source: official STAC first, giswqs index, or curated fallback",
+        help="Dataset catalog source: auto merges official STAC and community CSV; also supports official, community, all, giswqs, or curated",
     )
     parser.add_argument("--refresh-catalog", action="store_true", help="Refresh the cached official STAC catalog")
     parser.add_argument("--catalog-cache-hours", type=int, default=CATALOG_CACHE_MAX_AGE_HOURS, help="Official STAC cache age")

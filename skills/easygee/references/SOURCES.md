@@ -71,6 +71,7 @@ Reviewed date: 2026-07-04.
 | Earth Engine API GitHub | https://github.com/google/earthengine-api | Upstream Python/JavaScript bindings and release reference. |
 | Earth Engine Community GitHub | https://github.com/google/earthengine-community | Official community tutorial repository and contribution route. |
 | Earth Engine public STAC catalog | https://storage.googleapis.com/earthengine-stac/catalog/catalog.json | Machine-readable official catalog root used to ground dataset discovery and catalog source attribution. |
+| GEE Community datasets CSV | https://github.com/sadassimov/geemu-skill/blob/main/awesome-gee-community-datasets/community_datasets.csv | Machine-readable community dataset index used to expand EasyGEE Add Layers and catalog search beyond the official Earth Engine STAC catalog. |
 
 ## geemap / Qiusheng Wu Sources
 

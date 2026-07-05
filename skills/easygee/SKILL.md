@@ -159,11 +159,15 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   creates the viewer-first EasyGEE Map Console: the map fills the browser by
   default, while layer/catalog, inspector, measure, basemap, task/log, and
   project/quota controls stay compressed behind a small Calcite-inspired icon
-  tool rail and floating drawers. Serve the generated HTML with
-  `serve_map_preview.py`.
+  tool rail and floating drawers. Its Add Layers catalog defaults to official
+  Earth Engine STAC entries plus GEE Community Catalog CSV entries, with source
+  labels so community datasets are not mistaken for official catalog assets.
+  Serve the generated HTML with `serve_map_preview.py`.
 - Use `scripts/search_gee_dataset.py "<task>" --workflow` before selecting
-  datasets for exploratory or Chinese/English task requests; treat results as
-  candidates and verify the chosen dataset in the official catalog.
+  datasets for exploratory or Chinese/English task requests; treat the
+  high-confidence workflow results and expanded official/community catalog
+  results as candidates. Verify official entries in the Google catalog and
+  verify community entries on their community docs/sample code before analysis.
 - Use `scripts/scaffold_geemap_workflow.py` to generate a clean notebook or
   headless script skeleton with explicit project, AOI, dataset, probes, and
   non-started export task code.

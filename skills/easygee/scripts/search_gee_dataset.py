@@ -430,6 +430,61 @@ def geemap_ai_matches(query: str, limit: int) -> list[dict[str, object]]:
     return [{"result": str(matches)}]
 
 
+def expanded_catalog_matches(query: str, limit: int) -> list[dict[str, object]]:
+    try:
+        from create_map_console import build_catalog
+    except Exception as exc:
+        return [{"error": f"expanded catalog unavailable: {exc}"}]
+    try:
+        catalog, source = build_catalog([], include_remote=True, catalog_mode="auto", catalog_fetch_seconds=12)
+    except Exception as exc:
+        return [{"error": f"expanded catalog search failed: {exc}"}]
+    terms = [term.strip().casefold() for term in query.replace("，", " ").replace(",", " ").split() if term.strip()]
+    if not terms:
+        return []
+
+    def haystack(item: dict[str, object]) -> str:
+        return " ".join(
+            str(item.get(key) or "")
+            for key in ("id", "label", "tags", "description", "scale", "provider", "type", "category", "license", "source")
+        ).casefold()
+
+    ranked: list[tuple[int, dict[str, object]]] = []
+    for item in catalog:
+        text = haystack(item)
+        score = 0
+        for term in terms:
+            if not term:
+                continue
+            if term in str(item.get("id") or "").casefold():
+                score += 5
+            if term in str(item.get("label") or "").casefold():
+                score += 4
+            if term in text:
+                score += 1
+        if score > 0:
+            ranked.append((score, item))
+    ranked.sort(key=lambda record: (-record[0], str(record[1].get("source") or ""), str(record[1].get("label") or record[1].get("id") or "")))
+    results = []
+    for score, item in ranked[: max(1, limit)]:
+        results.append(
+            {
+                "id": item.get("id"),
+                "title": item.get("label"),
+                "kind": item.get("type"),
+                "source": item.get("source") or "official",
+                "provider": item.get("provider"),
+                "category": item.get("category"),
+                "url": item.get("url"),
+                "sample_code": item.get("sampleCode"),
+                "license": item.get("license"),
+                "score": score,
+                "verification_rule": "Official catalog entries should be verified in the Google catalog; community entries should be checked on their community docs/sample code before analysis.",
+            }
+        )
+    return results or [{"source": source, "note": "expanded catalog searched but no matching official/community entries were found"}]
+
+
 def candidate_record(score: int, dataset: Dataset) -> dict[str, object]:
     record = asdict(dataset)
     record["score"] = score
@@ -451,6 +506,22 @@ def print_text(results: list[tuple[int, Dataset]], include_workflow: bool) -> No
         print(f"   read: {', '.join(dataset.read)}")
         if include_workflow:
             print(f"   workflow: {' -> '.join(dataset.workflow)}")
+
+
+def print_expanded_catalog(records: list[dict[str, object]]) -> None:
+    if not records:
+        return
+    print("\nExpanded official/community catalog candidates:")
+    for index, item in enumerate(records, start=1):
+        if item.get("error") or item.get("note"):
+            print(f"{index}. {item.get('error') or item.get('note')}")
+            continue
+        print(f"{index}. {item.get('id')} - {item.get('title')}")
+        print(f"   source: {item.get('source')}  kind: {item.get('kind')}")
+        if item.get("provider"):
+            print(f"   provider: {item.get('provider')}")
+        if item.get("url"):
+            print(f"   catalog: {item.get('url')}")
 
 
 def smoke() -> int:
@@ -482,6 +553,7 @@ def main() -> int:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--workflow", action="store_true", help="Print concise workflow hints")
     parser.add_argument("--geemap-ai", action="store_true", help="Also try geemap.ai EarthEngineDatasetIndex")
+    parser.add_argument("--no-expanded-catalog", action="store_true", help="Skip official STAC + community catalog expansion")
     parser.add_argument("--smoke", action="store_true", help="Run built-in bilingual smoke tests")
     args = parser.parse_args()
 
@@ -493,13 +565,17 @@ def main() -> int:
         parser.error("provide a dataset search query")
 
     results = find_datasets(query, args.limit)
+    catalog_candidates = [] if args.no_expanded_catalog else expanded_catalog_matches(query, args.limit)
     if args.json:
         payload: dict[str, object] = {"query": query, "candidates": [candidate_record(score, dataset) for score, dataset in results]}
+        if catalog_candidates:
+            payload["catalog_candidates"] = catalog_candidates
         if args.geemap_ai:
             payload["geemap_ai_candidates"] = geemap_ai_matches(query, args.limit)
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         print_text(results, include_workflow=args.workflow)
+        print_expanded_catalog(catalog_candidates)
         if args.geemap_ai:
             print("\nGeemap AI candidates:")
             print(json.dumps(geemap_ai_matches(query, args.limit), ensure_ascii=False, indent=2))

@@ -17,7 +17,7 @@
 
 EasyGEE packages Google Earth Engine, geemap, GeoMaster method knowledge, and a local browser map console into one reusable agent plugin. It is not trying to clone the classic GEE Code Editor. It helps agents turn natural-language requests into dataset discovery, auth guidance, quota checks, map previews, and hybrid cloud/local geospatial workflows.
 
-- Search and explain GEE Catalog datasets from Chinese or English task prompts.
+- Search and explain datasets from the official GEE catalog and the GEE Community Catalog from Chinese or English task prompts.
 - Standardize Earth Engine / geemap authorization without exposing OAuth tokens, verification codes, credential files, or service account keys.
 - Query Earth Engine quota limits and usage as agent-readable summaries.
 - Generate the lightweight EasyGEE Map Console for AOI drawing, layer overlays, basemap switching, and visual QA.

@@ -57,7 +57,7 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "easygee_search_catalog",
-        "description": "Search likely Google Earth Engine datasets for a task or dataset query.",
+        "description": "Search likely Google Earth Engine datasets for a task or dataset query, including expanded official/community catalog candidates.",
         "inputSchema": _schema(
             {
                 "query": {"type": "string", "description": "Dataset need, task prompt, or analysis goal."},
