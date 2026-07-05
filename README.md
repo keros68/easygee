@@ -43,19 +43,33 @@ easygee/
 
 ### 1. 快速安装
 
-将插件目录放到本机插件目录，例如：
+给 Agent 的一句话安装：
+
+```text
+帮我安装这个插件：[Rimagination/easygee](https://github.com/Rimagination/easygee)
+```
+
+Agent 看到这句话后应完成四件事：克隆或更新仓库、写入个人 marketplace、校验插件、在可用时执行 `codex plugin add easygee@local-plugins`。
+
+在 Windows 上也可以直接运行这一行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command '$p=Join-Path $HOME "plugins\easygee"; if(Test-Path $p){ git -C $p pull --ff-only } else { gh repo clone Rimagination/easygee $p }; & (Join-Path $p "scripts\install-easygee.ps1")'
+```
+
+默认安装位置是：
 
 ```text
 %USERPROFILE%\plugins\easygee
 ```
 
-然后把插件路径加入本地 marketplace。Codex 会从这里发现 EasyGEE：
+安装脚本会把插件路径加入本地 marketplace。Codex 会从这里发现 EasyGEE：
 
 ```text
 C:\Users\Liang\.agents\plugins\marketplace.json
 ```
 
-安装后建议先校验插件结构：
+安装脚本也会校验插件结构；手动校验命令是：
 
 ```powershell
 python C:\Users\Liang\.codex\skills\.system\plugin-creator\scripts\validate_plugin.py C:\Users\Liang\plugins\easygee

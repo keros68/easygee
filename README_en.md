@@ -43,19 +43,33 @@ easygee/
 
 ### 1. Quick Install
 
-Place the plugin folder in your local plugin directory, for example:
+One-sentence agent install:
+
+```text
+Install this plugin for me: [Rimagination/easygee](https://github.com/Rimagination/easygee)
+```
+
+After seeing that sentence, an agent should clone or update the repository, write the personal marketplace entry, validate the plugin, and run `codex plugin add easygee@local-plugins` when the Codex CLI is available.
+
+On Windows, you can also run this one-liner:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command '$p=Join-Path $HOME "plugins\easygee"; if(Test-Path $p){ git -C $p pull --ff-only } else { gh repo clone Rimagination/easygee $p }; & (Join-Path $p "scripts\install-easygee.ps1")'
+```
+
+The default install location is:
 
 ```text
 %USERPROFILE%\plugins\easygee
 ```
 
-Then add the plugin path to the local marketplace. Codex discovers EasyGEE from:
+The installer adds the plugin path to the local marketplace. Codex discovers EasyGEE from:
 
 ```text
 C:\Users\Liang\.agents\plugins\marketplace.json
 ```
 
-After installation, validate the plugin structure:
+The installer also validates the plugin structure. The manual validation command is:
 
 ```powershell
 python C:\Users\Liang\.codex\skills\.system\plugin-creator\scripts\validate_plugin.py C:\Users\Liang\plugins\easygee
