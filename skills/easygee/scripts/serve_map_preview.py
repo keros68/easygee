@@ -15,6 +15,7 @@ import json
 import os
 import socket
 import tempfile
+import threading
 import time
 import urllib.parse
 from dataclasses import asdict, dataclass
@@ -159,6 +160,49 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
 
 CATALOG_CACHE: dict[str, object] | None = None
+SESSION_LOCK = threading.Lock()
+SESSION_STATE: dict[str, object] = {}
+SESSION_SYNCED_AT: float | None = None
+SESSION_ACTIONS: list[dict[str, object]] = []
+SESSION_ACTION_COUNTER = 0
+SESSION_ACTION_LIMIT = 100
+
+
+def contract_path() -> Path:
+    return Path(__file__).resolve().parents[1] / "references" / "map-console-agent-contract.json"
+
+
+def load_agent_contract() -> dict[str, object]:
+    try:
+        payload = json.loads(contract_path().read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            return payload
+    except Exception:
+        pass
+    return {"name": "EasyGEE Map Console Agent Contract", "version": 1}
+
+
+def session_state_payload() -> dict[str, object]:
+    with SESSION_LOCK:
+        return {
+            "ok": True,
+            "state": json.loads(json.dumps(SESSION_STATE, ensure_ascii=False)),
+            "syncedAt": SESSION_SYNCED_AT,
+        }
+
+
+def enqueue_session_action(action: dict[str, object]) -> dict[str, object]:
+    global SESSION_ACTION_COUNTER
+    with SESSION_LOCK:
+        SESSION_ACTION_COUNTER += 1
+        queued = {
+            "id": SESSION_ACTION_COUNTER,
+            "queuedAt": time.time(),
+            **action,
+        }
+        SESSION_ACTIONS.append(queued)
+        del SESSION_ACTIONS[:-SESSION_ACTION_LIMIT]
+        return {"ok": True, "action": queued, "pending": len(SESSION_ACTIONS)}
 
 
 class EasyGeeHandler(QuietHandler):
@@ -185,6 +229,23 @@ class EasyGeeHandler(QuietHandler):
 
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/session/capabilities":
+            self.send_json({"ok": True, "contract": load_agent_contract()})
+            return
+        if parsed.path == "/api/session/state":
+            self.send_json(session_state_payload())
+            return
+        if parsed.path == "/api/session/actions":
+            query = urllib.parse.parse_qs(parsed.query)
+            try:
+                since = int((query.get("since") or ["0"])[0] or "0")
+            except Exception:
+                since = 0
+            with SESSION_LOCK:
+                actions = [action for action in SESSION_ACTIONS if int(action.get("id") or 0) > since]
+                latest = SESSION_ACTION_COUNTER
+            self.send_json({"ok": True, "actions": actions, "latestActionId": latest})
+            return
         if parsed.path == "/api/catalog":
             global CATALOG_CACHE
             try:
@@ -201,11 +262,43 @@ class EasyGeeHandler(QuietHandler):
 
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/session/state":
+            try:
+                payload = self.read_json()
+                state = payload.get("state") if isinstance(payload.get("state"), dict) else payload
+                if not isinstance(state, dict):
+                    raise ValueError("state must be a JSON object")
+                global SESSION_STATE, SESSION_SYNCED_AT
+                with SESSION_LOCK:
+                    SESSION_STATE = json.loads(json.dumps(state, ensure_ascii=False))
+                    SESSION_SYNCED_AT = time.time()
+                self.send_json({"ok": True, "syncedAt": SESSION_SYNCED_AT})
+            except Exception as exc:
+                self.send_json({"ok": False, "error": str(exc)}, status=500)
+            return
+        if parsed.path == "/api/session/actions":
+            try:
+                payload = self.read_json()
+                action = payload.get("action") if isinstance(payload.get("action"), dict) else payload
+                if not isinstance(action, dict):
+                    raise ValueError("action must be a JSON object")
+                self.send_json(enqueue_session_action(action))
+            except Exception as exc:
+                self.send_json({"ok": False, "error": str(exc)}, status=500)
+            return
         if parsed.path == "/api/layer":
             try:
                 from create_map_console import build_catalog_layer
 
                 self.send_json(build_catalog_layer(self.read_json()))
+            except Exception as exc:
+                self.send_json({"ok": False, "error": str(exc)}, status=500)
+            return
+        if parsed.path == "/api/analysis/ndvi":
+            try:
+                from create_map_console import build_ndvi_analysis
+
+                self.send_json(build_ndvi_analysis(self.read_json()))
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, status=500)
             return
@@ -253,6 +346,14 @@ def smoke() -> int:
         file_plan = build_plan(sample, "127.0.0.1", 5000, "EasyGEE Smoke", None)
         if file_plan.root != str(root) or not file_plan.url.endswith("/map.html"):
             print("FAIL: file plan is wrong")
+            return 1
+        contract = load_agent_contract()
+        if contract.get("stateEndpoint") != "/api/session/state":
+            print("FAIL: agent contract was not loaded")
+            return 1
+        action_response = enqueue_session_action({"type": "noop"})
+        if not action_response.get("ok") or not action_response.get("action", {}).get("id"):
+            print("FAIL: session action queue is not working")
             return 1
     print("serve_map_preview smoke passed")
     return 0

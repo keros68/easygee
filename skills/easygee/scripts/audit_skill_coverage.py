@@ -30,6 +30,7 @@ REQUIRED_REFERENCES = [
     "opengeos-patterns.md",
     "evaluation-prompts.md",
     "SOURCES.md",
+    "map-console-agent-contract.json",
 ]
 
 REQUIRED_SCRIPTS = [
@@ -43,6 +44,7 @@ REQUIRED_SCRIPTS = [
     "route_geospatial_method.py",
     "serve_map_preview.py",
     "create_map_console.py",
+    "map_console_agent.py",
     "scaffold_geemap_workflow.py",
     "search_gee_dataset.py",
     "scaffold_gee_template.py",
@@ -408,9 +410,19 @@ def audit(skill_dir: Path) -> list[Check]:
             "dataset-favorite",
             "catalog.favorites",
             "easygee-dataset-favorites",
+            "easygee-aoi:",
+            "easygee-measurements:",
+            "/api/session/state",
+            "/api/session/actions",
+            "window.EasyGEE",
+            "syncState",
+            "pollActions",
+            "getMeasurementSummary",
+            "extractNdvi",
             "STATE =",
         ):
             add(checks, expected in console_text, f"map-console-contains:{expected}", str(console_path))
+        add(checks, "ndvi-btn" not in console_text, "map-console-no-ndvi-toolbar-button", str(console_path))
 
     preview_plan = run_python(skill_dir / "scripts" / "serve_map_preview.py", "--plan", "--title", "EasyGEE Audit", cwd=skill_dir)
     add(checks, preview_plan.returncode == 0, "browser-preview-plan-runs", preview_plan.stderr.strip() or "ran")
@@ -421,6 +433,9 @@ def audit(skill_dir: Path) -> list[Check]:
         "Keep this process running",
     ):
         add(checks, expected in preview_text, f"browser-preview-contains:{expected}", preview_text.strip())
+
+    agent_smoke = run_python(skill_dir / "scripts" / "map_console_agent.py", "smoke", cwd=skill_dir)
+    add(checks, agent_smoke.returncode == 0, "map-console-agent-smoke", agent_smoke.stdout.strip() or agent_smoke.stderr.strip())
 
     search_smoke = run_python(skill_dir / "scripts" / "search_gee_dataset.py", "--smoke", cwd=skill_dir)
     add(checks, search_smoke.returncode == 0, "search-dataset-smoke", search_smoke.stdout.strip() or search_smoke.stderr.strip())

@@ -1,0 +1,39 @@
+{
+  "name": "EasyGEE Map Console Agent Contract",
+  "version": 1,
+  "stateEndpoint": "/api/session/state",
+  "actionsEndpoint": "/api/session/actions",
+  "capabilitiesEndpoint": "/api/session/capabilities",
+  "analysisEndpoints": {
+    "ndvi": "/api/analysis/ndvi"
+  },
+  "stateFields": [
+    "title",
+    "project",
+    "center",
+    "zoom",
+    "bounds",
+    "aoi",
+    "measurements",
+    "measurementSummary",
+    "layers"
+  ],
+  "aoi": {
+    "defaultType": "rectangle",
+    "types": ["rectangle", "polygon"],
+    "coordinateOrder": "latlng"
+  },
+  "measurements": {
+    "fields": ["id", "start", "end", "lengthMeters", "lengthLabel", "createdAt"],
+    "summaryFields": ["count", "totalMeters", "meanMeters", "minMeters", "maxMeters"]
+  },
+  "actions": {
+    "supported": ["addLayer", "setAoi", "clearAoi", "clearMeasurements", "extractNdvi"],
+    "resultSync": "Actions are executed by the browser console and reflected in the next session state sync."
+  },
+  "rules": [
+    "Agents should use this contract or scripts/map_console_agent.py instead of reading generated HTML.",
+    "Do not add task-specific toolbar buttons; analysis results must sync back as normal map layers.",
+    "Generated Earth Engine tile URLs are preview material and should not be copied into chat logs."
+  ]
+}

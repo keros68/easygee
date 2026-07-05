@@ -236,7 +236,20 @@ def gcloud_env() -> dict[str, str]:
     env = os.environ.copy()
     if "CLOUDSDK_PYTHON" not in env and Path(sys.executable).exists():
         env["CLOUDSDK_PYTHON"] = sys.executable
+    env.setdefault("CLOUDSDK_COMPONENT_MANAGER_DISABLE_UPDATE_CHECK", "1")
+    env.setdefault("CLOUDSDK_CORE_DISABLE_PROMPTS", "1")
     return env
+
+
+def gcloud_component_installed(gcloud: str, component: str) -> bool:
+    try:
+        gcloud_path = Path(gcloud).resolve()
+    except OSError:
+        return True
+    if gcloud_path.parent.name.lower() != "bin":
+        return True
+    install_dir = gcloud_path.parent.parent / ".install"
+    return (install_dir / f"{component}.manifest").exists() or (install_dir / f"{component}.snapshot.json").exists()
 
 
 def run_gcloud(gcloud: str, args: list[str], timeout: int = 45) -> subprocess.CompletedProcess[str]:
@@ -411,11 +424,15 @@ def normalize_quota_infos(items: list[dict[str, Any]], source: str) -> list[Quot
 
 def gcloud_quota_infos(gcloud: str, project: str, service: str) -> tuple[list[QuotaRow], str | None, str | None]:
     commands = [
-        (["beta", "quotas", "info", "list"], "gcloud beta quotas info list"),
-        (["alpha", "quotas", "info", "list"], "gcloud alpha quotas info list"),
+        (["beta", "quotas", "info", "list"], "gcloud beta quotas info list", "beta"),
+        (["alpha", "quotas", "info", "list"], "gcloud alpha quotas info list", "alpha"),
     ]
     last_error: str | None = None
-    for prefix, label in commands:
+    skipped: list[str] = []
+    for prefix, label, component in commands:
+        if not gcloud_component_installed(gcloud, component):
+            skipped.append(component)
+            continue
         args = [
             *prefix,
             f"--service={service}",
@@ -438,6 +455,8 @@ def gcloud_quota_infos(gcloud: str, project: str, service: str) -> tuple[list[Qu
             continue
         items = payload if isinstance(payload, list) else payload.get("quotaInfos", [])
         return normalize_quota_infos(items, label), label, None
+    if skipped and not last_error:
+        last_error = "Skipping gcloud quota command groups because local components are not installed: " + ", ".join(skipped)
     return [], None, last_error
 
 

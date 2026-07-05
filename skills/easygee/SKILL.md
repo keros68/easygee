@@ -163,6 +163,11 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   Earth Engine STAC entries plus GEE Community Catalog CSV entries, with source
   labels so community datasets are not mistaken for official catalog assets.
   Serve the generated HTML with `serve_map_preview.py`.
+- Use `scripts/map_console_agent.py` for agent-facing Map Console work. Prefer
+  its `capabilities`, `state`, `aoi`, `measurement-summary`, and `extract-ndvi`
+  commands over reading generated HTML or browser DOM. The script talks to the
+  local preview server's compact `/api/session/*` protocol and can enqueue
+  browser-visible layer actions.
 - Use `scripts/search_gee_dataset.py "<task>" --workflow` before selecting
   datasets for exploratory or Chinese/English task requests; treat the
   high-confidence workflow results and expanded official/community catalog
@@ -229,6 +234,18 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   by `create_map_console.py` over ad hoc Leaflet/geemap HTML. Treat it as a
   local diagnostic workbench inspired by GEE Code Editor and GeoLibre patterns,
   not as proof that the underlying analysis is statistically correct.
+- Keep the Map Console tool rail stable. Do not add task-specific toolbar
+  buttons for analyses such as NDVI; run those actions in the background and
+  sync the result back as normal layers in the existing layer stack.
+- Treat AOI and measurement data as first-class console state. The console
+  exposes `window.EasyGEE.getAoi()`, `setAoi()`, `getMeasurements()`,
+  `getMeasurementSummary()`, and `extractNdvi()` for follow-up automation.
+  Default AOI drawing is rectangular; polygon AOI is supported through the same
+  AOI tool state/API without expanding the fixed toolbar.
+- For token-efficient follow-up work, read `references/map-console-agent-contract.json`
+  or run `map_console_agent.py capabilities` once, then use the agent protocol
+  cache. Do not reread the generated Map Console HTML/CSS or `create_map_console.py`
+  merely to discover stable UI capabilities.
 - Do not call `ee.Authenticate()` automatically from reusable scripts. Put auth
   in a setup cell, setup command, or explicit user-guided step because OAuth
   opens a browser or asks the user to complete a code flow.

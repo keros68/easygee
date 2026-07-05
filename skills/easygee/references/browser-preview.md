@@ -86,6 +86,21 @@ Generated Earth Engine tile URLs are local preview material. Do not commit the
 HTML page or copy tile URLs into chat/logs; regenerate the console when tiles
 expire or the analysis changes.
 
+AOI and measurement state are part of the workbench, not disposable page
+scratch. Use `window.EasyGEE.getAoi()` for follow-up analysis after the user
+draws an AOI, `window.EasyGEE.getMeasurements()` /
+`getMeasurementSummary()` after repeated distance measurements, and
+`window.EasyGEE.extractNdvi()` for Sentinel-2 NDVI extraction. These actions
+must sync results back into the existing layer stack; do not add task-specific
+toolbar buttons or generate a separate one-off HTML page for the same map
+session.
+
+For agent automation, prefer `scripts/map_console_agent.py` and the compact
+contract in `map-console-agent-contract.json` over reading generated HTML. The
+Map Console syncs its current state to `/api/session/state` and polls
+`/api/session/actions`; agents can read AOI/measurements as small JSON and
+enqueue layer updates after background analysis.
+
 ## When To Use This
 
 - Interactive geemap map previews.

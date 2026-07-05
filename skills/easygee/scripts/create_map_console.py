@@ -44,6 +44,7 @@ CATALOG_CACHE_MAX_AGE_HOURS = 168
 CATALOG_FETCH_SECONDS = 45
 CATALOG_MAX_URLS = 5000
 CATALOG_MAX_WORKERS = 32
+S2_NDVI_DERIVED_IDS = {"EASYGEE/S2_NDVI", "easygee:s2-ndvi", "s2-ndvi", "ndvi"}
 SKILL_DIR = Path(__file__).resolve().parents[1]
 ASSETS_DIR = SKILL_DIR / "assets"
 EASYGEE_LOGO = ASSETS_DIR / "easygee-logo-square-simple-256.png"
@@ -468,6 +469,16 @@ def official_stac_catalog_entries(
 def curated_catalog_entries() -> list[dict[str, Any]]:
     entries: dict[str, dict[str, Any]] = {}
     seeds = [
+        catalog_entry(
+            "EASYGEE/S2_NDVI",
+            "Sentinel-2 NDVI (Cloud Score+)",
+            "ndvi vegetation sentinel cloud score plus easygee derived 植被 归一化差异植被指数",
+            "10 m",
+            catalog_url_for_id("COPERNICUS/S2_SR_HARMONIZED"),
+            provider="EasyGEE",
+            kind="derived",
+            source_name="derived",
+        ),
         catalog_entry("COPERNICUS/S2_SR_HARMONIZED", "Sentinel-2 SR", "optical rgb ndvi vegetation 哨兵 光学 植被", "10 m"),
         catalog_entry("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED", "Cloud Score+", "sentinel cloud mask qa 云 掩膜", "10 m"),
         catalog_entry("COPERNICUS/S2_CLOUD_PROBABILITY", "Sentinel-2 Cloud Probability", "sentinel cloud probability s2cloudless 云概率", "10 m"),
@@ -753,6 +764,139 @@ def normalize_bounds(bounds: Any) -> tuple[float, float, float, float]:
     return west, south, east, north
 
 
+def normalize_latlng_pair(pair: Any) -> tuple[float, float]:
+    try:
+        lat = float(pair[0])
+        lon = float(pair[1])
+    except Exception as exc:
+        raise ValueError("AOI coordinates must be [lat, lon] pairs") from exc
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        raise ValueError("AOI coordinates are outside valid longitude/latitude ranges")
+    return lat, lon
+
+
+def normalize_lonlat_pair(pair: Any) -> tuple[float, float]:
+    try:
+        lon = float(pair[0])
+        lat = float(pair[1])
+    except Exception as exc:
+        raise ValueError("GeoJSON AOI coordinates must be [lon, lat] pairs") from exc
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        raise ValueError("AOI coordinates are outside valid longitude/latitude ranges")
+    return lat, lon
+
+
+def aoi_bounds_from_coordinates(coordinates: list[list[float]]) -> tuple[float, float, float, float]:
+    if len(coordinates) < 3:
+        raise ValueError("polygon AOI must contain at least three vertices")
+    lats = [point[0] for point in coordinates]
+    lons = [point[1] for point in coordinates]
+    south, north = min(lats), max(lats)
+    west, east = min(lons), max(lons)
+    if south >= north or west >= east:
+        raise ValueError("AOI bounds must have south < north and west < east")
+    return west, south, east, north
+
+
+def normalize_polygon_coordinates(aoi: dict[str, Any]) -> list[list[float]]:
+    raw = aoi.get("coordinates") or aoi.get("latLngs") or aoi.get("points")
+    if raw is None and isinstance(aoi.get("geometry"), dict):
+        return normalize_polygon_coordinates(aoi["geometry"])
+    if not isinstance(raw, list) or not raw:
+        raise ValueError("polygon AOI must include coordinates")
+    coordinate_order = str(aoi.get("coordinateOrder") or "").lower()
+    if raw and isinstance(raw[0], list) and raw[0] and isinstance(raw[0][0], list):
+        ring = raw[0]
+        points = [normalize_lonlat_pair(point) for point in ring]
+    elif coordinate_order == "lonlat":
+        points = [normalize_lonlat_pair(point) for point in raw]
+    else:
+        points = [normalize_latlng_pair(point) for point in raw]
+
+    deduped: list[list[float]] = []
+    for lat, lon in points:
+        if deduped and abs(deduped[-1][0] - lat) < 1e-12 and abs(deduped[-1][1] - lon) < 1e-12:
+            continue
+        deduped.append([lat, lon])
+    if len(deduped) > 3 and abs(deduped[0][0] - deduped[-1][0]) < 1e-12 and abs(deduped[0][1] - deduped[-1][1]) < 1e-12:
+        deduped.pop()
+    if len(deduped) < 3:
+        raise ValueError("polygon AOI must contain at least three distinct vertices")
+    aoi_bounds_from_coordinates(deduped)
+    return deduped
+
+
+def normalize_aoi(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return a stable AOI dict from a new AOI payload or legacy bounds."""
+    raw_aoi = payload.get("aoi") if isinstance(payload.get("aoi"), dict) else None
+    if not raw_aoi:
+        west, south, east, north = normalize_bounds(payload.get("bounds"))
+        return {
+            "type": "rectangle",
+            "bounds": [[south, west], [north, east]],
+            "coordinates": [[south, west], [south, east], [north, east], [north, west]],
+            "coordinateOrder": "latlng",
+        }
+
+    if str(raw_aoi.get("type") or "").lower() == "feature" and isinstance(raw_aoi.get("geometry"), dict):
+        raw_aoi = raw_aoi["geometry"]
+    aoi_type = str(raw_aoi.get("type") or "").lower()
+    if aoi_type in {"polygon", "multipolygon"}:
+        coordinates = normalize_polygon_coordinates(raw_aoi)
+        west, south, east, north = aoi_bounds_from_coordinates(coordinates)
+        return {
+            "type": "polygon",
+            "bounds": [[south, west], [north, east]],
+            "coordinates": coordinates,
+            "coordinateOrder": "latlng",
+        }
+
+    bounds = raw_aoi.get("bounds") or raw_aoi.get("bbox") or payload.get("bounds")
+    west, south, east, north = normalize_bounds(bounds)
+    return {
+        "type": "rectangle",
+        "bounds": [[south, west], [north, east]],
+        "coordinates": [[south, west], [south, east], [north, east], [north, west]],
+        "coordinateOrder": "latlng",
+    }
+
+
+def ee_geometry_from_aoi(ee: Any, aoi: dict[str, Any]) -> Any:
+    if aoi.get("type") == "polygon":
+        ring = [[lon, lat] for lat, lon in aoi["coordinates"]]
+        return ee.Geometry.Polygon([ring], None, False)
+    west, south, east, north = normalize_bounds(aoi["bounds"])
+    return ee.Geometry.Rectangle([west, south, east, north], None, False)
+
+
+def sentinel2_ndvi_image(
+    ee: Any,
+    roi: Any,
+    start_date: str,
+    end_date: str,
+    cloud_pct: float,
+    warnings: list[str],
+    cloud_score_min: float = 0.60,
+) -> tuple[Any, Any, str]:
+    collection = (
+        ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+        .filterBounds(roi)
+        .filterDate(start_date, end_date)
+        .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", cloud_pct))
+    )
+    method = "sentinel-2-ndvi"
+    try:
+        collection = collection.linkCollection(
+            ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"),
+            ["cs_cdf"],
+        ).map(lambda image: image.updateMask(image.select("cs_cdf").gte(cloud_score_min)))
+        method = "sentinel-2-ndvi-cloud-score"
+    except Exception:
+        warnings.append("Cloud Score+ masking was unavailable; using CLOUDY_PIXEL_PERCENTAGE only.")
+    image = collection.median().normalizedDifference(["B8", "B4"]).rename("NDVI").clip(roi)
+    return image, collection, method
+
+
 def safe_band_names(image: Any, limit: int = 16) -> list[str]:
     try:
         bands = image.bandNames().getInfo()
@@ -845,6 +989,9 @@ def known_catalog_image(
     cloud_pct: float,
     warnings: list[str],
 ) -> tuple[Any, dict[str, Any], str, str, list[list[str]], str] | None:
+    if dataset_id in S2_NDVI_DERIVED_IDS:
+        image, _, method = sentinel2_ndvi_image(ee, roi, start_date, end_date, cloud_pct, warnings)
+        return image, {"min": 0, "max": 0.8, "palette": ["#2c105c", "#4856a5", "#31a354", "#addd8e", "#f7fcb9"]}, "Sentinel-2 NDVI", "ee-derived", [["#2c105c", "Low"], ["#31a354", "Medium"], ["#f7fcb9", "High"]], method
     if dataset_id == "COPERNICUS/S2_SR_HARMONIZED":
         image = (
             ee.ImageCollection(dataset_id)
@@ -926,7 +1073,8 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("datasetId is required")
     if not project or project == DEFAULT_PROJECT:
         raise ValueError("A concrete Earth Engine project id is required")
-    west, south, east, north = normalize_bounds(payload.get("bounds"))
+    aoi = normalize_aoi(payload)
+    west, south, east, north = normalize_bounds(aoi["bounds"])
     start_date = str(payload.get("startDate") or "2024-01-01")
     end_date = str(payload.get("endDate") or datetime.now(timezone.utc).date().isoformat())
     try:
@@ -936,7 +1084,7 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
     catalog_item = payload.get("catalogItem") if isinstance(payload.get("catalogItem"), dict) else {}
 
     ee.Initialize(project=project)
-    roi = ee.Geometry.Rectangle([west, south, east, north], None, False)
+    roi = ee_geometry_from_aoi(ee, aoi)
     warnings: list[str] = []
 
     def tile_url(image: Any, vis: dict[str, Any]) -> str:
@@ -1008,7 +1156,7 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
                     raise ValueError("; ".join(attempts)) from vector_exc
 
     layer = {
-        "id": layer_id_for_dataset(f"{dataset_id}:{start_date}:{end_date}:{west:.5f}:{south:.5f}:{east:.5f}:{north:.5f}"),
+        "id": layer_id_for_dataset(f"{dataset_id}:{start_date}:{end_date}:{hashlib.sha1(json.dumps(aoi, sort_keys=True).encode('utf-8')).hexdigest()[:10]}"),
         "name": name,
         "dataset": dataset_id,
         "type": layer_type,
@@ -1017,10 +1165,115 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
         "tileUrl": tile_url(image, vis),
         "legend": legend,
         "method": method,
+        "aoi": aoi,
+        "bounds": aoi["bounds"],
         "warnings": warnings,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
     }
     return {"ok": True, "layer": layer, "warnings": warnings}
+
+
+def build_ndvi_analysis(payload: dict[str, Any]) -> dict[str, Any]:
+    import ee
+
+    project = str(payload.get("project") or DEFAULT_PROJECT).strip()
+    if not project or project == DEFAULT_PROJECT:
+        raise ValueError("A concrete Earth Engine project id is required")
+    aoi = normalize_aoi(payload)
+    start_date = str(payload.get("startDate") or "2024-01-01")
+    end_date = str(payload.get("endDate") or datetime.now(timezone.utc).date().isoformat())
+    try:
+        cloud_pct = float(payload.get("cloudPct") or 80)
+    except Exception:
+        cloud_pct = 80.0
+    try:
+        scale = float(payload.get("scale") or 10)
+    except Exception:
+        scale = 10.0
+
+    ee.Initialize(project=project)
+    roi = ee_geometry_from_aoi(ee, aoi)
+    warnings: list[str] = []
+    ndvi, collection, method = sentinel2_ndvi_image(ee, roi, start_date, end_date, cloud_pct, warnings)
+    vis = {"min": 0, "max": 0.8, "palette": ["#2c105c", "#4856a5", "#31a354", "#addd8e", "#f7fcb9"]}
+    reducer = (
+        ee.Reducer.mean()
+        .combine(ee.Reducer.median(), sharedInputs=True)
+        .combine(ee.Reducer.minMax(), sharedInputs=True)
+        .combine(ee.Reducer.stdDev(), sharedInputs=True)
+        .combine(ee.Reducer.count(), sharedInputs=True)
+    )
+    stats = ndvi.reduceRegion(
+        reducer=reducer,
+        geometry=roi,
+        scale=scale,
+        bestEffort=True,
+        maxPixels=1_000_000_000,
+        tileScale=4,
+    ).getInfo()
+    valid_area = (
+        ee.Image.pixelArea()
+        .updateMask(ndvi.mask())
+        .rename("valid_ndvi_area_m2")
+        .reduceRegion(
+            reducer=ee.Reducer.sum(),
+            geometry=roi,
+            scale=scale,
+            bestEffort=True,
+            maxPixels=1_000_000_000,
+            tileScale=4,
+        )
+        .getInfo()
+    )
+    try:
+        scene_count = int(collection.size().getInfo())
+    except Exception:
+        scene_count = None
+    summary = {
+        "dataset": "COPERNICUS/S2_SR_HARMONIZED",
+        "index": "NDVI",
+        "method": method,
+        "project": project,
+        "startDate": start_date,
+        "endDate": end_date,
+        "cloudPct": cloud_pct,
+        "scale": scale,
+        "aoi": aoi,
+        "aoiAreaM2": roi.area(maxError=1).getInfo(),
+        "validNdviAreaM2": valid_area.get("valid_ndvi_area_m2"),
+        "sceneCount": scene_count,
+        "mean": stats.get("NDVI_mean"),
+        "median": stats.get("NDVI_median"),
+        "min": stats.get("NDVI_min"),
+        "max": stats.get("NDVI_max"),
+        "stdDev": stats.get("NDVI_stdDev"),
+        "count": stats.get("NDVI_count"),
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    layer = {
+        "id": layer_id_for_dataset(
+            "easygee-s2-ndvi:"
+            + start_date
+            + ":"
+            + end_date
+            + ":"
+            + hashlib.sha1(json.dumps(aoi, sort_keys=True).encode("utf-8")).hexdigest()[:10]
+        ),
+        "name": "Sentinel-2 NDVI",
+        "dataset": "EASYGEE/S2_NDVI",
+        "type": "ee-derived",
+        "shown": True,
+        "opacity": 0.86,
+        "tileUrl": ndvi.getMapId(vis)["tile_fetcher"].url_format,
+        "legend": [["#2c105c", "Low"], ["#31a354", "Medium"], ["#f7fcb9", "High"]],
+        "method": method,
+        "aoi": aoi,
+        "bounds": aoi["bounds"],
+        "summary": summary,
+        "warnings": warnings,
+        "generatedAt": summary["generatedAt"],
+    }
+    return {"ok": True, "layer": layer, "summary": summary, "warnings": warnings}
 
 
 def sample_quota_state(project: str) -> dict[str, Any]:
@@ -1918,7 +2171,17 @@ def shell_css() -> str:
     .dataset-detail-link:hover, .dataset-detail-command:hover { filter: brightness(0.98); }
     .map-wrap { position: fixed; inset: 0; min-width: 0; min-height: 0; background: #dfe7e2; }
     #map { position: absolute; inset: 0; width: 100%; height: 100%; }
-    #map.draw-aoi { cursor: crosshair; }
+    #map.draw-aoi, #map.draw-polygon { cursor: crosshair; }
+    .leaflet-tooltip.measure-label {
+      border: 1px solid rgba(22, 115, 77, 0.26);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.92);
+      color: var(--accent);
+      box-shadow: 0 2px 10px rgba(16,24,40,0.10);
+      font-size: 11px;
+      font-weight: 760;
+      padding: 2px 6px;
+    }
     .mode-chip {
       position: absolute;
       left: 58px;
@@ -2612,6 +2875,13 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.aoiDone": "AOI 已更新",
         "mode.aoiOff": "AOI 绘制已关闭",
         "mode.aoiTooSmall": "AOI 太小",
+        "mode.polygonStart": "多边形 AOI：点击添加顶点，双击或按 Enter 完成",
+        "mode.polygonVertex": "多边形 AOI：已添加 :count 个顶点",
+        "mode.polygonTooSmall": "多边形 AOI 至少需要 3 个顶点",
+        "mode.ndviBuilding": "正在提取当前 AOI 的 NDVI",
+        "mode.ndviDone": "NDVI 均值 :mean，像元 :count",
+        "mode.ndviNoAoi": "请先绘制 AOI 再提取 NDVI",
+        "mode.ndviFailed": "NDVI 提取失败：:message",
         "quota.project": "项目：:project",
         "quota.tier": "用量层级：:tier",
         "quota.tierInferred": "用量层级：:tier",
@@ -2658,6 +2928,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.measureOff": "测距已关闭",
         "mode.measureEndpoint": "测距：选择终点",
         "mode.distance": "距离：:distance",
+        "mode.measureSaved": "测量已保存：:distance（共 :count 条，均值 :mean）",
         "basemap.osm": "OpenStreetMap",
         "basemap.osmNote": "道路与标注",
         "basemap.light": "浅色",
@@ -2686,9 +2957,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.aoiOn": "AOI 绘制模式已开启",
         "log.aoiOff": "AOI 绘制模式已关闭",
         "log.aoiDrawn": "AOI 已更新：:bounds",
+        "log.aoiRestored": "已从本地状态恢复 AOI",
+        "log.ndviStarted": "已开始 NDVI 提取",
+        "log.ndviDone": "NDVI 摘要已生成：均值 :mean",
+        "log.ndviFailed": "NDVI 提取失败",
         "log.measureOn": "测距模式已开启",
         "log.measureOff": "测距模式已关闭",
         "log.measured": "测得距离：:distance",
+        "log.measureSummary": "测量统计：共 :count 条，均值 :mean",
         "log.copied": "项目状态已复制",
         "log.clipboardUnavailable": "剪贴板不可用",
         "log.downloaded": "项目 JSON 已下载",
@@ -2801,6 +3077,13 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.aoiDone": "AOI updated",
         "mode.aoiOff": "AOI draw off",
         "mode.aoiTooSmall": "AOI too small",
+        "mode.polygonStart": "Polygon AOI: add vertices, double-click or Enter to finish",
+        "mode.polygonVertex": "Polygon AOI: :count vertices",
+        "mode.polygonTooSmall": "Polygon AOI needs at least 3 vertices",
+        "mode.ndviBuilding": "Extracting NDVI for current AOI",
+        "mode.ndviDone": "NDVI mean :mean from :count pixels",
+        "mode.ndviNoAoi": "Draw an AOI before extracting NDVI",
+        "mode.ndviFailed": "NDVI failed: :message",
         "quota.project": "Project: :project",
         "quota.tier": "Usage tier: :tier",
         "quota.tierInferred": "Usage tier: :tier",
@@ -2847,6 +3130,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.measureOff": "Measure off",
         "mode.measureEndpoint": "Measure: choose endpoint",
         "mode.distance": "Distance: :distance",
+        "mode.measureSaved": "Measurement saved: :distance (:count total, mean :mean)",
         "basemap.osm": "OpenStreetMap",
         "basemap.osmNote": "Roads and labels",
         "basemap.light": "Light",
@@ -2875,9 +3159,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.aoiOn": "AOI draw mode on",
         "log.aoiOff": "AOI draw mode off",
         "log.aoiDrawn": "AOI updated: :bounds",
+        "log.aoiRestored": "AOI restored from local state",
+        "log.ndviStarted": "NDVI extraction started",
+        "log.ndviDone": "NDVI summary ready: mean :mean",
+        "log.ndviFailed": "NDVI extraction failed",
         "log.measureOn": "Measure mode on",
         "log.measureOff": "Measure mode off",
         "log.measured": "Measured distance: :distance",
+        "log.measureSummary": "Measurements: :count total, mean :mean",
         "log.copied": "Project state copied",
         "log.clipboardUnavailable": "Clipboard write unavailable",
         "log.downloaded": "Project JSON downloaded",
@@ -2901,6 +3190,16 @@ def render_html(state: dict, leaflet_src: str) -> str:
     let catalogRenderedCount = 0;
     const CATALOG_RENDER_BATCH = 120;
     const FAVORITES_STORAGE_KEY = 'easygee-dataset-favorites';
+    const PROJECT_STORAGE_ID = String(STATE.project || STATE.title || 'default').replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80) || 'default';
+    const AOI_STORAGE_KEY = `easygee-aoi:${{PROJECT_STORAGE_ID}}`;
+    const MEASUREMENTS_STORAGE_KEY = `easygee-measurements:${{PROJECT_STORAGE_ID}}`;
+    const AGENT_PROTOCOL_VERSION = 1;
+    const SESSION_SYNC_INTERVAL_MS = 1200;
+    const SESSION_ACTION_POLL_MS = 900;
+    let lastSessionStateText = '';
+    let lastSessionActionId = 0;
+    let sessionSyncBusy = false;
+    let sessionActionBusy = false;
     const pendingDatasetIds = new Set();
     const failedDatasetIds = new Map();
     const DATASET_QUERY_ALIASES = {{
@@ -2979,23 +3278,192 @@ def render_html(state: dict, leaflet_src: str) -> str:
       showModeKey(added ? 'mode.favoriteAdded' : 'mode.favoriteRemoved', {{ dataset: id }});
       logMsg(added ? 'log.favoriteAdded' : 'log.favoriteRemoved', {{ dataset: id }});
     }}
+    function normalizeBounds(value) {{
+      if (!Array.isArray(value) || value.length !== 2 || !Array.isArray(value[0]) || !Array.isArray(value[1])) return null;
+      const south = Number(value[0][0]);
+      const west = Number(value[0][1]);
+      const north = Number(value[1][0]);
+      const east = Number(value[1][1]);
+      if (![south, west, north, east].every(Number.isFinite)) return null;
+      if (south >= north || west >= east) return null;
+      if (south < -90 || north > 90 || west < -180 || east > 180) return null;
+      return [[south, west], [north, east]];
+    }}
+    function aoiFromBounds(bounds) {{
+      const normalized = normalizeBounds(bounds);
+      if (!normalized) return null;
+      const [[south, west], [north, east]] = normalized;
+      return {{
+        type: 'rectangle',
+        bounds: normalized,
+        coordinates: [[south, west], [south, east], [north, east], [north, west]],
+        coordinateOrder: 'latlng',
+      }};
+    }}
+    function normalizeLatLngPair(pair) {{
+      if (!Array.isArray(pair) || pair.length < 2) return null;
+      const lat = Number(pair[0]);
+      const lng = Number(pair[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+      return [lat, lng];
+    }}
+    function normalizeLonLatPair(pair) {{
+      if (!Array.isArray(pair) || pair.length < 2) return null;
+      const lng = Number(pair[0]);
+      const lat = Number(pair[1]);
+      return normalizeLatLngPair([lat, lng]);
+    }}
+    function boundsFromAoiCoordinates(coordinates) {{
+      if (!Array.isArray(coordinates) || coordinates.length < 3) return null;
+      const lats = coordinates.map(point => point[0]);
+      const lngs = coordinates.map(point => point[1]);
+      const south = Math.min(...lats);
+      const north = Math.max(...lats);
+      const west = Math.min(...lngs);
+      const east = Math.max(...lngs);
+      return normalizeBounds([[south, west], [north, east]]);
+    }}
+    function normalizeAoiCoordinates(raw, order = 'latlng') {{
+      if (!Array.isArray(raw) || !raw.length) return null;
+      let points = raw;
+      let pointOrder = order;
+      if (Array.isArray(raw[0]) && raw[0].length && Array.isArray(raw[0][0])) {{
+        points = raw[0];
+        pointOrder = 'lonlat';
+      }}
+      const normalized = points.map(point => pointOrder === 'lonlat' ? normalizeLonLatPair(point) : normalizeLatLngPair(point)).filter(Boolean);
+      const deduped = [];
+      normalized.forEach(point => {{
+        const previous = deduped[deduped.length - 1];
+        if (!previous || Math.abs(previous[0] - point[0]) > 1e-12 || Math.abs(previous[1] - point[1]) > 1e-12) {{
+          deduped.push(point);
+        }}
+      }});
+      if (deduped.length > 3) {{
+        const first = deduped[0];
+        const last = deduped[deduped.length - 1];
+        if (Math.abs(first[0] - last[0]) < 1e-12 && Math.abs(first[1] - last[1]) < 1e-12) deduped.pop();
+      }}
+      return deduped.length >= 3 && boundsFromAoiCoordinates(deduped) ? deduped : null;
+    }}
+    function normalizeAoi(value) {{
+      if (!value || typeof value !== 'object') return null;
+      if (String(value.type || '').toLowerCase() === 'feature' && value.geometry) return normalizeAoi(value.geometry);
+      const type = String(value.type || '').toLowerCase();
+      if (type === 'polygon' || type === 'multipolygon') {{
+        const coordinates = normalizeAoiCoordinates(
+          value.coordinates || value.latLngs || value.points,
+          String(value.coordinateOrder || '').toLowerCase() === 'lonlat' ? 'lonlat' : 'latlng'
+        );
+        const bounds = coordinates ? boundsFromAoiCoordinates(coordinates) : null;
+        if (!coordinates || !bounds) return null;
+        return {{ type: 'polygon', bounds, coordinates, coordinateOrder: 'latlng' }};
+      }}
+      return aoiFromBounds(value.bounds || value.bbox || value);
+    }}
+    function cloneAoi(aoi) {{
+      return aoi ? JSON.parse(JSON.stringify(aoi)) : null;
+    }}
+    function loadPersistedAoi() {{
+      try {{
+        const parsed = JSON.parse(localStorage.getItem(AOI_STORAGE_KEY) || 'null');
+        const restored = normalizeAoi(parsed && parsed.aoi ? parsed.aoi : parsed);
+        return restored || null;
+      }} catch {{
+        return null;
+      }}
+    }}
+    function persistAoi() {{
+      if (!STATE.aoi) {{
+        localStorage.removeItem(AOI_STORAGE_KEY);
+        return;
+      }}
+      localStorage.setItem(AOI_STORAGE_KEY, JSON.stringify({{
+        project: STATE.project,
+        title: STATE.title,
+        aoi: STATE.aoi,
+        updatedAt: new Date().toISOString(),
+      }}));
+    }}
+    function hasAoi() {{
+      return Boolean(STATE.aoi && normalizeAoi(STATE.aoi));
+    }}
     function hasAoiBounds() {{
-      return Array.isArray(STATE.bounds)
-        && STATE.bounds.length === 2
-        && Array.isArray(STATE.bounds[0])
-        && Array.isArray(STATE.bounds[1]);
+      return Boolean(hasAoi() && normalizeBounds(STATE.aoi.bounds));
+    }}
+    function currentAoiBounds() {{
+      return hasAoiBounds() ? STATE.aoi.bounds : null;
     }}
     function resetHomeView() {{
       if (hasAoiBounds()) {{
-        map.fitBounds(STATE.bounds, {{ padding: [24, 24] }});
+        map.fitBounds(STATE.aoi.bounds, {{ padding: [24, 24] }});
       }} else {{
         map.setView(STATE.center || [{DEFAULT_EMPTY_CENTER[0]}, {DEFAULT_EMPTY_CENTER[1]}], STATE.zoom || {DEFAULT_EMPTY_ZOOM});
       }}
     }}
-    function currentProcessingBounds() {{
-      if (hasAoiBounds()) return STATE.bounds;
+    function mapBoundsAoi() {{
       const bounds = map.getBounds();
-      return [[bounds.getSouth(), bounds.getWest()], [bounds.getNorth(), bounds.getEast()]];
+      return aoiFromBounds([[bounds.getSouth(), bounds.getWest()], [bounds.getNorth(), bounds.getEast()]]);
+    }}
+    function currentProcessingAoi() {{
+      return hasAoi() ? cloneAoi(STATE.aoi) : mapBoundsAoi();
+    }}
+    function currentProcessingBounds() {{
+      const aoi = currentProcessingAoi();
+      return aoi ? aoi.bounds : null;
+    }}
+    function normalizeMeasurement(item) {{
+      if (!item || typeof item !== 'object') return null;
+      const start = normalizeLatLngPair(item.start);
+      const end = normalizeLatLngPair(item.end);
+      const lengthMeters = Number(item.lengthMeters);
+      if (!start || !end || !Number.isFinite(lengthMeters) || lengthMeters < 0) return null;
+      return {{
+        id: String(item.id || `measure-${{Date.now().toString(36)}}`),
+        start,
+        end,
+        lengthMeters,
+        lengthLabel: item.lengthLabel || formatDistance(lengthMeters),
+        createdAt: item.createdAt || new Date().toISOString(),
+      }};
+    }}
+    function loadPersistedMeasurements() {{
+      try {{
+        const parsed = JSON.parse(localStorage.getItem(MEASUREMENTS_STORAGE_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed.map(normalizeMeasurement).filter(Boolean) : [];
+      }} catch {{
+        return [];
+      }}
+    }}
+    function persistMeasurements() {{
+      localStorage.setItem(MEASUREMENTS_STORAGE_KEY, JSON.stringify(STATE.measurements || []));
+    }}
+    function measurementSummary(measurements = STATE.measurements) {{
+      const rows = Array.isArray(measurements) ? measurements.filter(item => Number.isFinite(Number(item.lengthMeters))) : [];
+      const lengths = rows.map(item => Number(item.lengthMeters));
+      const totalMeters = lengths.reduce((sum, value) => sum + value, 0);
+      const count = lengths.length;
+      const meanMeters = count ? totalMeters / count : 0;
+      return {{
+        count,
+        totalMeters,
+        meanMeters,
+        minMeters: count ? Math.min(...lengths) : 0,
+        maxMeters: count ? Math.max(...lengths) : 0,
+        totalLabel: formatDistance(totalMeters),
+        meanLabel: formatDistance(meanMeters),
+        minLabel: formatDistance(count ? Math.min(...lengths) : 0),
+        maxLabel: formatDistance(count ? Math.max(...lengths) : 0),
+      }};
+    }}
+    function initializePersistentState() {{
+      const generatedAoi = normalizeAoi(STATE.aoi) || aoiFromBounds(STATE.bounds);
+      const restoredAoi = loadPersistedAoi();
+      STATE.aoi = restoredAoi || generatedAoi || null;
+      STATE.bounds = STATE.aoi ? STATE.aoi.bounds : null;
+      STATE.measurements = Array.isArray(STATE.measurements) ? STATE.measurements.map(normalizeMeasurement).filter(Boolean) : loadPersistedMeasurements();
+      if (restoredAoi) logMsg('log.aoiRestored');
     }}
     function showMode(message, persist = false) {{
       currentModeKey = null;
@@ -3037,7 +3505,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       setToolActive('data-btn', document.querySelector('.data-panel').classList.contains('open'));
       setToolActive('layers-btn', document.querySelector('.layers-panel').classList.contains('open'));
       setToolActive('inspector-btn', document.querySelector('.right').classList.contains('open'));
-      setToolActive('draw-aoi-btn', drawAoiMode);
+      setToolActive('draw-aoi-btn', drawAoiMode || drawPolygonMode);
       setToolActive('measure-btn', measureMode);
       setToolActive('basemap-btn', document.querySelector('.basemap-panel').classList.contains('open'));
       setToolActive('quota-btn', quotaFocus && document.querySelector('.bottom').classList.contains('open'));
@@ -3512,9 +3980,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
       $('dataset-detail-copy')?.addEventListener('click', async () => {{
         try {{
           await navigator.clipboard.writeText(item.id || '');
-          setMode(t('data.detailCopied'));
+          showModeKey('data.detailCopied');
         }} catch (error) {{
-          setMode(t('log.clipboardUnavailable'));
+          showModeKey('log.clipboardUnavailable');
         }}
       }});
     }}
@@ -3711,6 +4179,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
 
     $('quota-link').href = STATE.quota?.consoleUrl || `https://console.cloud.google.com/iam-admin/quotas?service=earthengine.googleapis.com&project=${{encodeURIComponent(STATE.project)}}`;
+    initializePersistentState();
 
     const map = L.map('map', {{ zoomControl: false, attributionControl: false }}).setView(STATE.center, STATE.zoom);
     const BASEMAPS = [
@@ -3766,7 +4235,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     const basemapLayers = new Map(BASEMAPS.map(meta => [meta.id, L.tileLayer(meta.url, meta.options)]));
     let currentBasemap = 'OSM';
     basemapLayers.get(currentBasemap).addTo(map);
-    let aoiLayer = hasAoiBounds() ? L.rectangle(STATE.bounds, {{ color: '#d23b3b', weight: 2, fill: false }}).addTo(map) : null;
+    let aoiLayer = null;
 
     function registerLayer(meta) {{
       const tile = L.tileLayer(meta.tileUrl, {{ opacity: meta.opacity, attribution: 'Google Earth Engine' }});
@@ -3791,13 +4260,31 @@ def render_html(state: dict, leaflet_src: str) -> str:
       renderLayers();
       renderDatasets(filteredCatalog());
       setActiveLayer(meta.id);
+      syncSessionState('layer-added');
+    }}
+
+    function renderAoiLayer() {{
+      if (aoiLayer && map.hasLayer(aoiLayer)) map.removeLayer(aoiLayer);
+      aoiLayer = null;
+      if (!hasAoi()) return;
+      const options = {{ color: '#d23b3b', weight: 2, fill: false }};
+      if (STATE.aoi.type === 'polygon') {{
+        aoiLayer = L.polygon(STATE.aoi.coordinates, {{ ...options, fill: true, fillOpacity: 0.04 }}).addTo(map);
+      }} else {{
+        aoiLayer = L.rectangle(STATE.aoi.bounds, options).addTo(map);
+      }}
+      aoiLayer.bringToFront();
     }}
 
     const measureLayer = L.layerGroup().addTo(map);
+    const measureDraftLayer = L.layerGroup().addTo(map);
     const drawAoiLayer = L.layerGroup().addTo(map);
     let drawAoiMode = false;
+    let drawPolygonMode = false;
     let drawAoiStart = null;
     let drawAoiPreview = null;
+    let drawPolygonPoints = [];
+    let polygonDoubleClickZoomWasEnabled = false;
     let measureMode = false;
     let measurePoints = [];
 
@@ -3953,6 +4440,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
             project: STATE.project,
             datasetId,
             catalogItem: item,
+            aoi: currentProcessingAoi(),
             bounds: currentProcessingBounds(),
             startDate: STATE.startDate,
             endDate: STATE.endDate,
@@ -4059,6 +4547,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
             map.removeLayer(record.tile);
             logMsg('log.layerOff', {{ layer: record.meta.name }});
           }}
+          syncSessionState('layer-toggle');
         }});
         item.querySelector('[data-action="opacity"]').addEventListener('input', event => {{
           const value = Number(event.target.value);
@@ -4066,6 +4555,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
           record.tile.setOpacity(value);
           item.querySelector('[data-opacity-label]').textContent = `${{Math.round(value * 100)}}%`;
           if (activeLayerId === id) updateInspector();
+          syncSessionState('layer-opacity');
         }});
       }});
     }}
@@ -4134,44 +4624,76 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function clearAoiPreview() {{
       drawAoiLayer.clearLayers();
       drawAoiPreview = null;
+      drawPolygonPoints = [];
     }}
     function stopDrawAoiMode(announce = true) {{
-      const wasActive = drawAoiMode || drawAoiStart;
+      const wasActive = drawAoiMode || drawAoiStart || drawPolygonMode || drawPolygonPoints.length;
       drawAoiMode = false;
+      drawPolygonMode = false;
       drawAoiStart = null;
+      if (polygonDoubleClickZoomWasEnabled) map.doubleClickZoom.enable();
+      polygonDoubleClickZoomWasEnabled = false;
       clearAoiPreview();
-      map.getContainer().classList.remove('draw-aoi');
+      map.getContainer().classList.remove('draw-aoi', 'draw-polygon');
       syncToolState();
       if (announce && wasActive) {{
         showModeKey('mode.aoiOff', {{}}, false);
         logMsg('log.aoiOff');
       }}
     }}
-    function toggleDrawAoiMode() {{
-      if (drawAoiMode) {{
+    function startRectangleAoiMode() {{
+      if (drawAoiMode && !drawPolygonMode) {{
         stopDrawAoiMode(true);
         return;
       }}
       measureMode = false;
       measurePoints = [];
-      measureLayer.clearLayers();
+      measureDraftLayer.clearLayers();
       closeFloatingPanels();
+      stopDrawAoiMode(false);
       drawAoiMode = true;
       drawAoiStart = null;
-      clearAoiPreview();
       map.getContainer().classList.add('draw-aoi');
       syncToolState();
       showModeKey('mode.aoiStart', {{}}, true);
       logMsg('log.aoiOn');
     }}
-    function updateAoiBounds(bounds) {{
-      STATE.bounds = bounds;
-      if (!aoiLayer) {{
-        aoiLayer = L.rectangle(bounds, {{ color: '#d23b3b', weight: 2, fill: false }}).addTo(map);
-      }} else {{
-        aoiLayer.setBounds(bounds);
+    function startPolygonAoiMode() {{
+      if (drawPolygonMode) {{
+        stopDrawAoiMode(true);
+        return;
       }}
-      aoiLayer.bringToFront();
+      measureMode = false;
+      measurePoints = [];
+      measureDraftLayer.clearLayers();
+      closeFloatingPanels();
+      stopDrawAoiMode(false);
+      drawPolygonMode = true;
+      drawAoiMode = false;
+      drawPolygonPoints = [];
+      polygonDoubleClickZoomWasEnabled = map.doubleClickZoom.enabled();
+      if (polygonDoubleClickZoomWasEnabled) map.doubleClickZoom.disable();
+      map.getContainer().classList.add('draw-polygon');
+      syncToolState();
+      showModeKey('mode.polygonStart', {{}}, true);
+      logMsg('log.aoiOn');
+    }}
+    function toggleDrawAoiMode(polygon = false) {{
+      if (polygon) startPolygonAoiMode();
+      else startRectangleAoiMode();
+    }}
+    function updateAoi(aoi, options = {{ persist: true }}) {{
+      const normalized = normalizeAoi(aoi);
+      if (!normalized) return false;
+      STATE.aoi = normalized;
+      STATE.bounds = normalized.bounds;
+      renderAoiLayer();
+      if (options.persist !== false) persistAoi();
+      syncSessionState('aoi');
+      return true;
+    }}
+    function updateAoiBounds(bounds) {{
+      return updateAoi(aoiFromBounds(bounds));
     }}
     function handleDrawAoiMove(event) {{
       if (!drawAoiMode || !drawAoiStart) return;
@@ -4189,6 +4711,60 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }} else {{
         drawAoiPreview.setBounds(bounds);
       }}
+    }}
+    function renderPolygonPreview(nextPoint = null) {{
+      if (!drawPolygonMode) return;
+      drawAoiLayer.clearLayers();
+      drawPolygonPoints.forEach(point => {{
+        L.circleMarker(point, {{
+          radius: 4,
+          color: '#16734d',
+          fillColor: '#16734d',
+          fillOpacity: 1,
+          weight: 2,
+          interactive: false,
+        }}).addTo(drawAoiLayer);
+      }});
+      const previewPoints = nextPoint ? [...drawPolygonPoints, nextPoint] : drawPolygonPoints;
+      if (previewPoints.length >= 2) {{
+        L.polyline(previewPoints, {{ color: '#16734d', weight: 2, dashArray: '6 5', interactive: false }}).addTo(drawAoiLayer);
+      }}
+      if (previewPoints.length >= 3) {{
+        L.polygon(previewPoints, {{
+          color: '#16734d',
+          weight: 2,
+          dashArray: '6 5',
+          fill: true,
+          fillColor: '#16734d',
+          fillOpacity: 0.10,
+          interactive: false,
+        }}).addTo(drawAoiLayer);
+      }}
+    }}
+    function handleDrawPolygonMove(event) {{
+      if (!drawPolygonMode) return;
+      renderPolygonPreview(event.latlng);
+    }}
+    function handleDrawPolygonClick(event) {{
+      if (!drawPolygonMode) return false;
+      drawPolygonPoints.push(event.latlng);
+      renderPolygonPreview();
+      showModeKey('mode.polygonVertex', {{ count: drawPolygonPoints.length }}, true);
+      return true;
+    }}
+    function finishPolygonAoi() {{
+      if (!drawPolygonMode) return false;
+      if (drawPolygonPoints.length < 3) {{
+        showModeKey('mode.polygonTooSmall', {{}}, true);
+        return true;
+      }}
+      const coordinates = drawPolygonPoints.map(point => [point.lat, point.lng]);
+      updateAoi({{ type: 'polygon', coordinates, coordinateOrder: 'latlng' }});
+      const bounds = STATE.aoi.bounds;
+      stopDrawAoiMode(false);
+      showModeKey('mode.aoiDone', {{}}, false);
+      logMsg('log.aoiDrawn', {{ bounds: boundsLabel(bounds) }});
+      return true;
     }}
     function handleDrawAoiClick(event) {{
       if (!drawAoiMode) return false;
@@ -4287,14 +4863,112 @@ def render_html(state: dict, leaflet_src: str) -> str:
       window.addEventListener('pointerup', up, {{ once: true }});
     }}
 
+    function renderMeasurements() {{
+      measureLayer.clearLayers();
+      (STATE.measurements || []).forEach(item => {{
+        const start = L.latLng(item.start[0], item.start[1]);
+        const end = L.latLng(item.end[0], item.end[1]);
+        L.polyline([start, end], {{ color: '#16734d', weight: 3, dashArray: '6 5' }})
+          .bindTooltip(item.lengthLabel || formatDistance(item.lengthMeters), {{
+            permanent: true,
+            direction: 'center',
+            className: 'measure-label',
+          }})
+          .addTo(measureLayer);
+        [start, end].forEach(point => {{
+          L.circleMarker(point, {{
+            radius: 3,
+            color: '#16734d',
+            fillColor: '#16734d',
+            fillOpacity: 1,
+            weight: 1.5,
+            interactive: false,
+          }}).addTo(measureLayer);
+        }});
+      }});
+    }}
+    function saveMeasurement(start, end) {{
+      const meters = distanceMeters(start, end);
+      const row = {{
+        id: `measure-${{Date.now().toString(36)}}-${{Math.random().toString(36).slice(2, 7)}}`,
+        start: [start.lat, start.lng],
+        end: [end.lat, end.lng],
+        lengthMeters: meters,
+        lengthLabel: formatDistance(meters),
+        createdAt: new Date().toISOString(),
+      }};
+      STATE.measurements.push(row);
+      persistMeasurements();
+      renderMeasurements();
+      const summary = measurementSummary();
+      showModeKey('mode.measureSaved', {{ distance: row.lengthLabel, count: summary.count, mean: summary.meanLabel }}, true);
+      logMsg('log.measureSummary', {{ count: summary.count, mean: summary.meanLabel }});
+      syncSessionState('measurement');
+      return row;
+    }}
+    function clearMeasurements() {{
+      STATE.measurements = [];
+      persistMeasurements();
+      measureLayer.clearLayers();
+      measureDraftLayer.clearLayers();
+      measurePoints = [];
+      syncSessionState('measurements-cleared');
+      return measurementSummary();
+    }}
+    async function extractNdviForCurrentAoi(options = {{}}) {{
+      if (!hasAoi()) {{
+        showModeKey('mode.ndviNoAoi', {{}}, true);
+        return {{ ok: false, error: 'AOI is required' }};
+      }}
+      showModeKey('mode.ndviBuilding', {{}}, true);
+      logMsg('log.ndviStarted');
+      try {{
+        const response = await fetch('/api/analysis/ndvi', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{
+            project: STATE.project,
+            aoi: cloneAoi(STATE.aoi),
+            bounds: STATE.aoi.bounds,
+            startDate: options.startDate || STATE.startDate,
+            endDate: options.endDate || STATE.endDate,
+            cloudPct: options.cloudPct ?? STATE.cloudPct,
+            scale: options.scale || 10,
+          }}),
+        }});
+        const payload = await response.json().catch(() => ({{ ok: false, error: response.statusText || 'request failed' }}));
+        if (!response.ok || !payload.ok || !payload.layer) {{
+          throw new Error(payload.error || `HTTP ${{response.status}}`);
+        }}
+        addGeneratedLayer(payload.layer);
+        const mean = Number(payload.summary?.mean);
+        const count = Number(payload.summary?.count || 0);
+        const meanText = Number.isFinite(mean) ? mean.toFixed(3) : '-';
+        showModeKey('mode.ndviDone', {{ mean: meanText, count }});
+        logMsg('log.ndviDone', {{ mean: meanText }});
+        return payload;
+      }} catch (error) {{
+        const message = error && error.message ? error.message : String(error);
+        showModeKey('mode.ndviFailed', {{ message: message.slice(0, 90) }}, true);
+        logMsg('log.ndviFailed');
+        return {{ ok: false, error: message }};
+      }} finally {{
+        syncToolState();
+      }}
+    }}
+
     function buildProjectState() {{
       return {{
         title: STATE.title,
         project: STATE.project,
+        agentProtocolVersion: AGENT_PROTOCOL_VERSION,
         center: [map.getCenter().lat, map.getCenter().lng],
         zoom: map.getZoom(),
         basemap: currentBasemap,
-        bounds: hasAoiBounds() ? STATE.bounds : null,
+        bounds: currentAoiBounds(),
+        aoi: hasAoi() ? cloneAoi(STATE.aoi) : null,
+        measurements: STATE.measurements.map(item => ({{ ...item }})),
+        measurementSummary: measurementSummary(),
         language: currentLang,
         favoriteDatasets: [...favoriteDatasetIds].sort(),
         quota: STATE.quota,
@@ -4303,9 +4977,96 @@ def render_html(state: dict, leaflet_src: str) -> str:
           name: layer.name,
           dataset: layer.dataset,
           shown: layerRegistry.has(layer.id) ? map.hasLayer(layerRegistry.get(layer.id).tile) : Boolean(layer.shown),
-          opacity: layer.opacity
+          opacity: layer.opacity,
+          ...(layer.summary ? {{ summary: layer.summary }} : {{}}),
+          ...(layer.aoi ? {{ aoi: layer.aoi }} : {{}}),
         }}))
       }};
+    }}
+
+    async function syncSessionState(reason = 'update') {{
+      if (sessionSyncBusy) return false;
+      let state;
+      try {{
+        state = buildProjectState();
+      }} catch {{
+        return false;
+      }}
+      const text = JSON.stringify(state);
+      if (text === lastSessionStateText) return true;
+      lastSessionStateText = text;
+      state.sessionReason = reason;
+      state.sessionUpdatedAt = new Date().toISOString();
+      sessionSyncBusy = true;
+      try {{
+        const response = await fetch('/api/session/state', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{ state }}),
+        }});
+        return response.ok;
+      }} catch {{
+        return false;
+      }} finally {{
+        sessionSyncBusy = false;
+      }}
+    }}
+    async function executeSessionAction(action) {{
+      const type = String(action?.type || action?.action || '').toLowerCase();
+      if (type === 'addlayer' || type === 'add-layer') {{
+        if (action.layer) {{
+          addGeneratedLayer(action.layer);
+          showModeKey('mode.datasetAdded', {{ count: 1 }});
+          return true;
+        }}
+        return false;
+      }}
+      if (type === 'setaoi' || type === 'set-aoi') {{
+        if (action.aoi && updateAoi(action.aoi)) {{
+          resetHomeView();
+          return true;
+        }}
+        return false;
+      }}
+      if (type === 'clearaoi' || type === 'clear-aoi') {{
+        STATE.aoi = null;
+        STATE.bounds = null;
+        persistAoi();
+        renderAoiLayer();
+        syncSessionState('aoi-cleared');
+        return true;
+      }}
+      if (type === 'clearmeasurements' || type === 'clear-measurements') {{
+        clearMeasurements();
+        return true;
+      }}
+      if (type === 'extractndvi' || type === 'extract-ndvi') {{
+        await extractNdviForCurrentAoi(action.options || action);
+        return true;
+      }}
+      return false;
+    }}
+    async function pollSessionActions() {{
+      if (sessionActionBusy) return false;
+      sessionActionBusy = true;
+      try {{
+        const response = await fetch(`/api/session/actions?since=${{encodeURIComponent(lastSessionActionId)}}`);
+        if (!response.ok) return false;
+        const payload = await response.json();
+        const actions = Array.isArray(payload.actions) ? payload.actions : [];
+        for (const action of actions) {{
+          const id = Number(action.id || 0);
+          if (id > lastSessionActionId) lastSessionActionId = id;
+          await executeSessionAction(action);
+        }}
+        const latest = Number(payload.latestActionId || 0);
+        if (latest > lastSessionActionId) lastSessionActionId = latest;
+        return true;
+      }} catch {{
+        return false;
+      }} finally {{
+        sessionActionBusy = false;
+      }}
     }}
 
     $('dataset-search').addEventListener('input', event => {{
@@ -4356,7 +5117,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function toggleMeasureMode() {{
       measureMode = !measureMode;
       measurePoints = [];
-      measureLayer.clearLayers();
+      measureDraftLayer.clearLayers();
       if (measureMode) {{
         stopDrawAoiMode(false);
         document.querySelector('.data-panel').classList.remove('open');
@@ -4377,21 +5138,19 @@ def render_html(state: dict, leaflet_src: str) -> str:
         fillColor: '#16734d',
         fillOpacity: 1,
         weight: 2,
-      }}).addTo(measureLayer);
+      }}).addTo(measureDraftLayer);
       if (measurePoints.length === 1) {{
         showModeKey('mode.measureEndpoint', {{}}, true);
         return true;
       }}
       const [start, end] = measurePoints;
-      const meters = distanceMeters(start, end);
-      L.polyline(measurePoints, {{ color: '#16734d', weight: 3, dashArray: '6 5' }}).addTo(measureLayer);
-      const label = formatDistance(meters);
-      showModeKey('mode.distance', {{ distance: label }}, true);
-      logMsg('log.measured', {{ distance: label }});
+      const row = saveMeasurement(start, end);
+      measureDraftLayer.clearLayers();
+      logMsg('log.measured', {{ distance: row.lengthLabel }});
       measurePoints = [];
       return true;
     }}
-    $('draw-aoi-btn').addEventListener('click', toggleDrawAoiMode);
+    $('draw-aoi-btn').addEventListener('click', event => toggleDrawAoiMode(event.shiftKey));
     $('measure-btn').addEventListener('click', toggleMeasureMode);
     async function copyProjectState() {{
       const text = JSON.stringify(buildProjectState(), null, 2);
@@ -4475,8 +5234,13 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }});
     }});
     document.addEventListener('keydown', event => {{
+      if (event.key === 'Enter' && drawPolygonMode) {{
+        event.preventDefault();
+        finishPolygonAoi();
+        return;
+      }}
       if (event.key !== 'Escape') return;
-      if (drawAoiMode) {{
+      if (drawAoiMode || drawPolygonMode) {{
         stopDrawAoiMode(true);
         return;
       }}
@@ -4491,8 +5255,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
 
     map.on('mousemove', event => {{
       handleDrawAoiMove(event);
+      handleDrawPolygonMove(event);
     }});
     map.on('click', event => {{
+      if (drawPolygonMode && handleDrawPolygonClick(event)) return;
       if (drawAoiMode && handleDrawAoiClick(event)) return;
       if (measureMode && handleMeasureClick(event)) return;
       $('lat-value').textContent = fmt(event.latlng.lat, 6);
@@ -4501,10 +5267,43 @@ def render_html(state: dict, leaflet_src: str) -> str:
       setClickState('state.clicked');
       logMsg('log.clicked', {{ lat: fmt(event.latlng.lat, 4), lon: fmt(event.latlng.lng, 4) }});
     }});
+    map.on('dblclick', event => {{
+      if (!drawPolygonMode) return;
+      L.DomEvent.stop(event);
+      finishPolygonAoi();
+    }});
     map.on('zoomend moveend', () => {{
       $('zoom-value').textContent = map.getZoom();
       updateScaleLine();
     }});
+    window.EasyGEE = {{
+      getProjectState: () => buildProjectState(),
+      getAoi: () => hasAoi() ? cloneAoi(STATE.aoi) : null,
+      setAoi: aoi => updateAoi(aoi),
+      clearAoi: () => {{
+        STATE.aoi = null;
+        STATE.bounds = null;
+        persistAoi();
+        renderAoiLayer();
+        syncSessionState('aoi-cleared');
+        return true;
+      }},
+      startRectangleAoi: () => startRectangleAoiMode(),
+      startPolygonAoi: () => startPolygonAoiMode(),
+      getMeasurements: () => STATE.measurements.map(item => ({{ ...item }})),
+      getMeasurementSummary: () => measurementSummary(),
+      clearMeasurements: () => clearMeasurements(),
+      extractNdvi: options => extractNdviForCurrentAoi(options || {{}}),
+      addGeneratedLayer: meta => addGeneratedLayer(meta),
+      syncState: reason => syncSessionState(reason || 'manual'),
+      pollActions: () => pollSessionActions(),
+    }};
+    renderAoiLayer();
+    renderMeasurements();
+    syncSessionState('loaded');
+    window.setInterval(() => syncSessionState('interval'), SESSION_SYNC_INTERVAL_MS);
+    window.setInterval(pollSessionActions, SESSION_ACTION_POLL_MS);
+    pollSessionActions();
     applyI18n();
     renderDatasets(filteredCatalog());
     renderLayers();

@@ -139,7 +139,13 @@ def active_account_present(gcloud: str | None) -> bool:
     except Exception:
         return False
     account = result.stdout.strip()
-    return result.returncode == 0 and bool(account) and account != "(unset)"
+    if result.returncode != 0 or not account or account == "(unset)":
+        return False
+    try:
+        token_result = run_gcloud(gcloud, ["auth", "print-access-token"], timeout=30)
+    except Exception:
+        return False
+    return token_result.returncode == 0 and bool(token_result.stdout.strip())
 
 
 def safe_extract_zip(archive: Path, destination_parent: Path) -> None:
@@ -222,7 +228,7 @@ def install_with_winget(timeout: int) -> Operation:
 
 def login_gcloud(gcloud: str, timeout: int, force: bool) -> Operation:
     if active_account_present(gcloud) and not force:
-        return Operation("cloud-auth", True, "gcloud active account already present")
+        return Operation("cloud-auth", True, "valid gcloud credentials already present")
     try:
         result = subprocess.run(
             show_ee_quotas.subprocess_command(gcloud, ["auth", "login", "--brief", "--quiet"]),
