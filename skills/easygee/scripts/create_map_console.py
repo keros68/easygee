@@ -1581,6 +1581,7 @@ def shell_css() -> str:
       background: rgba(255,255,255,0.95);
       backdrop-filter: blur(12px);
     }
+    .data-panel.detail-open .catalog-main { padding-right: min(430px, 46%); }
     .basemap-panel {
       position: fixed;
       left: 52px;
@@ -1821,6 +1822,48 @@ def shell_css() -> str:
     .dataset-favorite.active svg { fill: currentColor; stroke-width: 1.55; }
     .dataset-empty, .dataset-loading { padding: 12px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--muted); font-size: 12px; }
     .dataset-loading { border-width: 0; border-top: 1px solid #e3ebe6; border-radius: 0; text-align: center; background: rgba(255,255,255,0.64); }
+    .dataset-detail-popover {
+      position: absolute;
+      top: 52px;
+      right: 10px;
+      bottom: 10px;
+      width: min(410px, calc(100% - 302px));
+      z-index: 8;
+      display: none;
+      min-width: 280px;
+      border: 1px solid #d9e5df;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.97);
+      box-shadow: 0 14px 34px rgba(16,24,40,0.16);
+      overflow: hidden;
+    }
+    .dataset-detail-popover.open { display: flex; flex-direction: column; }
+    .dataset-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 12px 10px; border-bottom: 1px solid #e3ebe6; }
+    .dataset-detail-title { min-width: 0; font-size: 14px; line-height: 1.24; font-weight: 780; color: var(--text); }
+    .dataset-detail-id { margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
+    .dataset-detail-body { padding: 12px; overflow: auto; display: grid; gap: 11px; min-height: 0; }
+    .dataset-detail-thumb { width: 100%; aspect-ratio: 16 / 9; border: 1px solid #e3ebe6; border-radius: 8px; object-fit: cover; background: #eef3f0; }
+    .dataset-detail-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+    .dataset-detail-badge { border: 1px solid #dce8e2; border-radius: 999px; padding: 3px 7px; background: #f8fbf9; color: #405049; font-size: 10.5px; line-height: 1.15; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dataset-detail-section { display: grid; gap: 5px; min-width: 0; }
+    .dataset-detail-label { color: var(--muted); font-size: 10px; font-weight: 760; text-transform: uppercase; }
+    .dataset-detail-text { color: var(--text); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+    .dataset-detail-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+    .dataset-detail-link, .dataset-detail-command {
+      min-height: 30px;
+      border: 1px solid #dce8e2;
+      border-radius: 7px;
+      background: #fff;
+      color: var(--accent);
+      display: grid;
+      place-items: center;
+      text-decoration: none;
+      font-size: 11px;
+      font-weight: 720;
+      cursor: pointer;
+    }
+    .dataset-detail-command.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+    .dataset-detail-link:hover, .dataset-detail-command:hover { filter: brightness(0.98); }
     .map-wrap { position: fixed; inset: 0; min-width: 0; min-height: 0; background: #dfe7e2; }
     #map { position: absolute; inset: 0; width: 100%; height: 100%; }
     #map.draw-aoi { cursor: crosshair; }
@@ -1979,6 +2022,8 @@ def shell_css() -> str:
       .catalog-search-row { grid-template-columns: 1fr; }
       .type-chip-list { justify-content: start; }
       .dataset-list { max-height: min(394px, calc(100vh - 154px)); }
+      .data-panel.detail-open .catalog-main { padding-right: 0; }
+      .dataset-detail-popover { left: 8px; right: 8px; top: 52px; bottom: 8px; width: auto; min-width: 0; }
       .basemap-panel { left: 48px; top: 64px; width: min(292px, calc(100vw - 58px)); max-height: calc(100vh - 76px); }
       .bottom { top: 46px; left: 48px; right: 6px; bottom: 8px; width: auto; max-height: none; overflow: hidden; transform: translateX(calc(100% + 12px)); }
       .mode-chip { left: 48px; max-width: calc(100% - 56px); }
@@ -2323,6 +2368,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
               <span class="dataset-hint" data-i18n="data.addHint">Click + to process nearby and add</span>
             </div>
             <div class="dataset-list" id="dataset-list"></div>
+            <aside class="dataset-detail-popover" id="dataset-detail" aria-live="polite"></aside>
           </section>
         </div>
       </div>
@@ -2479,6 +2525,18 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "data.favoriteTitle": "收藏数据集",
         "data.unfavoriteTitle": "取消收藏",
         "data.openCatalog": "打开数据目录",
+        "data.openSample": "示例代码",
+        "data.addFromDetail": "加入地图",
+        "data.copyId": "复制 ID",
+        "data.detailSource": "来源",
+        "data.detailType": "类型",
+        "data.detailProvider": "提供方",
+        "data.detailLicense": "许可",
+        "data.detailDates": "时间范围",
+        "data.detailDescription": "简介",
+        "data.detailTags": "标签",
+        "data.detailNoDescription": "暂无详细简介。请打开数据目录或示例代码核对字段、许可和使用方式。",
+        "data.detailCopied": "数据集 ID 已复制",
         "data.processing": "正在处理并生成图层",
         "data.generated": "已可视化",
         "data.failed": "生成失败",
@@ -2650,6 +2708,18 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "data.favoriteTitle": "Favorite dataset",
         "data.unfavoriteTitle": "Remove favorite",
         "data.openCatalog": "Open catalog page",
+        "data.openSample": "Sample code",
+        "data.addFromDetail": "Add to map",
+        "data.copyId": "Copy ID",
+        "data.detailSource": "Source",
+        "data.detailType": "Type",
+        "data.detailProvider": "Provider",
+        "data.detailLicense": "License",
+        "data.detailDates": "Date range",
+        "data.detailDescription": "Description",
+        "data.detailTags": "Tags",
+        "data.detailNoDescription": "No detailed description is available. Open the catalog page or sample code to verify fields, license, and usage.",
+        "data.detailCopied": "Dataset ID copied",
         "data.processing": "Processing and generating layer",
         "data.generated": "Visualized",
         "data.failed": "Generation failed",
@@ -3240,9 +3310,102 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function datasetLayerIds(datasetId) {{
       return STATE.layers.filter(layer => layer.dataset === datasetId).map(layer => layer.id);
     }}
+    function datasetById(datasetId) {{
+      return (Array.isArray(STATE.catalog) ? STATE.catalog : []).find(item => item.id === datasetId) || null;
+    }}
+    function datasetDetailValue(value) {{
+      const text = String(value || '').trim();
+      if (!text || text.toLowerCase() === 'na' || text.toLowerCase() === 'none') return '';
+      return text;
+    }}
+    function datasetDateText(item) {{
+      const start = datasetDetailValue(item.startDate);
+      const end = datasetDetailValue(item.endDate);
+      if (start && end) return `${{start}} - ${{end}}`;
+      return start || end || '';
+    }}
+    function datasetDetailSection(labelKey, value) {{
+      const text = datasetDetailValue(value);
+      if (!text) return '';
+      return `
+        <section class="dataset-detail-section">
+          <div class="dataset-detail-label">${{escapeHtml(t(labelKey))}}</div>
+          <div class="dataset-detail-text">${{escapeHtml(text)}}</div>
+        </section>
+      `;
+    }}
+    function datasetDetailHtml(item) {{
+      const typeLabel = catalogTypeLabel(normalizeCatalogType(item));
+      const sourceLabel = catalogSourceLabel(item);
+      const category = catalogCategoryLabel(catalogCategoryKey(item));
+      const license = datasetDetailValue(item.license);
+      const provider = datasetDetailValue(item.provider);
+      const dates = datasetDateText(item);
+      const description = datasetDetailValue(item.description) || t('data.detailNoDescription');
+      const tags = datasetDetailValue([item.category, item.tags].filter(Boolean).join(' · '));
+      const thumb = datasetDetailValue(item.thumbnail);
+      const catalogUrl = datasetDetailValue(item.url);
+      const sampleCode = datasetDetailValue(item.sampleCode);
+      return `
+        <div class="dataset-detail-head">
+          <div>
+            <div class="dataset-detail-title">${{escapeHtml(item.label || item.id)}}</div>
+            <div class="dataset-detail-id">${{escapeHtml(item.id || '')}}</div>
+          </div>
+          <button class="icon-btn panel-close" id="dataset-detail-close" title="${{escapeHtml(t('tool.close'))}}" aria-label="${{escapeHtml(t('tool.close'))}}" type="button">${svg_icon("close")}</button>
+        </div>
+        <div class="dataset-detail-body">
+          ${{thumb ? `<img class="dataset-detail-thumb" src="${{escapeHtml(thumb)}}" alt="">` : ''}}
+          <div class="dataset-detail-badges">
+            <span class="dataset-detail-badge">${{escapeHtml(sourceLabel)}}</span>
+            <span class="dataset-detail-badge">${{escapeHtml(typeLabel)}}</span>
+            <span class="dataset-detail-badge">${{escapeHtml(category)}}</span>
+            ${{license ? `<span class="dataset-detail-badge">${{escapeHtml(license)}}</span>` : ''}}
+          </div>
+          ${{datasetDetailSection('data.detailDescription', description)}}
+          ${{datasetDetailSection('data.detailProvider', provider)}}
+          ${{datasetDetailSection('data.detailDates', dates)}}
+          ${{datasetDetailSection('data.detailTags', tags)}}
+          <div class="dataset-detail-actions">
+            <button class="dataset-detail-command primary" id="dataset-detail-add" type="button">${{escapeHtml(t('data.addFromDetail'))}}</button>
+            <button class="dataset-detail-command" id="dataset-detail-copy" type="button">${{escapeHtml(t('data.copyId'))}}</button>
+            ${{catalogUrl ? `<a class="dataset-detail-link" href="${{escapeHtml(catalogUrl)}}" target="_blank" rel="noreferrer">${{escapeHtml(t('data.openCatalog'))}}</a>` : ''}}
+            ${{sampleCode ? `<a class="dataset-detail-link" href="${{escapeHtml(sampleCode)}}" target="_blank" rel="noreferrer">${{escapeHtml(t('data.openSample'))}}</a>` : ''}}
+          </div>
+        </div>
+      `;
+    }}
+    function closeDatasetDetail() {{
+      const detail = $('dataset-detail');
+      detail.classList.remove('open');
+      detail.innerHTML = '';
+      document.querySelector('.data-panel').classList.remove('detail-open');
+    }}
+    function renderDatasetDetail(datasetId) {{
+      const item = datasetById(datasetId);
+      if (!item) {{
+        closeDatasetDetail();
+        return;
+      }}
+      const detail = $('dataset-detail');
+      detail.innerHTML = datasetDetailHtml(item);
+      detail.classList.add('open');
+      document.querySelector('.data-panel').classList.add('detail-open');
+      $('dataset-detail-close')?.addEventListener('click', closeDatasetDetail);
+      $('dataset-detail-add')?.addEventListener('click', () => importDatasetToMap(item.id));
+      $('dataset-detail-copy')?.addEventListener('click', async () => {{
+        try {{
+          await navigator.clipboard.writeText(item.id || '');
+          setMode(t('data.detailCopied'));
+        }} catch (error) {{
+          setMode(t('log.clipboardUnavailable'));
+        }}
+      }});
+    }}
     function setActiveDataset(datasetId) {{
       activeDatasetId = datasetId;
       document.querySelectorAll('.dataset-item').forEach(item => item.classList.toggle('active', item.dataset.dataset === datasetId));
+      renderDatasetDetail(datasetId);
       logMsg('log.datasetSelected', {{ dataset: datasetId }});
     }}
     function setLanguage(lang) {{
@@ -3250,6 +3413,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
       localStorage.setItem('easygee-lang', currentLang);
       applyI18n();
       renderDatasets(filteredCatalog());
+      if (activeDatasetId && $('dataset-detail')?.classList.contains('open')) {{
+        renderDatasetDetail(activeDatasetId);
+      }}
       renderLayers();
       setActiveLayer(activeLayerId, {{ reveal: false }});
       updateScaleLine();
@@ -3640,6 +3806,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
       catalogListItems = items;
       catalogRenderedCount = 0;
       const list = $('dataset-list');
+      if (activeDatasetId && !items.some(item => item.id === activeDatasetId)) {{
+        activeDatasetId = null;
+        closeDatasetDetail();
+      }}
       if (!items.length) {{
         updateCatalogCount();
         list.innerHTML = `<div class="dataset-empty">${{escapeHtml(t(catalogFavoriteFilter ? 'data.noFavorites' : 'data.noResults'))}}</div>`;
