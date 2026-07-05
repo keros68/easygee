@@ -48,9 +48,9 @@ SKILL_DIR = Path(__file__).resolve().parents[1]
 ASSETS_DIR = SKILL_DIR / "assets"
 EASYGEE_LOGO = ASSETS_DIR / "easygee-logo-square-simple-256.png"
 NONCOMMERCIAL_TIER_LIMITS = {
-    540_000: ("Community Tier", "Community 社区级", "Community Tier"),
-    3_600_000: ("Contributor Tier", "Contributor 贡献者级", "Contributor Tier"),
-    360_000_000: ("Partner Tier", "Partner 合作伙伴级", "Partner Tier"),
+    540_000: ("Community", "Community（非商业）", "Community (noncommercial)"),
+    3_600_000: ("Contributor", "Contributor（非商业）", "Contributor (noncommercial)"),
+    360_000_000: ("Partner", "Partner（非商业）", "Partner (noncommercial)"),
 }
 QUOTA_LABELS = {
     "Average concurrent batch tasks": ("平均批任务", "Average concurrent batch tasks"),
@@ -1131,11 +1131,55 @@ def infer_noncommercial_tier(rows: list[dict[str, Any]]) -> dict[str, Any] | Non
                 }
         return {
             "name": "Custom / Unknown",
-            "nameZh": "自定义/未知等级",
-            "nameEn": "Custom / Unknown tier",
+            "nameZh": "自定义（非商业）",
+            "nameEn": "Custom (noncommercial)",
             "kind": "noncommercial",
             "source": "monthly_eecu_system_limit",
             "limit": compact_value(row.get("value"), row.get("unit")),
+            "inferred": True,
+        }
+    return None
+
+
+def infer_commercial_tier(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Best-effort usage tier inference from quota-like commercial plan limits."""
+
+    by_name = {str(row.get("quota") or row.get("name") or "").lower(): row for row in rows}
+
+    def find_value(*needles: str) -> float | None:
+        for name, row in by_name.items():
+            if all(needle in name for needle in needles):
+                return parse_float(row.get("value"))
+        return None
+
+    storage_gb = find_value("asset", "storage")
+    high_volume = find_value("high-volume", "concurrent")
+    batch_tasks = find_value("batch", "tasks")
+    if storage_gb is not None and storage_gb >= 1000:
+        return {
+            "name": "Professional",
+            "nameZh": "Professional（商业）",
+            "nameEn": "Professional (commercial)",
+            "kind": "commercial",
+            "source": "storage_or_high_volume_quota",
+            "inferred": True,
+        }
+    if high_volume is not None and high_volume >= 100:
+        return {
+            "name": "Professional",
+            "nameZh": "Professional（商业）",
+            "nameEn": "Professional (commercial)",
+            "kind": "commercial",
+            "source": "high_volume_quota",
+            "inferred": True,
+        }
+    if batch_tasks is not None and batch_tasks >= 8:
+        return {
+            "name": "Basic",
+            "nameZh": "Basic（商业）",
+            "nameEn": "Basic (commercial)",
+            "kind": "commercial",
+            "source": "batch_task_quota",
             "inferred": True,
         }
     return None
@@ -1195,7 +1239,10 @@ def quota_state_from_report(report: Any) -> dict[str, Any]:
     source = report_json.get("live_source") or "official Earth Engine default"
     usage_source = report_json.get("usage_source")
     usage_rows = report_json.get("usage_rows") or []
+    source_is_default = "default" in str(source).lower()
     tier = infer_noncommercial_tier(source_rows)
+    if tier is None and not source_is_default:
+        tier = infer_commercial_tier(source_rows)
     rows: list[dict[str, Any]] = []
     preferred_terms = ("eecu", "batch", "asset", "request", "slot")
     ordered_rows = sorted(
@@ -1809,6 +1856,9 @@ def shell_css() -> str:
     .dataset-item:hover, .dataset-item.active { border-color: rgba(22, 115, 77, 0.45); background: var(--accent-soft); }
     .dataset-name { font-size: 12px; font-weight: 760; line-height: 1.25; }
     .dataset-meta { margin-top: 3px; font-size: 11px; color: var(--muted); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dataset-attrs { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 5px; }
+    .dataset-attr { max-width: 100%; border: 1px solid #dce8e2; border-radius: 999px; padding: 2px 7px; background: #f8fbf9; color: #46564f; font-size: 10.5px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dataset-attr strong { color: #21342b; font-weight: 760; }
     .dataset-tags { margin-top: 3px; font-size: 10px; color: var(--muted); line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .dataset-provider { margin-top: 3px; font-size: 10px; color: #718078; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .dataset-status { margin-top: 6px; width: fit-content; max-width: 100%; border: 1px solid rgba(22,115,77,0.18); border-radius: 999px; padding: 2px 7px; background: rgba(232,244,238,0.65); font-size: 10px; color: var(--accent); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1841,6 +1891,8 @@ def shell_css() -> str:
     .dataset-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 12px 10px; border-bottom: 1px solid #e3ebe6; }
     .dataset-detail-title { min-width: 0; font-size: 14px; line-height: 1.24; font-weight: 780; color: var(--text); }
     .dataset-detail-id { margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
+    .dataset-detail-close { flex: 0 0 auto; width: 30px; height: 30px; border: 1px solid #dce8e2; border-radius: 8px; background: #fff; color: var(--text); display: grid; place-items: center; font-size: 20px; line-height: 1; cursor: pointer; }
+    .dataset-detail-close:hover { background: #f6faf8; }
     .dataset-detail-body { padding: 12px; overflow: auto; display: grid; gap: 11px; min-height: 0; }
     .dataset-detail-thumb { width: 100%; aspect-ratio: 16 / 9; border: 1px solid #e3ebe6; border-radius: 8px; object-fit: cover; background: #eef3f0; }
     .dataset-detail-badges { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1933,9 +1985,9 @@ def shell_css() -> str:
     }
     .bottom {
       position: fixed;
-      top: 76px;
+      top: 52px;
       right: 10px;
-      bottom: 12px;
+      bottom: 10px;
       width: min(420px, calc(100vw - 76px));
       max-height: none;
       z-index: 1600;
@@ -1961,10 +2013,10 @@ def shell_css() -> str:
     .quota-tier { color: #395247; }
     .quota-link-mini { color: var(--accent); text-decoration: none; font-size: 11px; font-weight: 720; white-space: nowrap; }
     .quota-link-mini:hover { text-decoration: underline; }
-    .quota-stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-bottom: 10px; }
-    .quota-stat { border: 1px solid #e3ebe6; border-radius: 7px; background: rgba(255,255,255,0.78); padding: 8px 9px; min-width: 0; }
+    .quota-stat-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .quota-stat { border: 1px solid #e3ebe6; border-radius: 999px; background: rgba(255,255,255,0.76); padding: 4px 8px; min-width: 0; display: inline-flex; align-items: baseline; gap: 5px; }
     .quota-stat span { display: block; font-size: 10px; color: var(--muted); line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .quota-stat strong { display: block; margin-top: 6px; font-size: 17px; line-height: 1; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .quota-stat strong { display: block; font-size: 12px; line-height: 1; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .quota-summary {
       margin-bottom: 10px;
       padding: 7px 8px;
@@ -2476,7 +2528,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "section.layerStack": "图层栈",
         "placeholder.searchDatasets": "按名称、类别或 ID 搜索图层",
         "placeholder.filterOptions": "筛选类别...",
-        "catalog.categories": "分类",
+        "catalog.categories": "分类（当前类型）",
         "catalog.all": "全部",
         "catalog.typeAll": "全部",
         "catalog.typeImageCollection": "影像集合",
@@ -2537,6 +2589,12 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "data.detailTags": "标签",
         "data.detailNoDescription": "暂无详细简介。请打开数据目录或示例代码核对字段、许可和使用方式。",
         "data.detailCopied": "数据集 ID 已复制",
+        "data.attrTime": "时间",
+        "data.attrSpan": "跨度",
+        "data.attrResolution": "分辨率",
+        "data.attrType": "类型",
+        "data.attrYear": ":count 年",
+        "data.attrMonth": ":count 月",
         "data.processing": "正在处理并生成图层",
         "data.generated": "已可视化",
         "data.failed": "生成失败",
@@ -2555,9 +2613,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.aoiOff": "AOI 绘制已关闭",
         "mode.aoiTooSmall": "AOI 太小",
         "quota.project": "项目：:project",
-        "quota.tier": "等级：:tier",
-        "quota.tierInferred": "等级：:tier（推断）",
-        "quota.tierUnknown": "等级：未识别",
+        "quota.tier": "用量层级：:tier",
+        "quota.tierInferred": "用量层级：:tier",
+        "quota.tierUnknown": "用量层级：待连接",
         "quota.items": "额度项",
         "quota.summaryLiveUsage": "实时用量可用",
         "quota.summaryLiveLimit": "实时额度可用；用量未接通",
@@ -2659,7 +2717,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "section.layerStack": "Layer Stack",
         "placeholder.searchDatasets": "Search layers by name, category, or id",
         "placeholder.filterOptions": "Filter options...",
-        "catalog.categories": "Categories",
+        "catalog.categories": "Categories (current type)",
         "catalog.all": "All",
         "catalog.typeAll": "All",
         "catalog.typeImageCollection": "Image collections",
@@ -2720,6 +2778,12 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "data.detailTags": "Tags",
         "data.detailNoDescription": "No detailed description is available. Open the catalog page or sample code to verify fields, license, and usage.",
         "data.detailCopied": "Dataset ID copied",
+        "data.attrTime": "Time",
+        "data.attrSpan": "Span",
+        "data.attrResolution": "Resolution",
+        "data.attrType": "Type",
+        "data.attrYear": ":count yr",
+        "data.attrMonth": ":count mo",
         "data.processing": "Processing and generating layer",
         "data.generated": "Visualized",
         "data.failed": "Generation failed",
@@ -2738,9 +2802,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.aoiOff": "AOI draw off",
         "mode.aoiTooSmall": "AOI too small",
         "quota.project": "Project: :project",
-        "quota.tier": "Tier: :tier",
-        "quota.tierInferred": "Tier: :tier (inferred)",
-        "quota.tierUnknown": "Tier: unknown",
+        "quota.tier": "Usage tier: :tier",
+        "quota.tierInferred": "Usage tier: :tier",
+        "quota.tierUnknown": "Usage tier: pending",
         "quota.items": "Quota items",
         "quota.summaryLiveUsage": "Live usage available",
         "quota.summaryLiveLimit": "Live limits available; usage unavailable",
@@ -3088,10 +3152,12 @@ def render_html(state: dict, leaflet_src: str) -> str:
         imagery: 'imagery',
         orthophotos: 'imagery',
         radar: 'imagery',
+        'analysis ready data': 'imagery',
         climate: 'climate-atmosphere',
         atmosphere: 'climate-atmosphere',
         precipitation: 'climate-atmosphere',
         'water-vapor': 'climate-atmosphere',
+        'weather and climate layers': 'climate-atmosphere',
         'surface-ground-water': 'water-ocean',
         hydrology: 'water-ocean',
         water: 'water-ocean',
@@ -3104,21 +3170,34 @@ def render_html(state: dict, leaflet_src: str) -> str:
         ecosystems: 'vegetation-ecosystems',
         agriculture: 'vegetation-ecosystems',
         'agriculture and food security': 'vegetation-ecosystems',
+        'agriculture vegetation and forestry': 'vegetation-ecosystems',
+        'biodiversity ecosystems habitat layers': 'vegetation-ecosystems',
         'landuse-landcover': 'land-cover',
         'land-cover': 'land-cover',
         'land use land cover': 'land-cover',
+        'regional land use and land cover': 'land-cover',
+        'global land use and land cover': 'land-cover',
         'elevation-topography': 'terrain',
         elevation: 'terrain',
         topography: 'terrain',
+        bathymetry: 'terrain',
+        'elevation and bathymetry': 'terrain',
+        'terrain and topography': 'terrain',
         population: 'human-built',
         'infrastructure-boundaries': 'human-built',
         'population-built': 'human-built',
         'infrastructure and boundaries': 'human-built',
+        'population socioeconomic': 'human-built',
+        'global utilities assets and amenities layers': 'human-built',
         soil: 'soil-geology',
         soils: 'soil-geology',
         geology: 'soil-geology',
+        'soil properties': 'soil-geology',
+        'geophysical biological biogeochemical': 'soil-geology',
         fire: 'hazards',
         disasters: 'hazards',
+        'fire monitoring and analysis': 'hazards',
+        'global events layers': 'hazards',
         cryosphere: 'cryosphere',
         other: 'other',
       }};
@@ -3136,12 +3215,18 @@ def render_html(state: dict, leaflet_src: str) -> str:
         'other',
       ];
       if (raw) {{
+        const compactRaw = raw.replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
         const groups = raw
           .split(',')
           .map(part => part.trim())
           .filter(Boolean)
-          .map(part => categoryMap[part] || 'other');
-        return priority.find(group => groups.includes(group)) || 'other';
+          .map(part => {{
+            const compactPart = part.replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+            return categoryMap[part] || categoryMap[compactPart] || '';
+          }})
+          .filter(Boolean);
+        const direct = categoryMap[raw] || categoryMap[compactRaw] || priority.find(group => groups.includes(group));
+        if (direct && direct !== 'other') return direct;
       }}
       const haystack = datasetSearchText(item);
       if (/(climate|weather|temperature|precipitation|rain|era5|chirps|atmosphere|aerosol|ozone|water vapor)/.test(haystack)) return 'climate-atmosphere';
@@ -3324,6 +3409,37 @@ def render_html(state: dict, leaflet_src: str) -> str:
       if (start && end) return `${{start}} - ${{end}}`;
       return start || end || '';
     }}
+    function datasetDurationText(item) {{
+      const start = Date.parse(datasetDetailValue(item.startDate));
+      const endText = datasetDetailValue(item.endDate);
+      const end = endText ? Date.parse(endText) : Date.now();
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return '';
+      const months = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24 * 30.4375)));
+      if (months >= 24) return t('data.attrYear', {{ count: trimNumber((months / 12).toFixed(months >= 120 ? 0 : 1)) }});
+      return t('data.attrMonth', {{ count: months }});
+    }}
+    function datasetResolutionText(item) {{
+      const scale = datasetDetailValue(item.scale);
+      if (!scale) return '';
+      const lower = scale.toLowerCase();
+      if (/^(image|image collection|table|feature|vector|catalog|ready layer|official catalog|community catalog)$/.test(lower)) return '';
+      if (/\\b(\\d+(\\.\\d+)?\\s*(m|meter|meters|km|kilometer|kilometers|deg|degree|degrees|arcsec|arc-second|arcseconds)|scale)\\b/.test(lower)) return scale;
+      return '';
+    }}
+    function datasetAttr(labelKey, value) {{
+      const text = datasetDetailValue(value);
+      if (!text) return '';
+      return `<span class="dataset-attr"><strong>${{escapeHtml(t(labelKey))}}</strong> ${{escapeHtml(text)}}</span>`;
+    }}
+    function datasetAttrsHtml(item, typeLabel) {{
+      const attrs = [
+        datasetAttr('data.attrTime', datasetDateText(item)),
+        datasetAttr('data.attrSpan', datasetDurationText(item)),
+        datasetAttr('data.attrResolution', datasetResolutionText(item)),
+        datasetAttr('data.attrType', typeLabel),
+      ].filter(Boolean);
+      return attrs.length ? `<div class="dataset-attrs">${{attrs.join('')}}</div>` : '';
+    }}
     function datasetDetailSection(labelKey, value) {{
       const text = datasetDetailValue(value);
       if (!text) return '';
@@ -3352,7 +3468,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
             <div class="dataset-detail-title">${{escapeHtml(item.label || item.id)}}</div>
             <div class="dataset-detail-id">${{escapeHtml(item.id || '')}}</div>
           </div>
-          <button class="icon-btn panel-close" id="dataset-detail-close" title="${{escapeHtml(t('tool.close'))}}" aria-label="${{escapeHtml(t('tool.close'))}}" type="button">${svg_icon("close")}</button>
+          <button class="dataset-detail-close" id="dataset-detail-close" title="${{escapeHtml(t('tool.close'))}}" aria-label="${{escapeHtml(t('tool.close'))}}" type="button">&times;</button>
         </div>
         <div class="dataset-detail-body">
           ${{thumb ? `<img class="dataset-detail-thumb" src="${{escapeHtml(thumb)}}" alt="">` : ''}}
@@ -3720,10 +3836,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const provider = item.provider ? `<div class="dataset-provider">${{escapeHtml(item.provider)}}</div>` : '';
       const tagsText = [catalogCategoryLabel(catalogCategoryKey(item)), item.tags, item.license].filter(Boolean).join(' · ');
       const tags = tagsText ? `<div class="dataset-tags">${{escapeHtml(tagsText)}}</div>` : '';
-      const statusKey = pending ? 'data.processing' : failed ? 'data.failed' : ready ? 'data.ready' : 'data.catalogItem';
-      const statusText = ready ? t(statusKey, {{ count: readyCount }}) : t(statusKey);
+      const statusKey = pending ? 'data.processing' : failed ? 'data.failed' : ready ? 'data.ready' : '';
+      const statusText = ready ? t(statusKey, {{ count: readyCount }}) : statusKey ? t(statusKey) : '';
       const statusClass = pending ? 'pending' : failed ? 'error' : ready ? '' : 'muted';
       const typeLabel = catalogTypeLabel(normalizeCatalogType(item));
+      const attrs = datasetAttrsHtml(item, typeLabel);
       const favorite = isFavoriteDataset(item.id);
       const favoriteTitle = favorite ? t('data.unfavoriteTitle') : t('data.favoriteTitle');
       const sourceLabel = catalogSourceLabel(item);
@@ -3732,9 +3849,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
           <div>
             <div class="dataset-name">${{escapeHtml(item.label)}}</div>
             <div class="dataset-meta">${{escapeHtml(item.id)}} | ${{escapeHtml(typeLabel)}} | ${{escapeHtml(sourceLabel)}} | ${{escapeHtml(item.scale || item.category || '')}}</div>
+            ${{attrs}}
             ${{tags}}
             ${{provider}}
-            <div class="dataset-status ${{statusClass}}">${{escapeHtml(statusText)}}</div>
+            ${{statusText ? `<div class="dataset-status ${{statusClass}}">${{escapeHtml(statusText)}}</div>` : ''}}
           </div>
           <div class="dataset-actions">
             <button class="dataset-favorite icon-btn ${{favorite ? 'active' : ''}}" data-action="favorite" title="${{escapeHtml(favoriteTitle)}}" aria-label="${{escapeHtml(favoriteTitle)}}" aria-pressed="${{favorite ? 'true' : 'false'}}" type="button">{svg_icon("favorite")}</button>
