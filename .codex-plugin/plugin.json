@@ -1,0 +1,46 @@
+{
+  "name": "easygee",
+  "version": "0.1.0",
+  "description": "Google Earth Engine, geemap, and bundled GeoMaster workflows with catalog search, auth guidance, quota checks, and a lightweight local map console.",
+  "author": {
+    "name": "Liang"
+  },
+  "homepage": "https://github.com/Rimagination/easygee",
+  "repository": "https://github.com/Rimagination/easygee",
+  "license": "MIT",
+  "keywords": [
+    "earth-engine",
+    "geemap",
+    "gis",
+    "remote-sensing",
+    "mcp",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "EasyGEE",
+    "shortDescription": "Use GEE, geemap, quotas, catalog search, and browser maps from Codex.",
+    "longDescription": "EasyGEE packages a Google Earth Engine and geemap workflow layer for agents, plus a bundled GeoMaster skill snapshot for local GIS, CRS, remote sensing, ML, STAC/COG, and scientific-domain methods. It provides credential-safe authentication guidance, Cloud project and quota checks, Earth Engine catalog search, GeoMaster-aware method routing, reusable GEE/geemap scripts, and a lightweight browser map console for AOI drawing, layer inspection, and visualization handoff.",
+    "developerName": "Liang",
+    "category": "Science",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/Rimagination/easygee",
+    "privacyPolicyURL": "https://github.com/Rimagination/easygee",
+    "termsOfServiceURL": "https://github.com/Rimagination/easygee",
+    "defaultPrompt": [
+      "帮我授权 geemap 到 Earth Engine 项目",
+      "搜索 GEE 数据集并添加到地图",
+      "打开 EasyGEE 地图控制台"
+    ],
+    "brandColor": "#0F766E",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
+    "logoDark": "./assets/logo-dark.png",
+    "screenshots": []
+  }
+}

@@ -1,0 +1,113 @@
+# Browser Preview
+
+Use this reference when the user asks for an interactive map, browser-based
+visual inspection, a persistent lightweight visualization page, or an in-app
+Browser handoff for GEE/geemap outputs.
+
+If the request mixes analysis and visualization, read
+`interaction-router.md` first. This file explains the mechanics of building and
+serving the browser surface after the routing decision is made.
+
+## Current Capability
+
+EasyGEE can prepare and serve a local preview page. It does not own the browser
+runtime by itself; when the in-app Browser skill is available, load
+`browser:control-in-app-browser` and open the local preview URL there. If the
+Browser skill is unavailable, provide the localhost URL or local HTML path as a
+fallback.
+
+## Standard Flow
+
+1. Choose the preview surface:
+
+```powershell
+# Fixed EasyGEE workbench UI
+python scripts/create_map_console.py --project YOUR_EE_PROJECT --output map-console/index.html
+
+# One-off geemap/folium HTML artifact
+python your_map_script.py
+```
+
+Use `create_map_console.py` when the user wants a stable browser interface with
+layer list, catalog search, inspector, task/log panels, and project-state
+export. The generated shell is viewer-first: the map occupies the full browser
+surface, and status/control regions stay compressed as floating drawers until
+the user opens them. Its interaction style is inspired by professional
+ArcGIS/Calcite-style web GIS apps such as Insight Maps: a compact icon tool
+rail, an icon-only 30 px status badge instead of a title bar, semantic
+layer-type marks, a quota status icon backed by total/used/remaining quota rows
+when Cloud Quotas and Monitoring are available, a simple line scale, a
+Chinese/English language toggle, and short-lived mode chips instead of large
+always-on status panels. Use direct geemap HTML when the user only needs a
+specific map artifact from notebook code.
+
+2. Build or export the map artifact:
+
+```python
+m = geemap.Map()
+# add Earth Engine layers, vector layers, legends, controls, etc.
+m.to_html("map_preview.html")
+```
+
+3. Start the local preview server with Python's standard library helper:
+
+```powershell
+python scripts/serve_map_preview.py map_preview.html
+```
+
+4. Keep that server process running while the user interacts with the map.
+5. Open the printed `http://127.0.0.1:PORT/...` URL in the in-app Browser when
+   that browser surface is available.
+6. Use the browser view to inspect layer loading, pan/zoom behavior, legends,
+   popups, and whether tiles/rendered HTML are nonblank.
+
+## EasyGEE Map Console
+
+The Map Console is EasyGEE's fixed local browser shell. It is not the native
+GEE Code Editor and it is not a geemap widget; it is a lightweight local UI for
+recurring GEE/geemap previews.
+
+Standard regions:
+
+- Top bar: an icon-only status badge for EE readiness. Project/title/AOI
+  details belong in a hover/focus tooltip, not in always-visible map space.
+- Tool rail: icon buttons for layers, inspector, measure, basemap, quota
+  status, task/state, home, zoom controls, and language switching.
+- Left drawer: catalog search and layer stack with opacity controls.
+- Map workspace: Leaflet map with Earth Engine tile overlays and a minimal
+  custom line scale.
+- Right drawer: click inspector, active layer metadata, legend.
+- Bottom drawer: task board, session log, project state, and state export.
+  The project section includes quota rows with total, used, and remaining
+  values. If live usage is unavailable, it must say so directly and use the
+  official default/fixed quota reference only as a fallback.
+
+Generated Earth Engine tile URLs are local preview material. Do not commit the
+HTML page or copy tile URLs into chat/logs; regenerate the console when tiles
+expire or the analysis changes.
+
+## When To Use This
+
+- Interactive geemap map previews.
+- Visual QA before exporting screenshots or static maps.
+- Lightweight "always open" map page during iterative analysis.
+- Local HTML, Leaflet/Folium/geemap exports, simple dashboards, or map reports.
+
+## When Not To Use This
+
+- Headless batch exports that do not need visual inspection.
+- Confidential credential flows. Authentication remains a separate setup step.
+- Proof of analysis correctness. A browser map is a diagnostic view, not a
+  substitute for reducer/export validation.
+
+## Notes
+
+- `scripts/serve_map_preview.py` uses only Python's standard library.
+- The preview page may still need network access if the exported HTML loads
+  online basemap tiles, CDNs, or Earth Engine tile URLs.
+- Do not paste OAuth URLs, tokens, credential files, or service account keys
+  into the page or browser automation logs.
+- If the map depends on Earth Engine tiles, initialize/authenticate in the
+  Python workflow before exporting the geemap HTML.
+- Prefer `127.0.0.1` binding for local previews unless the user explicitly asks
+  to expose the page on the network.

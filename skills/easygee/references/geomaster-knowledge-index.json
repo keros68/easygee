@@ -1,0 +1,97 @@
+{
+  "source_skill": "geomaster",
+  "integration_policy": "Use GeoMaster as EasyGEE's geospatial method backend. Do not bulk-copy examples into EasyGEE; route to the smallest relevant GeoMaster reference and keep EasyGEE responsible for GEE auth, quota, catalog, browser, and export orchestration.",
+  "backend_methods": {
+    "gee_first": "Use Earth Engine/geemap for cloud-scale catalog access, compositing, reducers, visualization, and exports.",
+    "local_first": "Use local GIS/remote-sensing libraries for local files, CRS-heavy operations, windowed raster IO, topology, network, point cloud, or COG/STAC processing.",
+    "hybrid": "Use GEE for data access or preprocessing, then local tools for COG/STAC, ML, advanced statistics, or exact file-based GIS work.",
+    "catalog_first": "Search and verify candidate datasets before analysis.",
+    "browser_first": "Use EasyGEE Map Console for AOI drawing, layer inspection, annotations, or visual QA before computation."
+  },
+  "entries": [
+    {
+      "id": "coordinate-systems",
+      "file": "geomaster:coordinate-systems.md",
+      "triggers": ["CRS", "projection", "EPSG", "UTM", "area", "distance", "axis order", "坐标系", "投影", "面积", "距离"],
+      "easygee_use": "Decide units/projection for local or hybrid calculations; warn against area/distance in geographic or Web Mercator CRS."
+    },
+    {
+      "id": "core-libraries",
+      "file": "geomaster:core-libraries.md",
+      "triggers": ["GeoPandas", "Rasterio", "GDAL", "Shapely", "PyProj", "Fiona", "local vector", "local raster", "本地矢量", "本地栅格"],
+      "easygee_use": "Pick local Python libraries and IO patterns for local_first or post-export hybrid steps."
+    },
+    {
+      "id": "remote-sensing",
+      "file": "geomaster:remote-sensing.md",
+      "triggers": ["Sentinel", "Landsat", "MODIS", "SAR", "hyperspectral", "spectral index", "cloud mask", "NDVI", "NDWI", "遥感", "云掩膜"],
+      "easygee_use": "Supplement EasyGEE dataset QA with mission, index, SAR, hyperspectral, and preprocessing methods."
+    },
+    {
+      "id": "machine-learning",
+      "file": "geomaster:machine-learning.md",
+      "triggers": ["classification", "random forest", "CNN", "GNN", "TorchGeo", "training data", "机器学习", "分类", "训练"],
+      "easygee_use": "Route model training, inference, feature engineering, and evaluation to local or hybrid workflows."
+    },
+    {
+      "id": "gis-software",
+      "file": "geomaster:gis-software.md",
+      "triggers": ["QGIS", "ArcGIS", "GRASS", "PostGIS", "desktop GIS", "桌面 GIS"],
+      "easygee_use": "Bridge EasyGEE outputs into desktop GIS or database workflows when browser preview is insufficient."
+    },
+    {
+      "id": "scientific-domains",
+      "file": "geomaster:scientific-domains.md",
+      "triggers": ["marine", "coastal", "atmosphere", "hydrology", "agriculture", "forestry", "海洋", "水文", "农业", "森林"],
+      "easygee_use": "Choose domain-specific assumptions, indicators, and validation cautions."
+    },
+    {
+      "id": "advanced-gis",
+      "file": "geomaster:advanced-gis.md",
+      "triggers": ["3D GIS", "spatiotemporal", "topology", "network analysis", "viewshed", "trajectory", "三维", "拓扑", "网络分析", "轨迹"],
+      "easygee_use": "Prefer local or hybrid workflows for topology, routing, trajectories, service areas, and 3D analysis."
+    },
+    {
+      "id": "big-data",
+      "file": "geomaster:big-data.md",
+      "triggers": ["Dask", "COG", "STAC", "Planetary Computer", "GCS", "Zarr", "Parquet", "GPU", "xarray", "大数据", "云原生"],
+      "easygee_use": "Plan cloud-native local/hybrid data handling after GEE export or outside GEE."
+    },
+    {
+      "id": "industry-applications",
+      "file": "geomaster:industry-applications.md",
+      "triggers": ["urban", "disaster", "infrastructure", "environmental monitoring", "城市", "灾害", "基础设施", "环境监测"],
+      "easygee_use": "Frame outputs and validation around applied decision contexts."
+    },
+    {
+      "id": "programming-languages",
+      "file": "geomaster:programming-languages.md",
+      "triggers": ["R", "Julia", "JavaScript", "C++", "Java", "Go", "Rust", "多语言"],
+      "easygee_use": "Translate EasyGEE patterns to non-Python environments when explicitly requested."
+    },
+    {
+      "id": "data-sources",
+      "file": "geomaster:data-sources.md",
+      "triggers": ["data source", "catalog", "STAC", "API", "satellite catalog", "数据源", "目录", "API"],
+      "easygee_use": "Compare GEE catalog options with external STAC, open data, and platform alternatives."
+    },
+    {
+      "id": "troubleshooting",
+      "file": "geomaster:troubleshooting.md",
+      "triggers": ["GDAL install", "CRS mismatch", "memory error", "invalid geometry", "coordinate order", "slow raster", "报错", "内存", "坐标错误"],
+      "easygee_use": "Diagnose local GIS stack, CRS, geometry, memory, and performance failures."
+    },
+    {
+      "id": "code-examples",
+      "file": "geomaster:code-examples.md",
+      "triggers": ["example", "snippet", "template", "示例", "代码"],
+      "easygee_use": "Retrieve a local GIS or remote-sensing example only after method routing identifies the backend."
+    },
+    {
+      "id": "specialized-topics",
+      "file": "geomaster:specialized-topics.md",
+      "triggers": ["geostatistics", "kriging", "optimization", "privacy", "provenance", "reproducible", "地统计", "克里金", "优化", "隐私", "溯源"],
+      "easygee_use": "Route specialized statistics, optimization, privacy, provenance, and reproducibility questions to local/hybrid methods."
+    }
+  ]
+}

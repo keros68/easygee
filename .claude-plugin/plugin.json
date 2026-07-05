@@ -1,0 +1,19 @@
+{
+  "name": "easygee",
+  "version": "0.1.0",
+  "description": "Google Earth Engine and geemap workflow bundle with skills, commands, hooks, and a local MCP server.",
+  "author": {
+    "name": "Liang"
+  },
+  "homepage": "https://github.com/Rimagination/easygee",
+  "repository": "https://github.com/Rimagination/easygee",
+  "license": "MIT",
+  "keywords": [
+    "earth-engine",
+    "geemap",
+    "gis",
+    "remote-sensing",
+    "mcp"
+  ],
+  "skills": "./skills/"
+}
