@@ -77,22 +77,22 @@ python C:\Users\Liang\.codex\skills\.system\plugin-creator\scripts\validate_plug
 
 ### 2. 快速使用
 
-插件提供一个本地 stdio MCP server，包含以下工具：
-
-- `easygee_check_environment`
-- `easygee_auth_plan`
-- `easygee_search_catalog`
-- `easygee_quota_summary`
-- `easygee_create_map_console`
-- `easygee_preview_plan`
-
-典型触发方式：
+直接用自然语言告诉 Agent 你要做什么。下面这些例子覆盖了最常见的日常用法：
 
 ```text
 帮我授权 geemap 到 example-ee-project-123456
-搜索适合看北京朝阳公园 NDVI 的 GEE 数据集
-打开 EasyGEE 地图控制台，我想画 AOI
-查看 Earth Engine 项目的配额和剩余额度
+
+打开 EasyGEE 地图，我想先看看北京朝阳公园附近，然后手动画一个 AOI
+
+我想做北京朝阳公园 2024 年夏季 NDVI，帮我选择合适的 GEE 数据集并解释为什么
+
+把 Sentinel-2 真彩色和 NDVI 叠加到地图上，我想在浏览器里检查云和植被情况
+
+查看我的 Earth Engine 项目配额、用量层级和剩余额度
+
+帮我把当前 AOI 的 NDVI 结果导出到 Google Drive，并告诉我导出参数是否合理
+
+我有一个本地 GeoJSON，帮我判断应该用 GEE 处理还是本地 GIS 处理，并生成可运行脚本
 ```
 
 ## 安全

@@ -77,22 +77,22 @@ python C:\Users\Liang\.codex\skills\.system\plugin-creator\scripts\validate_plug
 
 ### 2. Quick Use
 
-The plugin exposes a local stdio MCP server with these tools:
-
-- `easygee_check_environment`
-- `easygee_auth_plan`
-- `easygee_search_catalog`
-- `easygee_quota_summary`
-- `easygee_create_map_console`
-- `easygee_preview_plan`
-
-Typical prompts:
+Just tell the agent what you want in plain language. These examples cover common daily workflows:
 
 ```text
 Authorize geemap for example-ee-project-123456.
-Find GEE datasets for NDVI around Beijing Chaoyang Park.
-Open the EasyGEE map console so I can draw an AOI.
-Show my Earth Engine project quota and remaining capacity.
+
+Open the EasyGEE map around Beijing Chaoyang Park so I can draw an AOI.
+
+I want summer 2024 NDVI for Beijing Chaoyang Park. Pick a suitable GEE dataset and explain why.
+
+Add Sentinel-2 true color and NDVI layers to the map so I can inspect clouds and vegetation in the browser.
+
+Show my Earth Engine project quota, usage tier, and remaining capacity.
+
+Export NDVI for the current AOI to Google Drive and check whether the export parameters make sense.
+
+I have a local GeoJSON. Decide whether this should run in GEE or local GIS, then generate a runnable script.
 ```
 
 ## Security
