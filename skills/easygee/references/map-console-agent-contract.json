@@ -37,10 +37,13 @@
     "aoiShown",
     "aoiStyle",
     "measurements",
+    "measurementsShown",
+    "measurementsOpacity",
     "measurementSummary",
     "selectedDataset",
     "layers",
     "tasks",
+    "quota",
     "visualPreferences",
     "favoriteDatasets"
   ],
@@ -125,7 +128,9 @@
   },
   "measurements": {
     "fields": ["id", "start", "end", "lengthMeters", "lengthLabel", "createdAt"],
-    "summaryFields": ["count", "totalMeters", "meanMeters", "minMeters", "maxMeters"]
+    "summaryFields": ["count", "totalMeters", "meanMeters", "minMeters", "maxMeters"],
+    "layerId": "__easygee_measurements__",
+    "layerBehavior": "When measurements exist, the Map Console exposes them as a system layer in the layer stack. hide/show preserves saved measurements; remove clears them."
   },
   "actions": {
     "supported": ["addLayer", "removeLayer", "showLayer", "hideLayer", "selectLayer", "setLayerVisibility", "setLayerOpacity", "selectDataset", "setAoi", "clearAoi", "setAoiStyle", "updateLayerStyle", "clearMeasurements", "extractNdvi", "addTask", "exportNdviDrive"],
@@ -133,7 +138,11 @@
   },
   "compactState": {
     "agentCommand": "map_console_agent.py state --compact",
-    "purpose": "Return only the state fields agents usually need for follow-up work, omitting Earth Engine tile URLs and bulky AOI/layer detail."
+    "purpose": "Return only the state fields agents usually need for follow-up work, omitting Earth Engine tile URLs and bulky AOI/layer detail. Includes a safe quota summary with status/source/usageSource so agents can detect default-only fallback state."
+  },
+  "quotaRefresh": {
+    "agentCommand": "refresh_map_console_quota.py <map.html>",
+    "purpose": "Refresh only the embedded STATE.quota object in an existing generated Map Console page after UI-only maintenance. The helper preserves layers, AOI, measurements, and tile URLs, and refuses to write default-only fallback quota state unless --allow-fallback is explicit."
   },
   "quickLayer": {
     "agentCommand": "map_console_agent.py quick-layer",
@@ -154,6 +163,8 @@
     "For common NDVI map requests, agents should try quick-layer first and fall back to render-recipe or dataset search only when no fast path matches.",
     "Persistent profile state is the durable source for dataset favorites, AOI, and measurements across localhost ports.",
     "AOI is represented as a system layer in the layer stack and can be styled, hidden, or cleared through the same layer workflow.",
+    "Measurement markers are represented as a system layer in the layer stack and can be hidden, faded, or removed through the same layer workflow.",
+    "For UI-only Map Console maintenance, do not regenerate a user-facing page with --no-live-quota or --no-quota-usage; patch the UI and use refresh_map_console_quota.py for quota-only refreshes. Non-sample pages require --allow-default-quota-state before create_map_console.py will write default-only quota state.",
     "When explicit AOI is cleared, aoi is null but processingAoi and processingBounds fall back to the current map viewport so preview layers can still be rendered.",
     "GEE layer visualization changes should update visParams through the workbench protocol and regenerate tile URLs instead of editing generated HTML.",
     "For vague extraction requests, run the planner first and ask one multiple-choice clarification when the route is ask_user.",

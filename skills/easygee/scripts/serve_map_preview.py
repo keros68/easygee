@@ -402,6 +402,13 @@ def merge_profile_with_state(state: dict[str, object]) -> dict[str, object]:
         measurements = state.get("measurements")
         if isinstance(measurements, list) and (measurements or reason in CLEAR_MEASUREMENT_REASONS):
             entry["measurements"] = json_clone(measurements)
+            if reason in CLEAR_MEASUREMENT_REASONS:
+                entry.pop("measurementsShown", None)
+                entry.pop("measurementsOpacity", None)
+        if reason not in CLEAR_MEASUREMENT_REASONS and isinstance(state.get("measurementsShown"), bool):
+            entry["measurementsShown"] = state["measurementsShown"]
+        if reason not in CLEAR_MEASUREMENT_REASONS and isinstance(state.get("measurementsOpacity"), (int, float)):
+            entry["measurementsOpacity"] = state["measurementsOpacity"]
         layers = sanitize_recent_layers(state.get("layers"))
         if layers:
             entry["recentLayers"] = layers

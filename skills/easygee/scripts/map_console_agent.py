@@ -184,6 +184,28 @@ def compact_selected_dataset(selected: Any) -> dict[str, Any] | None:
     return compact
 
 
+def compact_quota(quota: Any) -> dict[str, Any] | None:
+    if not isinstance(quota, dict):
+        return None
+    keys = ["status", "indicator", "source", "usageSource", "refreshedAt"]
+    compact = {key: quota.get(key) for key in keys if quota.get(key) not in (None, "", [])}
+    rows = quota.get("rows") if isinstance(quota.get("rows"), list) else []
+    warnings = quota.get("warnings") if isinstance(quota.get("warnings"), list) else []
+    if rows:
+        compact["rowCount"] = len(rows)
+        known_usage = sum(1 for row in rows if isinstance(row, dict) and row.get("usageKnown"))
+        compact["usageKnownCount"] = known_usage
+        warn_count = sum(1 for row in rows if isinstance(row, dict) and row.get("status") == "warn")
+        if warn_count:
+            compact["warningRowCount"] = warn_count
+    if warnings:
+        compact["warnings"] = [str(item) for item in warnings[:3]]
+    tier = quota.get("tier") if isinstance(quota.get("tier"), dict) else None
+    if tier:
+        compact["tier"] = {key: tier.get(key) for key in ("name", "kind", "source") if tier.get(key) not in (None, "", [])}
+    return compact or None
+
+
 def compact_state_response(payload: dict[str, Any]) -> dict[str, Any]:
     state = payload.get("state") if isinstance(payload.get("state"), dict) else {}
     layers = [item for item in (compact_layer(layer) for layer in state.get("layers", [])) if item]
@@ -202,10 +224,13 @@ def compact_state_response(payload: dict[str, Any]) -> dict[str, Any]:
         "aoi": compact_aoi(state.get("aoi")),
         "hasExplicitAoi": state.get("hasExplicitAoi"),
         "processingBounds": state.get("processingBounds"),
+        "measurementsShown": state.get("measurementsShown"),
+        "measurementsOpacity": state.get("measurementsOpacity"),
         "measurementSummary": state.get("measurementSummary"),
         "selectedDataset": compact_selected_dataset(state.get("selectedDataset")),
         "layers": layers,
         "tasks": tasks,
+        "quota": compact_quota(state.get("quota")),
         "favoriteDatasetCount": len(state.get("favoriteDatasets", [])) if isinstance(state.get("favoriteDatasets"), list) else 0,
         "visualPreferences": state.get("visualPreferences") if isinstance(state.get("visualPreferences"), dict) else None,
     }
@@ -438,6 +463,12 @@ def command_selected_dataset(args: argparse.Namespace) -> int:
 
 def command_clear_aoi(args: argparse.Namespace) -> int:
     payload = enqueue_action(args.url, {"type": "clearAoi", "source": "map_console_agent"}, args.timeout)
+    print_json(payload, args.pretty)
+    return 0 if payload.get("ok") else 1
+
+
+def command_clear_measurements(args: argparse.Namespace) -> int:
+    payload = enqueue_action(args.url, {"type": "clearMeasurements", "source": "map_console_agent"}, args.timeout)
     print_json(payload, args.pretty)
     return 0 if payload.get("ok") else 1
 
@@ -907,6 +938,10 @@ def build_parser() -> argparse.ArgumentParser:
     clear_aoi = subparsers.add_parser("clear-aoi", help="Clear the current AOI from the Map Console.")
     add_url_args(clear_aoi)
     clear_aoi.set_defaults(func=command_clear_aoi)
+
+    clear_measurements = subparsers.add_parser("clear-measurements", help="Clear saved distance measurements from the Map Console.")
+    add_url_args(clear_measurements)
+    clear_measurements.set_defaults(func=command_clear_measurements)
 
     remove_layer = subparsers.add_parser("remove-layer", help="Remove a layer from the Map Console layer stack.")
     add_url_args(remove_layer)

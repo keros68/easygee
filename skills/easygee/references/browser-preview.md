@@ -84,7 +84,15 @@ Standard regions:
   values. If live usage is unavailable, it must say so directly and use the
   official default/fixed quota reference only as a fallback.
   Do not use `--no-live-quota` for ordinary user-facing workbench pages; it is
-  reserved for offline smoke tests or explicit no-network previews.
+  reserved for offline smoke tests or explicit no-network previews. For
+  non-sample pages, the generator requires the explicit
+  `--allow-default-quota-state` guard before it will write default-only quota
+  state.
+  When making UI-only changes to an existing generated page, patch the UI and
+  run `scripts/refresh_map_console_quota.py <map.html>` if quota state needs a
+  refresh. That helper updates only `STATE.quota` and refuses to write
+  default-only fallback quota state by default, preserving the current map,
+  AOI, measurements, and Earth Engine tile layers.
 
 Generated Earth Engine tile URLs are local preview material. Do not commit the
 HTML page or copy tile URLs into chat/logs; regenerate the console when tiles

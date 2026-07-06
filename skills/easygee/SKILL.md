@@ -156,6 +156,10 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   quota URL when the user asks for quota values. Use `--include-usage` only
   when the user asks for recent/current usage. Report whether results are live
   Cloud Quotas/Monitoring data or official fallback defaults.
+- Use `scripts/refresh_map_console_quota.py <map.html>` after UI-only edits to
+  an existing Map Console HTML file when quota state needs to be refreshed.
+  This updates only `STATE.quota` and refuses to write default-only fallback
+  quota state unless `--allow-fallback` is explicitly provided.
 - Use `scripts/route_easygee_interaction.py "<task>" --json` before nontrivial
   analysis or visualization requests to classify `compute_first`, `map_first`,
   or `mixed`, along with browser policy and expected result artifacts.
@@ -258,7 +262,15 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   output, OAuth URLs, service account keys, or credential file contents.
 - For normal Map Console pages, leave live quota lookup enabled so the UI can
   show Cloud Quotas / Monitoring status. Use `--no-live-quota` only for offline
-  tests, smoke runs, or explicitly requested no-network previews.
+  tests, smoke runs, or explicitly requested no-network previews; for non-sample
+  pages the generator requires the explicit `--allow-default-quota-state` guard
+  before it will write default-only quota state.
+- For UI-only Map Console maintenance, do not regenerate a user-facing page
+  with `--no-live-quota` or `--no-quota-usage`. Patch the source/generated HTML
+  for the UI change, then run `refresh_map_console_quota.py` if the page's
+  embedded quota state needs refreshing. If live quota lookup is unavailable,
+  leave the existing page state unchanged and explain the quota lookup failure
+  instead of downgrading the UI to default-only quota status.
 - For interactive visualization, prefer the browser-preview flow: export HTML,
   serve it locally, open it in the in-app Browser, and keep the preview server
   running only while the user needs the page.
