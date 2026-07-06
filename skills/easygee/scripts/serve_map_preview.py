@@ -224,6 +224,7 @@ def empty_profile() -> dict[str, object]:
     return {
         "version": PROFILE_VERSION,
         "favoriteDatasets": [],
+        "visualPreferences": {},
         "projects": {},
         "updatedAt": None,
     }
@@ -248,6 +249,8 @@ def normalize_profile(payload: object) -> dict[str, object]:
         profile.update(payload)
     profile["version"] = PROFILE_VERSION
     profile["favoriteDatasets"] = normalize_string_list(profile.get("favoriteDatasets"))
+    if not isinstance(profile.get("visualPreferences"), dict):
+        profile["visualPreferences"] = {}
     projects = profile.get("projects")
     profile["projects"] = projects if isinstance(projects, dict) else {}
     return profile
@@ -306,7 +309,21 @@ def state_project_entry(profile: dict[str, object], state: dict[str, object]) ->
 def sanitize_recent_layers(value: object) -> list[dict[str, object]]:
     if not isinstance(value, list):
         return []
-    allowed = {"id", "name", "dataset", "shown", "opacity", "summary", "aoi"}
+    allowed = {
+        "id",
+        "name",
+        "dataset",
+        "type",
+        "shown",
+        "opacity",
+        "summary",
+        "recipe",
+        "aoi",
+        "styleProfile",
+        "stylePreset",
+        "visParams",
+        "legend",
+    }
     layers: list[dict[str, object]] = []
     for item in value:
         if not isinstance(item, dict):
@@ -330,6 +347,9 @@ def merge_profile_with_state(state: dict[str, object]) -> dict[str, object]:
         language = state.get("language")
         if isinstance(language, str) and language:
             profile["language"] = language
+        visual_preferences = state.get("visualPreferences")
+        if isinstance(visual_preferences, dict):
+            profile["visualPreferences"] = json_clone(visual_preferences)
 
         entry = state_project_entry(profile, state)
         center = state.get("center")
@@ -341,6 +361,11 @@ def merge_profile_with_state(state: dict[str, object]) -> dict[str, object]:
             entry["aoi"] = json_clone(state["aoi"])
         elif "aoi" in state and reason in CLEAR_AOI_REASONS:
             entry.pop("aoi", None)
+            entry.pop("aoiStyle", None)
+        if isinstance(state.get("aoiStyle"), dict) and reason not in CLEAR_AOI_REASONS:
+            entry["aoiStyle"] = json_clone(state["aoiStyle"])
+        if isinstance(state.get("aoiShown"), bool) and reason not in CLEAR_AOI_REASONS:
+            entry["aoiShown"] = state["aoiShown"]
         measurements = state.get("measurements")
         if isinstance(measurements, list) and (measurements or reason in CLEAR_MEASUREMENT_REASONS):
             entry["measurements"] = json_clone(measurements)

@@ -71,6 +71,8 @@ Standard regions:
 
 - Top bar: an icon-only status badge for EE readiness. Project/title/AOI
   details belong in a hover/focus tooltip, not in always-visible map space.
+  The active-layer badge should also expose the current basemap source, with
+  full attribution available in its hover/focus title.
 - Tool rail: icon buttons for layers, inspector, measure, basemap, quota
   status, task/state, home, zoom controls, and language switching.
 - Left drawer: catalog search and layer stack with opacity controls.
@@ -81,6 +83,8 @@ Standard regions:
   The project section includes quota rows with total, used, and remaining
   values. If live usage is unavailable, it must say so directly and use the
   official default/fixed quota reference only as a fallback.
+  Do not use `--no-live-quota` for ordinary user-facing workbench pages; it is
+  reserved for offline smoke tests or explicit no-network previews.
 
 Generated Earth Engine tile URLs are local preview material. Do not commit the
 HTML page or copy tile URLs into chat/logs; regenerate the console when tiles
@@ -95,11 +99,30 @@ must sync results back into the existing layer stack; do not add task-specific
 toolbar buttons or generate a separate one-off HTML page for the same map
 session.
 
+AOI is represented as a system layer in the layer stack. Users and agents can
+hide it, style its color/opacity, or clear it. Earth Engine data layers also
+carry visualization state such as `visParams`, `styleProfile`, and
+`stylePreset`; changing a palette should use the workbench protocol to
+regenerate the tile URL with new visualization parameters, not edit generated
+HTML. Regular loaded layers should be removable from the same layer stack.
+For ImageCollection datasets, Add Layers is a quick preview, not a complete
+analysis choice: the resulting layer must carry a `recipe` explaining the
+default reducer, band/index, date range, scale factor, and AOI. Analytical
+requests such as "MODIS 2024 May-Sep NDVImax" should use an explicit
+ImageCollection recipe, then sync the result as a normal layer.
+Clearing the AOI only removes the explicit AOI system layer. The console should
+still expose `processingAoi` and `processingBounds` from the current map
+viewport so users can continue loading remote-sensing preview layers without
+redrawing an AOI.
+
 For agent automation, prefer `scripts/map_console_agent.py` and the compact
 contract in `map-console-agent-contract.json` over reading generated HTML. The
 Map Console syncs its current state to `/api/session/state` and polls
 `/api/session/actions`; agents can read AOI/measurements as small JSON and
-enqueue layer updates after background analysis.
+enqueue layer updates after background analysis. The synced state includes
+`selectedDataset` and per-layer `recipe` metadata so agents can resolve phrases
+like "this MODIS dataset" or "this layer" without scraping the DOM or asking
+the user to copy an ID.
 
 For vague extraction requests made while a Map Console is open, run
 `scripts/map_console_agent.py plan --url <localhost-url> "<prompt>" --pretty`

@@ -5,6 +5,7 @@
   "profileEndpoint": "/api/session/profile",
   "actionsEndpoint": "/api/session/actions",
   "capabilitiesEndpoint": "/api/session/capabilities",
+  "layerEndpoint": "/api/layer",
   "analysisEndpoints": {
     "ndvi": "/api/analysis/ndvi"
   },
@@ -18,17 +19,77 @@
     "title",
     "project",
     "projectSource",
+    "startDate",
+    "endDate",
+    "cloudPct",
     "center",
     "zoom",
     "bounds",
+    "aoiBounds",
     "aoi",
+    "hasExplicitAoi",
+    "processingAoi",
+    "processingBounds",
+    "aoiShown",
+    "aoiStyle",
     "measurements",
     "measurementSummary",
+    "selectedDataset",
     "layers",
+    "visualPreferences",
     "favoriteDatasets"
   ],
+  "selectedDatasetFields": [
+    "id",
+    "label",
+    "type",
+    "source",
+    "provider",
+    "scale",
+    "dateRange",
+    "catalogUrl",
+    "currentAoi",
+    "currentBounds",
+    "hasExplicitAoi",
+    "processingAoi",
+    "processingBounds",
+    "mapDateRange",
+    "defaultRecipe"
+  ],
+  "layerFields": [
+    "id",
+    "name",
+    "dataset",
+    "type",
+    "shown",
+    "opacity",
+    "styleProfile",
+    "stylePreset",
+    "visParams",
+    "legend",
+    "recipe",
+    "summary",
+    "aoi"
+  ],
+  "recipe": {
+    "purpose": "Describe how an Earth Engine layer was produced so agents can revise or reproduce it without guessing.",
+    "kinds": ["preview", "imageCollection"],
+    "imageCollectionFields": ["datasetId", "band", "outputBand", "temporalReducer", "year", "months", "startDate", "endDate", "scaleFactor", "offset", "visParams", "legend"],
+    "temporalReducers": ["median", "mean", "max", "min", "mode", "mosaic"],
+    "example": {
+      "kind": "imageCollection",
+      "datasetId": "MODIS/061/MOD13Q1",
+      "band": "NDVI",
+      "outputBand": "NDVI",
+      "temporalReducer": "max",
+      "year": 2024,
+      "months": [5, 6, 7, 8, 9],
+      "scaleFactor": 0.0001
+    }
+  },
   "profileFields": [
     "favoriteDatasets",
+    "visualPreferences",
     "projects",
     "language",
     "updatedAt"
@@ -43,12 +104,18 @@
     "summaryFields": ["count", "totalMeters", "meanMeters", "minMeters", "maxMeters"]
   },
   "actions": {
-    "supported": ["addLayer", "setAoi", "clearAoi", "clearMeasurements", "extractNdvi"],
+    "supported": ["addLayer", "removeLayer", "selectDataset", "setAoi", "clearAoi", "setAoiStyle", "updateLayerStyle", "clearMeasurements", "extractNdvi"],
     "resultSync": "Actions are executed by the browser console and reflected in the next session state sync."
   },
   "rules": [
     "Agents should use this contract or scripts/map_console_agent.py instead of reading generated HTML.",
+    "Selected dataset context is exposed as selectedDataset; agents should use it to resolve deictic requests such as this MODIS dataset.",
+    "ImageCollection analyses should use explicit recipe objects instead of relying on the default preview reducer.",
+    "Layer recipe metadata must be preserved when restyling a layer so visualization changes do not alter the analytical calculation.",
     "Persistent profile state is the durable source for dataset favorites, AOI, and measurements across localhost ports.",
+    "AOI is represented as a system layer in the layer stack and can be styled, hidden, or cleared through the same layer workflow.",
+    "When explicit AOI is cleared, aoi is null but processingAoi and processingBounds fall back to the current map viewport so preview layers can still be rendered.",
+    "GEE layer visualization changes should update visParams through the workbench protocol and regenerate tile URLs instead of editing generated HTML.",
     "For vague extraction requests, run the planner first and ask one multiple-choice clarification when the route is ask_user.",
     "Do not add task-specific toolbar buttons; analysis results must sync back as normal map layers.",
     "Generated Earth Engine tile URLs are preview material and should not be copied into chat logs."

@@ -231,6 +231,9 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 - For quota display, parse the project id from the Console URL when present,
   run `show_ee_quotas.py`, and never print `gcloud auth print-access-token`
   output, OAuth URLs, service account keys, or credential file contents.
+- For normal Map Console pages, leave live quota lookup enabled so the UI can
+  show Cloud Quotas / Monitoring status. Use `--no-live-quota` only for offline
+  tests, smoke runs, or explicitly requested no-network previews.
 - For interactive visualization, prefer the browser-preview flow: export HTML,
   serve it locally, open it in the in-app Browser, and keep the preview server
   running only while the user needs the page.
@@ -256,6 +259,24 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 - Keep the Map Console tool rail stable. Do not add task-specific toolbar
   buttons for analyses such as NDVI; run those actions in the background and
   sync the result back as normal layers in the existing layer stack.
+- Treat AOI as a system layer inside the Map Console layer stack. Users can
+  hide it, change its color/opacity, or clear it through the layer workflow.
+  Do not leave drawn AOI state as an unmanageable overlay.
+- Treat explicit AOI and processing extent as separate state. After AOI is
+  cleared, `aoi` should be null but `processingAoi` / `processingBounds` should
+  fall back to the current map viewport so remote-sensing preview layers can
+  still be loaded.
+- Treat Earth Engine visualization parameters as editable layer state. When a
+  user asks to change JRC water to blue, adjust an NDVI palette, remove a
+  loaded layer, or restore a default color ramp, enqueue a Map Console action
+  such as `updateLayerStyle`, `setAoiStyle`, or `removeLayer` through
+  `scripts/map_console_agent.py`; do not regenerate a one-off HTML page.
+- Treat ImageCollection layers as reproducible recipes, not just rendered
+  tiles. The Map Console state exposes `selectedDataset` and layer `recipe`
+  metadata; use explicit recipes for requests like "MODIS May-Sep NDVImax"
+  with dataset id, band/index, temporal reducer, date/month window, scale
+  factor, AOI, and visualization parameters instead of relying on the Add
+  Layers quick-preview default.
 - Treat AOI and measurement data as first-class console state. The console
   exposes `window.EasyGEE.getAoi()`, `setAoi()`, `getMeasurements()`,
   `getMeasurementSummary()`, and `extractNdvi()` for follow-up automation.

@@ -576,16 +576,18 @@ def build_report(args: argparse.Namespace) -> QuotaReport:
     elif not gcloud:
         warnings.append("gcloud was not found. Install/init Google Cloud CLI or use the Cloud Console link below.")
     elif project:
-        live_quotas, live_source, error = gcloud_quota_infos(gcloud, project, service)
-        if error:
-            warnings.append(error)
+        live_quotas, live_source, gcloud_error = gcloud_quota_infos(gcloud, project, service)
         if not live_quotas:
             rest_rows, rest_error = cloudquotas_quota_infos(gcloud, project, service)
             if rest_rows:
                 live_quotas = rest_rows
                 live_source = "Cloud Quotas REST API"
             elif rest_error:
+                if gcloud_error:
+                    warnings.append(gcloud_error)
                 warnings.append(rest_error)
+            elif gcloud_error:
+                warnings.append(gcloud_error)
         if args.include_usage:
             usage_rows, usage_error = monitoring_usage_rows(gcloud, project, service, args.minutes)
             if usage_rows:
@@ -754,6 +756,35 @@ def smoke() -> int:
     if report.project != "example-ee-project-123456" or not report.default_quotas:
         print("FAIL: report build")
         return 1
+    original_find_gcloud = globals()["find_gcloud"]
+    original_gcloud_quota_infos = globals()["gcloud_quota_infos"]
+    original_cloudquotas_quota_infos = globals()["cloudquotas_quota_infos"]
+    try:
+        fallback_rows = normalize_quota_infos(sample, "Cloud Quotas REST API")
+        globals()["find_gcloud"] = lambda: "gcloud"
+        globals()["gcloud_quota_infos"] = lambda gcloud, project, service: (
+            [],
+            None,
+            "Skipping gcloud quota command groups because local components are not installed: beta, alpha",
+        )
+        globals()["cloudquotas_quota_infos"] = lambda gcloud, project, service: (fallback_rows, None)
+        fallback_report = build_report(
+            argparse.Namespace(
+                project="example-ee-project-123456",
+                console_url=None,
+                service=None,
+                no_live=False,
+                include_usage=False,
+                minutes=60,
+            )
+        )
+        if fallback_report.live_source != "Cloud Quotas REST API" or any("Skipping gcloud" in item for item in fallback_report.warnings):
+            print("FAIL: REST fallback should suppress gcloud component warning")
+            return 1
+    finally:
+        globals()["find_gcloud"] = original_find_gcloud
+        globals()["gcloud_quota_infos"] = original_gcloud_quota_infos
+        globals()["cloudquotas_quota_infos"] = original_cloudquotas_quota_infos
     print("show_ee_quotas smoke passed")
     return 0
 

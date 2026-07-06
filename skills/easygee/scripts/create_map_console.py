@@ -17,6 +17,7 @@ import csv
 import hashlib
 import html
 import json
+import math
 import os
 import re
 import tempfile
@@ -983,6 +984,308 @@ def generic_vis_for_image(image: Any, roi: Any, dataset_id: str) -> tuple[dict[s
     return vis, [["#132b43", "Low"], ["#7fcdbb", "Mid"], ["#ffffcc", "High"]], "auto-percentile"
 
 
+def sanitize_color(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if len(text) in {4, 7} and text.startswith("#") and all(ch in "0123456789abcdefABCDEF" for ch in text[1:]):
+        return text
+    return None
+
+
+def sanitize_vis_params(value: Any, fallback: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return dict(fallback)
+    vis = dict(fallback)
+    for key in ("min", "max", "gamma"):
+        if key in value:
+            try:
+                number = float(value[key])
+            except Exception:
+                continue
+            if math.isfinite(number):
+                vis[key] = number
+    if isinstance(value.get("bands"), list):
+        bands = [str(item) for item in value["bands"] if str(item).strip()]
+        if bands:
+            vis["bands"] = bands[:4]
+    if isinstance(value.get("palette"), list):
+        palette = [color for color in (sanitize_color(item) for item in value["palette"]) if color]
+        if len(palette) >= 2:
+            vis["palette"] = palette[:32]
+    return vis
+
+
+def sanitize_legend(value: Any, fallback: list[list[str]]) -> list[list[str]]:
+    if not isinstance(value, list):
+        return fallback
+    rows: list[list[str]] = []
+    for item in value[:32]:
+        if not isinstance(item, list) or len(item) < 2:
+            continue
+        color = sanitize_color(item[0])
+        label = str(item[1] or "").strip()
+        if color and label:
+            rows.append([color, label[:80]])
+    return rows or fallback
+
+
+def parse_recipe_float(value: Any, fallback: float) -> float:
+    try:
+        number = float(value)
+    except Exception:
+        return fallback
+    return number if math.isfinite(number) else fallback
+
+
+def parse_months(value: Any) -> list[int]:
+    if value is None:
+        return []
+    raw_items: list[Any]
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if "-" in text and "," not in text:
+            start, end = text.split("-", 1)
+            try:
+                start_i = int(start)
+                end_i = int(end)
+            except Exception:
+                return []
+            raw_items = list(range(min(start_i, end_i), max(start_i, end_i) + 1))
+        else:
+            raw_items = re.split(r"[\s,;]+", text)
+    elif isinstance(value, list):
+        raw_items = value
+    else:
+        raw_items = [value]
+    months: list[int] = []
+    for item in raw_items:
+        try:
+            month = int(item)
+        except Exception:
+            continue
+        if 1 <= month <= 12 and month not in months:
+            months.append(month)
+    return sorted(months)
+
+
+def recipe_date_range(recipe: dict[str, Any], fallback_start: str, fallback_end: str) -> tuple[str, str, list[int]]:
+    months = parse_months(recipe.get("months") or recipe.get("calendarMonths"))
+    year: int | None = None
+    try:
+        if recipe.get("year") not in (None, ""):
+            year = int(recipe["year"])
+    except Exception:
+        year = None
+    if year and months:
+        start_month = min(months)
+        end_month = max(months)
+        start_date = f"{year:04d}-{start_month:02d}-01"
+        if end_month == 12:
+            end_date = f"{year + 1:04d}-01-01"
+        else:
+            end_date = f"{year:04d}-{end_month + 1:02d}-01"
+        return start_date, end_date, months
+    start_date = str(recipe.get("startDate") or fallback_start)
+    end_date = str(recipe.get("endDate") or fallback_end)
+    return start_date, end_date, months
+
+
+def default_recipe_scale(dataset_id: str, band: str, recipe: dict[str, Any]) -> tuple[float, float]:
+    if recipe.get("scaleFactor") not in (None, "") or recipe.get("offset") not in (None, ""):
+        return parse_recipe_float(recipe.get("scaleFactor"), 1.0), parse_recipe_float(recipe.get("offset"), 0.0)
+    band_upper = band.upper()
+    if dataset_id == "MODIS/061/MOD13Q1" and band_upper in {"NDVI", "EVI"}:
+        return 0.0001, 0.0
+    if dataset_id == "MODIS/061/MOD11A2" and band_upper.startswith("LST_"):
+        return 0.02, -273.15
+    return 1.0, 0.0
+
+
+def normalize_layer_recipe(payload: dict[str, Any], dataset_id: str, start_date: str, end_date: str) -> dict[str, Any] | None:
+    raw = payload.get("recipe") if isinstance(payload.get("recipe"), dict) else None
+    if not raw:
+        return None
+    if str(raw.get("kind") or "").lower() == "preview":
+        return None
+    recipe = dict(raw)
+    recipe_dataset = str(recipe.get("datasetId") or dataset_id).strip()
+    if recipe_dataset and recipe_dataset != dataset_id:
+        raise ValueError("recipe.datasetId must match datasetId")
+    band = str(recipe.get("band") or recipe.get("index") or "").strip()
+    if not band:
+        raise ValueError("recipe.band is required for ImageCollection recipes")
+    reducer = str(recipe.get("temporalReducer") or recipe.get("reducer") or "median").strip().lower()
+    aliases = {"maximum": "max", "minimum": "min", "avg": "mean", "average": "mean"}
+    reducer = aliases.get(reducer, reducer)
+    if reducer not in {"median", "mean", "max", "min", "mode", "mosaic"}:
+        raise ValueError("recipe.temporalReducer must be one of median, mean, max, min, mode, or mosaic")
+    recipe_start, recipe_end, months = recipe_date_range(recipe, start_date, end_date)
+    scale_factor, offset = default_recipe_scale(dataset_id, band, recipe)
+    normalized: dict[str, Any] = {
+        "kind": str(recipe.get("kind") or "imageCollection").strip() or "imageCollection",
+        "source": str(recipe.get("source") or "agent-recipe"),
+        "datasetId": dataset_id,
+        "band": band,
+        "outputBand": str(recipe.get("outputBand") or band).strip() or band,
+        "temporalReducer": reducer,
+        "startDate": recipe_start,
+        "endDate": recipe_end,
+        "scaleFactor": scale_factor,
+        "offset": offset,
+        "aoi": "currentAOI",
+    }
+    if recipe.get("year") not in (None, ""):
+        try:
+            normalized["year"] = int(recipe["year"])
+        except Exception:
+            pass
+    if months:
+        normalized["months"] = months
+    if recipe.get("name"):
+        normalized["name"] = str(recipe["name"])[:120]
+    if recipe.get("description"):
+        normalized["description"] = str(recipe["description"])[:500]
+    if isinstance(recipe.get("visParams"), dict):
+        normalized["visParams"] = recipe["visParams"]
+    if isinstance(recipe.get("legend"), list):
+        normalized["legend"] = recipe["legend"]
+    return normalized
+
+
+def recipe_default_vis(dataset_id: str, band: str) -> tuple[dict[str, Any], list[list[str]], str]:
+    text = f"{dataset_id} {band}".lower()
+    if "ndvi" in text or band.upper() in {"NDVI", "EVI"}:
+        return (
+            {"bands": [band], "min": 0, "max": 0.9, "palette": ["#2c105c", "#4856a5", "#31a354", "#addd8e", "#f7fcb9"]},
+            [["#2c105c", "Low"], ["#31a354", "Medium"], ["#f7fcb9", "High"]],
+            "ndvi",
+        )
+    if any(term in text for term in ["lst", "temperature", "thermal"]):
+        return (
+            {"bands": [band], "min": 0, "max": 45, "palette": ["#313695", "#74add1", "#ffffbf", "#f46d43", "#a50026"]},
+            [["#313695", "Cool"], ["#ffffbf", "Moderate"], ["#a50026", "Hot"]],
+            "temperature",
+        )
+    return (
+        {"bands": [band], "min": 0, "max": 1, "palette": ["#132b43", "#2c7fb8", "#7fcdbb", "#ffffcc"]},
+        [["#132b43", "Low"], ["#7fcdbb", "Mid"], ["#ffffcc", "High"]],
+        "raster",
+    )
+
+
+def recipe_period_label(recipe: dict[str, Any]) -> str:
+    if recipe.get("year") and recipe.get("months"):
+        months = recipe["months"]
+        if isinstance(months, list) and months:
+            if len(months) > 1 and months == list(range(min(months), max(months) + 1)):
+                return f"{recipe['year']} months {min(months)}-{max(months)}"
+            return f"{recipe['year']} months {','.join(str(item) for item in months)}"
+    return f"{recipe.get('startDate')}..{recipe.get('endDate')}"
+
+
+def recipe_layer_name(catalog_item: dict[str, Any], recipe: dict[str, Any]) -> str:
+    if recipe.get("name"):
+        return str(recipe["name"])
+    label = str(catalog_item.get("label") or recipe.get("datasetId") or "GEE layer")
+    reducer = str(recipe.get("temporalReducer") or "").upper()
+    band = str(recipe.get("outputBand") or recipe.get("band") or "")
+    return f"{label} {band} {reducer}".strip()
+
+
+def preview_recipe(dataset_id: str, catalog_item: dict[str, Any], start_date: str, end_date: str, method: str) -> dict[str, Any]:
+    label = str(catalog_item.get("label") or dataset_id)
+    return {
+        "kind": "preview",
+        "source": "map-console-default-preview",
+        "datasetId": dataset_id,
+        "label": label,
+        "operation": method,
+        "startDate": start_date,
+        "endDate": end_date,
+        "aoi": "currentAOI",
+        "description": "Default quick-preview recipe. Use an explicit recipe for analytical requests.",
+    }
+
+
+def build_recipe_image(
+    ee: Any,
+    dataset_id: str,
+    catalog_item: dict[str, Any],
+    roi: Any,
+    recipe: dict[str, Any],
+    warnings: list[str],
+) -> tuple[Any, dict[str, Any], str, str, list[list[str]], str, dict[str, Any]]:
+    collection = (
+        ee.ImageCollection(dataset_id)
+        .filterBounds(roi)
+        .filterDate(str(recipe["startDate"]), str(recipe["endDate"]))
+    )
+    months = recipe.get("months")
+    if isinstance(months, list) and months:
+        month_values = [int(month) for month in months]
+        if month_values == list(range(min(month_values), max(month_values) + 1)):
+            collection = collection.filter(ee.Filter.calendarRange(min(month_values), max(month_values), "month"))
+        else:
+            collection = collection.map(lambda image: image.set("easygee_month", ee.Date(image.get("system:time_start")).get("month")))
+            collection = collection.filter(ee.Filter.inList("easygee_month", month_values))
+    band = str(recipe["band"])
+    output_band = str(recipe.get("outputBand") or band)
+    scale_factor = float(recipe.get("scaleFactor") or 1)
+    offset = float(recipe.get("offset") or 0)
+
+    def transform(image: Any) -> Any:
+        selected = image.select(band)
+        if scale_factor != 1:
+            selected = selected.multiply(scale_factor)
+        if offset:
+            selected = selected.add(offset)
+        return selected.rename(output_band).copyProperties(image, ["system:time_start"])
+
+    prepared = collection.map(transform)
+    reducer = str(recipe["temporalReducer"])
+    if reducer == "max":
+        image = prepared.max()
+    elif reducer == "min":
+        image = prepared.min()
+    elif reducer == "mean":
+        image = prepared.mean()
+    elif reducer == "mode":
+        image = prepared.mode()
+    elif reducer == "mosaic":
+        image = prepared.mosaic()
+    else:
+        image = prepared.median()
+    image = image.rename(output_band).clip(roi)
+    vis, legend, profile = recipe_default_vis(dataset_id, output_band)
+    method = f"recipe:{reducer}:{band}"
+    recipe["periodLabel"] = recipe_period_label(recipe)
+    recipe["styleProfile"] = profile
+    recipe["label"] = recipe_layer_name(catalog_item, recipe)
+    return image, vis, recipe["label"], "ee-derived", legend, method, recipe
+
+
+def style_profile_for_layer(dataset_id: str, layer_type: str, method: str, name: str) -> str:
+    text = f"{dataset_id} {layer_type} {method} {name}".lower()
+    if "ndvi" in text or "vegetation" in text:
+        return "ndvi"
+    if "jrc" in text or "water" in text or "gsw" in text:
+        return "water"
+    if "lst" in text or "temperature" in text or "thermal" in text:
+        return "temperature"
+    if "dem" in text or "elevation" in text or "terrain" in text:
+        return "terrain"
+    if "viirs" in text or "night" in text:
+        return "nightlights"
+    if "population" in text or "worldpop" in text or "ghsl" in text:
+        return "population"
+    if "categorical" in layer_type:
+        return "categorical"
+    if "vector" in layer_type:
+        return "vector"
+    return "raster"
+
+
 def known_catalog_image(
     ee: Any,
     dataset_id: str,
@@ -1086,6 +1389,7 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         cloud_pct = 80.0
     catalog_item = payload.get("catalogItem") if isinstance(payload.get("catalogItem"), dict) else {}
+    explicit_recipe = normalize_layer_recipe(payload, dataset_id, start_date, end_date)
 
     ee.Initialize(project=project)
     roi = ee_geometry_from_aoi(ee, aoi)
@@ -1100,15 +1404,26 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         asset = {}
     asset_type = str(asset.get("type") or catalog_item.get("type") or "").upper()
-    known = known_catalog_image(ee, dataset_id, roi, start_date, end_date, cloud_pct, warnings)
+    known = None if explicit_recipe else known_catalog_image(ee, dataset_id, roi, start_date, end_date, cloud_pct, warnings)
     image: Any
     vis: dict[str, Any]
     name: str
     layer_type: str
     legend: list[list[str]]
     method: str
-    if known:
+    layer_recipe: dict[str, Any]
+    if explicit_recipe:
+        image, vis, name, layer_type, legend, method, layer_recipe = build_recipe_image(
+            ee,
+            dataset_id,
+            catalog_item,
+            roi,
+            explicit_recipe,
+            warnings,
+        )
+    elif known:
         image, vis, name, layer_type, legend, method = known
+        layer_recipe = preview_recipe(dataset_id, catalog_item, start_date, end_date, method)
     else:
         attempts: list[str] = []
         if "TABLE" in asset_type or str(catalog_item.get("type") or "").lower() == "table":
@@ -1120,6 +1435,7 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
                 layer_type = "ee-vector"
                 legend = [["#16734d", "Styled features"]]
                 method = "featurecollection-style"
+                layer_recipe = preview_recipe(dataset_id, catalog_item, start_date, end_date, method)
             except Exception as exc:
                 attempts.append(f"FeatureCollection failed: {exc}")
                 raise ValueError("; ".join(attempts) or "Could not render FeatureCollection") from exc
@@ -1145,6 +1461,7 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
                 method = f"{method}:{vis_method}"
                 name = str(catalog_item.get("label") or dataset_id)
                 layer_type = "ee-raster"
+                layer_recipe = preview_recipe(dataset_id, catalog_item, start_date, end_date, method)
             except Exception as exc:
                 attempts.append(f"Image failed: {exc}")
                 try:
@@ -1155,12 +1472,23 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
                     layer_type = "ee-vector"
                     legend = [["#16734d", "Styled features"]]
                     method = "featurecollection-style"
+                    layer_recipe = preview_recipe(dataset_id, catalog_item, start_date, end_date, method)
                 except Exception as vector_exc:
                     attempts.append(f"FeatureCollection failed: {vector_exc}")
                     raise ValueError("; ".join(attempts)) from vector_exc
 
+    style_profile = style_profile_for_layer(dataset_id, layer_type, method, name)
+    default_style_preset = str(payload.get("stylePreset") or "default")
+    vis_override = payload.get("visParams") if isinstance(payload.get("visParams"), dict) else layer_recipe.get("visParams")
+    if isinstance(vis_override, dict):
+        vis = sanitize_vis_params(vis_override, vis)
+        default_style_preset = default_style_preset if default_style_preset != "default" else "custom"
+    legend_override = payload.get("legend") if isinstance(payload.get("legend"), list) else layer_recipe.get("legend")
+    legend = sanitize_legend(legend_override, legend)
+    layer_recipe["visParams"] = vis
+    layer_recipe["legend"] = legend
     layer = {
-        "id": layer_id_for_dataset(f"{dataset_id}:{start_date}:{end_date}:{hashlib.sha1(json.dumps(aoi, sort_keys=True).encode('utf-8')).hexdigest()[:10]}"),
+        "id": layer_id_for_dataset(f"{dataset_id}:{hashlib.sha1(json.dumps({'aoi': aoi, 'recipe': layer_recipe}, sort_keys=True).encode('utf-8')).hexdigest()[:12]}"),
         "name": name,
         "dataset": dataset_id,
         "type": layer_type,
@@ -1168,7 +1496,19 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
         "opacity": 0.78 if layer_type == "ee-vector" else 0.82,
         "tileUrl": tile_url(image, vis),
         "legend": legend,
+        "visParams": vis,
+        "styleProfile": style_profile,
+        "stylePreset": default_style_preset,
         "method": method,
+        "recipe": layer_recipe,
+        "summary": {
+            "startDate": layer_recipe.get("startDate", start_date),
+            "endDate": layer_recipe.get("endDate", end_date),
+            "band": layer_recipe.get("band"),
+            "temporalReducer": layer_recipe.get("temporalReducer") or layer_recipe.get("operation"),
+            "periodLabel": layer_recipe.get("periodLabel"),
+            "cloudPct": cloud_pct,
+        },
         "aoi": aoi,
         "bounds": aoi["bounds"],
         "warnings": warnings,
@@ -1271,6 +1611,9 @@ def build_ndvi_analysis(payload: dict[str, Any]) -> dict[str, Any]:
         "opacity": 0.86,
         "tileUrl": ndvi.getMapId(vis)["tile_fetcher"].url_format,
         "legend": [["#2c105c", "Low"], ["#31a354", "Medium"], ["#f7fcb9", "High"]],
+        "visParams": vis,
+        "styleProfile": "ndvi",
+        "stylePreset": "default",
         "method": method,
         "aoi": aoi,
         "bounds": aoi["bounds"],
@@ -1491,6 +1834,22 @@ def usage_for_quota(quota: dict[str, Any], usage_rows: list[dict[str, Any]]) -> 
     }
 
 
+def is_nonblocking_quota_fallback_warning(warning: Any) -> bool:
+    text = str(warning or "").lower()
+    return (
+        "skipping gcloud quota command groups" in text
+        and "local components" in text
+        and ("alpha" in text or "beta" in text)
+    )
+
+
+def report_warnings_for_console(report_json: dict[str, Any]) -> list[str]:
+    warnings = [str(item) for item in (report_json.get("warnings") or []) if str(item).strip()]
+    if report_json.get("live_source"):
+        warnings = [item for item in warnings if not is_nonblocking_quota_fallback_warning(item)]
+    return warnings
+
+
 def quota_state_from_report(report: Any) -> dict[str, Any]:
     report_json = report_to_plain_json(report)
     source_rows = report_json.get("live_quotas") or report_json.get("default_quotas") or []
@@ -1582,7 +1941,7 @@ def quota_state_from_report(report: Any) -> dict[str, Any]:
         "refreshedAt": datetime.now(timezone.utc).isoformat(),
         "status": status,
         "indicator": indicator,
-        "warnings": report_json.get("warnings") or [],
+        "warnings": report_warnings_for_console(report_json),
         "tier": tier,
         "rows": rows,
     }
@@ -2101,10 +2460,19 @@ def shell_css() -> str:
     .layer-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .layer-name { font-size: 13px; font-weight: 700; line-height: 1.25; }
     .type-dot { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; color: #fff; font-size: 10px; font-weight: 800; flex: 0 0 auto; }
+    .type-dot.aoi { background: #c2410c; }
     .type-dot.raster { background: #2f7d55; }
     .type-dot.derived { background: #7a58a8; }
     .type-dot.categorical { background: #2f6fa3; }
     .layer-dataset { margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
+    .layer-actions { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; }
+    .layer-action { width: 26px; height: 26px; border-radius: 7px; background: #fff; border-color: var(--line); }
+    .layer-action.danger { color: #a32929; }
+    .layer-style-row { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 7px; align-items: center; margin-top: 8px; color: var(--muted); font-size: 11px; }
+    .layer-style-row select, .layer-style-row input[type="color"] { min-width: 0; width: 100%; height: 28px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--text); font: inherit; }
+    .layer-style-row input[type="color"] { padding: 2px; }
+    .palette-preview { display: flex; height: 8px; margin-top: 6px; border: 1px solid rgba(21,35,28,0.12); border-radius: 999px; overflow: hidden; }
+    .palette-preview span { flex: 1 1 0; }
     .opacity-row { display: grid; grid-template-columns: 46px minmax(0, 1fr) 34px; gap: 7px; align-items: center; margin-top: 8px; color: var(--muted); font-size: 11px; }
     input[type="range"] { width: 100%; min-width: 0; accent-color: var(--accent); }
     .dataset-list { gap: 0; border: 1px solid #e3ebe6; border-radius: 8px; overflow: auto; max-height: min(430px, calc(100vh - 170px)); background: rgba(255,255,255,0.78); }
@@ -2477,6 +2845,9 @@ def live_state(args: argparse.Namespace) -> dict:
                     ["#c9b96d", "Mid elevation"],
                     ["#f4f1e8", "Higher elevation"],
                 ],
+                "visParams": {"min": 0, "max": 600, "palette": ["#0f3b2e", "#3f7d3f", "#c9b96d", "#a2673f", "#f4f1e8"]},
+                "styleProfile": "terrain",
+                "stylePreset": "default",
             },
             {
                 "id": "s2-rgb",
@@ -2504,6 +2875,9 @@ def live_state(args: argparse.Namespace) -> dict:
                     },
                 ),
                 "legend": [["#2c105c", "Low"], ["#31a354", "Medium"], ["#f7fcb9", "High"]],
+                "visParams": {"min": 0, "max": 0.8, "palette": ["#2c105c", "#4856a5", "#31a354", "#addd8e", "#f7fcb9"]},
+                "styleProfile": "ndvi",
+                "stylePreset": "default",
             },
             {
                 "id": "dynamic-world",
@@ -2531,6 +2905,9 @@ def live_state(args: argparse.Namespace) -> dict:
                     },
                 ),
                 "legend": [["#419bdf", "Water"], ["#397d49", "Trees"], ["#e49635", "Built"]],
+                "visParams": {"min": 0, "max": 8, "palette": ["#419bdf", "#397d49", "#88b053", "#7a87c6", "#e49635", "#dfc35a", "#c4281b", "#a59b8f", "#b39fe1"]},
+                "styleProfile": "categorical",
+                "stylePreset": "default",
             },
             {
                 "id": "jrc-water",
@@ -2541,6 +2918,9 @@ def live_state(args: argparse.Namespace) -> dict:
                 "opacity": 0.76,
                 "tileUrl": tile_url(water, {"min": 0, "max": 100, "palette": ["#f7fbff", "#6baed6", "#08306b"]}),
                 "legend": [["#f7fbff", "Rare"], ["#6baed6", "Seasonal"], ["#08306b", "Persistent"]],
+                "visParams": {"min": 0, "max": 100, "palette": ["#f7fbff", "#6baed6", "#08306b"]},
+                "styleProfile": "water",
+                "stylePreset": "default",
             },
     ]
     if getattr(args, "default_layer", None):
@@ -2611,6 +2991,8 @@ def svg_icon(name: str) -> str:
         "zoom-in": '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 7v6M7 10h6M15 15l5 5"/></svg>',
         "zoom-out": '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M7 10h6M15 15l5 5"/></svg>',
         "language": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h9M8.5 5v2M11.5 5c-.8 4.7-3.5 7.3-7 8.8"/><path d="M5.5 9.5c1.2 2 3.1 3.5 5.5 4.4"/><path d="M14 20l4-9 4 9M15.2 17h5.6"/></svg>',
+        "style": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.5a1.8 1.8 0 0 0 .7-3.4 1.8 1.8 0 0 1 .7-3.4H16a5 5 0 0 0 0-10H12Z"/><circle cx="7.5" cy="10" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="14" cy="7.5" r="1"/><circle cx="8.5" cy="14" r="1"/></svg>',
+        "trash": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg>',
         "close": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
     }
     return icons[name]
@@ -2736,6 +3118,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
             <div class="kv-row"><div class="kv-key" data-i18n="key.name">Name</div><div class="kv-value" id="detail-name">-</div></div>
             <div class="kv-row"><div class="kv-key" data-i18n="key.dataset">Dataset</div><div class="kv-value" id="detail-dataset">-</div></div>
             <div class="kv-row"><div class="kv-key" data-i18n="key.type">Type</div><div class="kv-value" id="detail-type">-</div></div>
+            <div class="kv-row"><div class="kv-key" data-i18n="key.recipe">Recipe</div><div class="kv-value" id="detail-recipe">-</div></div>
             <div class="kv-row"><div class="kv-key" data-i18n="key.opacity">Opacity</div><div class="kv-value" id="detail-opacity">-</div></div>
           </div>
         </section>
@@ -2788,6 +3171,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "tool.zoomOut": "缩小",
         "tool.lang": "切换语言",
         "tool.close": "关闭",
+        "tool.styleLayer": "设置图层样式",
+        "tool.removeLayer": "移除图层",
+        "tool.clearAoi": "清除 AOI",
         "panel.data": "添加图层",
         "panel.dataSubtitle": "搜索与添加 Earth Engine 数据集",
         "panel.basemap": "底图",
@@ -2817,11 +3203,16 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "key.name": "名称",
         "key.dataset": "数据集",
         "key.type": "类型",
+        "key.recipe": "配方",
         "key.opacity": "透明度",
         "label.opacity": "透明度",
+        "label.color": "颜色",
+        "label.palette": "色带",
         "layers.empty": "还没有图层。点“添加图层”搜索 GEE 数据集。",
         "layer.none": "未选择图层",
         "badge.noLayer": "EasyGEE 地图",
+        "badge.basemap": "底图：:basemap",
+        "badge.basemapSource": "底图来源：:source",
         "bottom.project": "配额",
         "link.quota": "控制台",
         "action.copy": "复制",
@@ -2848,6 +3239,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "data.openSample": "示例代码",
         "data.addFromDetail": "加入地图",
         "data.copyId": "复制 ID",
+        "data.copyContext": "复制上下文",
+        "data.contextCopied": "数据集上下文已复制",
+        "data.previewRecipe": "默认预览",
         "data.detailSource": "来源",
         "data.detailType": "类型",
         "data.detailProvider": "提供方",
@@ -2887,6 +3281,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.ndviDone": "NDVI 均值 :mean，像元 :count",
         "mode.ndviNoAoi": "请先绘制 AOI 再提取 NDVI",
         "mode.ndviFailed": "NDVI 提取失败：:message",
+        "mode.styleBuilding": "正在更新图层样式：:layer",
+        "mode.styleApplied": "图层样式已更新：:layer",
+        "mode.styleFailed": "样式更新失败：:message",
         "quota.project": "项目：:project",
         "quota.tier": "用量层级：:tier",
         "quota.tierInferred": "用量层级：:tier",
@@ -2957,12 +3354,16 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.favoriteRemoved": "已取消收藏数据集：:dataset",
         "log.layerOn": "已显示图层：:layer",
         "log.layerOff": "已隐藏图层：:layer",
+        "log.layerRemoved": "已移除图层：:layer",
+        "log.layerStyled": "已更新图层样式：:layer",
+        "log.layerStyleFailed": "图层样式更新失败：:layer",
         "log.home": "已回到研究区",
         "log.basemap": "底图已切换为 :basemap",
         "log.aoiOn": "AOI 绘制模式已开启",
         "log.aoiOff": "AOI 绘制模式已关闭",
         "log.aoiDrawn": "AOI 已更新：:bounds",
         "log.aoiRestored": "已从本地状态恢复 AOI",
+        "log.aoiCleared": "AOI 已清除",
         "log.ndviStarted": "已开始 NDVI 提取",
         "log.ndviDone": "NDVI 摘要已生成：均值 :mean",
         "log.ndviFailed": "NDVI 提取失败",
@@ -2990,6 +3391,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "tool.zoomOut": "Zoom out",
         "tool.lang": "Switch language",
         "tool.close": "Close",
+        "tool.styleLayer": "Style layer",
+        "tool.removeLayer": "Remove layer",
+        "tool.clearAoi": "Clear AOI",
         "panel.data": "Add Layers",
         "panel.dataSubtitle": "Search and add Earth Engine datasets",
         "panel.basemap": "Basemap",
@@ -3019,11 +3423,16 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "key.name": "Name",
         "key.dataset": "Dataset",
         "key.type": "Type",
+        "key.recipe": "Recipe",
         "key.opacity": "Opacity",
         "label.opacity": "Opacity",
+        "label.color": "Color",
+        "label.palette": "Palette",
         "layers.empty": "No layers yet. Use Add layers to search the GEE catalog.",
         "layer.none": "No layer selected",
         "badge.noLayer": "EasyGEE map",
+        "badge.basemap": "Basemap: :basemap",
+        "badge.basemapSource": "Basemap source: :source",
         "bottom.project": "Quotas",
         "link.quota": "Console",
         "action.copy": "Copy",
@@ -3050,6 +3459,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "data.openSample": "Sample code",
         "data.addFromDetail": "Add to map",
         "data.copyId": "Copy ID",
+        "data.copyContext": "Copy context",
+        "data.contextCopied": "Dataset context copied",
+        "data.previewRecipe": "Default preview",
         "data.detailSource": "Source",
         "data.detailType": "Type",
         "data.detailProvider": "Provider",
@@ -3089,6 +3501,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.ndviDone": "NDVI mean :mean from :count pixels",
         "mode.ndviNoAoi": "Draw an AOI before extracting NDVI",
         "mode.ndviFailed": "NDVI failed: :message",
+        "mode.styleBuilding": "Updating layer style: :layer",
+        "mode.styleApplied": "Layer style updated: :layer",
+        "mode.styleFailed": "Style update failed: :message",
         "quota.project": "Project: :project",
         "quota.tier": "Usage tier: :tier",
         "quota.tierInferred": "Usage tier: :tier",
@@ -3159,12 +3574,16 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.favoriteRemoved": "Removed favorite dataset: :dataset",
         "log.layerOn": "Layer on: :layer",
         "log.layerOff": "Layer off: :layer",
+        "log.layerRemoved": "Removed layer: :layer",
+        "log.layerStyled": "Updated layer style: :layer",
+        "log.layerStyleFailed": "Layer style update failed: :layer",
         "log.home": "Zoomed to AOI",
         "log.basemap": "Basemap switched to :basemap",
         "log.aoiOn": "AOI draw mode on",
         "log.aoiOff": "AOI draw mode off",
         "log.aoiDrawn": "AOI updated: :bounds",
         "log.aoiRestored": "AOI restored from local state",
+        "log.aoiCleared": "AOI cleared",
         "log.ndviStarted": "NDVI extraction started",
         "log.ndviDone": "NDVI summary ready: mean :mean",
         "log.ndviFailed": "NDVI extraction failed",
@@ -3203,6 +3622,50 @@ def render_html(state: dict, leaflet_src: str) -> str:
     const AGENT_PROTOCOL_VERSION = 1;
     const SESSION_SYNC_INTERVAL_MS = 1200;
     const SESSION_ACTION_POLL_MS = 900;
+    const ACTION_SET_AOI_STYLE = 'setAoiStyle';
+    const ACTION_UPDATE_LAYER_STYLE = 'updateLayerStyle';
+    const AOI_LAYER_ID = '__easygee_aoi__';
+    const DEFAULT_AOI_STYLE = {{ color: '#d23b3b', fillColor: '#d23b3b', opacity: 1, fillOpacity: 0.08, weight: 2, shown: true }};
+    const VIS_PRESETS = {{
+      ndvi: [
+        {{ id: 'default', label: 'NDVI purple-green', visParams: {{ min: 0, max: 0.8, palette: ['#2c105c', '#4856a5', '#31a354', '#addd8e', '#f7fcb9'] }}, legend: [['#2c105c', 'Low'], ['#31a354', 'Medium'], ['#f7fcb9', 'High']] }},
+        {{ id: 'natural-green', label: 'NDVI brown-green', visParams: {{ min: -0.2, max: 0.9, palette: ['#8c510a', '#d8b365', '#f6e8c3', '#5ab469', '#006837'] }}, legend: [['#8c510a', 'Bare/low'], ['#f6e8c3', 'Moderate'], ['#006837', 'High']] }},
+        {{ id: 'soft-green', label: 'NDVI soft green', visParams: {{ min: 0, max: 0.8, palette: ['#f7fcf5', '#c7e9c0', '#74c476', '#238b45', '#00441b'] }}, legend: [['#f7fcf5', 'Low'], ['#74c476', 'Medium'], ['#00441b', 'High']] }},
+        {{ id: 'contrast', label: 'NDVI high contrast', visParams: {{ min: -0.2, max: 1, palette: ['#440154', '#31688e', '#35b779', '#fde725'] }}, legend: [['#440154', 'Low'], ['#35b779', 'Medium'], ['#fde725', 'High']] }},
+      ],
+      water: [
+        {{ id: 'default', label: 'Water blue', visParams: {{ min: 0, max: 100, palette: ['#f7fbff', '#6baed6', '#08306b'] }}, legend: [['#f7fbff', 'Rare'], ['#6baed6', 'Seasonal'], ['#08306b', 'Persistent']] }},
+        {{ id: 'deep-blue', label: 'Water deep blue', visParams: {{ min: 0, max: 100, palette: ['#f0f9ff', '#38bdf8', '#075985'] }}, legend: [['#f0f9ff', 'Rare'], ['#38bdf8', 'Seasonal'], ['#075985', 'Persistent']] }},
+        {{ id: 'cyan', label: 'Water cyan', visParams: {{ min: 0, max: 100, palette: ['#ecfeff', '#67e8f9', '#0e7490'] }}, legend: [['#ecfeff', 'Rare'], ['#67e8f9', 'Seasonal'], ['#0e7490', 'Persistent']] }},
+        {{ id: 'single-blue', label: 'Water mask blue', visParams: {{ min: 1, max: 100, palette: ['#bfdbfe', '#1d4ed8'] }}, legend: [['#bfdbfe', 'Low occurrence'], ['#1d4ed8', 'High occurrence']] }},
+      ],
+      temperature: [
+        {{ id: 'default', label: 'Temperature blue-red', visParams: {{ min: 0, max: 45, palette: ['#313695', '#74add1', '#ffffbf', '#f46d43', '#a50026'] }}, legend: [['#313695', 'Cool'], ['#ffffbf', 'Moderate'], ['#a50026', 'Hot']] }},
+        {{ id: 'fire', label: 'Temperature fire', visParams: {{ min: 0, max: 45, palette: ['#081d58', '#225ea8', '#ffffb2', '#fd8d3c', '#bd0026'] }}, legend: [['#081d58', 'Cool'], ['#ffffb2', 'Moderate'], ['#bd0026', 'Hot']] }},
+      ],
+      terrain: [
+        {{ id: 'default', label: 'Terrain green-brown', visParams: {{ min: 0, max: 1000, palette: ['#0f3b2e', '#3f7d3f', '#c9b96d', '#a2673f', '#f4f1e8'] }}, legend: [['#0f3b2e', 'Low'], ['#c9b96d', 'Mid'], ['#f4f1e8', 'High']] }},
+        {{ id: 'gray', label: 'Terrain gray', visParams: {{ min: 0, max: 1000, palette: ['#111827', '#6b7280', '#f9fafb'] }}, legend: [['#111827', 'Low'], ['#6b7280', 'Mid'], ['#f9fafb', 'High']] }},
+      ],
+      nightlights: [
+        {{ id: 'default', label: 'Night lights amber', visParams: {{ min: 0, max: 60, palette: ['#03071e', '#370617', '#f48c06', '#ffba08'] }}, legend: [['#03071e', 'Low'], ['#f48c06', 'Medium'], ['#ffba08', 'High']] }},
+        {{ id: 'purple-gold', label: 'Night lights purple-gold', visParams: {{ min: 0, max: 60, palette: ['#1e1b4b', '#7e22ce', '#facc15'] }}, legend: [['#1e1b4b', 'Low'], ['#7e22ce', 'Medium'], ['#facc15', 'High']] }},
+      ],
+      population: [
+        {{ id: 'default', label: 'Population red', visParams: {{ min: 0, max: 100, palette: ['#fff7ec', '#fdbb84', '#e34a33', '#7f0000'] }}, legend: [['#fff7ec', 'Sparse'], ['#e34a33', 'Dense']] }},
+        {{ id: 'magenta', label: 'Population magenta', visParams: {{ min: 0, max: 100, palette: ['#fdf2f8', '#f472b6', '#831843'] }}, legend: [['#fdf2f8', 'Sparse'], ['#831843', 'Dense']] }},
+      ],
+      raster: [
+        {{ id: 'default', label: 'Raster teal', visParams: {{ min: 0, max: 1, palette: ['#132b43', '#2c7fb8', '#7fcdbb', '#ffffcc'] }}, legend: [['#132b43', 'Low'], ['#7fcdbb', 'Mid'], ['#ffffcc', 'High']] }},
+        {{ id: 'gray', label: 'Raster gray', visParams: {{ min: 0, max: 1, palette: ['#111827', '#9ca3af', '#f9fafb'] }}, legend: [['#111827', 'Low'], ['#9ca3af', 'Mid'], ['#f9fafb', 'High']] }},
+      ],
+      vector: [
+        {{ id: 'default', label: 'Vector green', visParams: {{}}, legend: [['#16734d', 'Features']] }},
+      ],
+      rgb: [
+        {{ id: 'default', label: 'RGB default', visParams: {{}}, legend: [['#6f9fcf', 'RGB composite']] }},
+      ],
+    }};
     let lastSessionStateText = '';
     let lastSessionActionId = 0;
     let sessionSyncBusy = false;
@@ -3268,6 +3731,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }}
     }}
     let favoriteDatasetIds = loadFavoriteDatasetIds();
+    STATE.aoiStyle = {{ ...DEFAULT_AOI_STYLE, ...(STATE.aoiStyle || {{}}) }};
+    STATE.aoiShown = STATE.aoiShown !== false;
+    let visualPreferences = (STATE.visualPreferences && typeof STATE.visualPreferences === 'object') ? {{ ...STATE.visualPreferences }} : {{}};
     function saveFavoriteDatasetIds() {{
       localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...favoriteDatasetIds].sort()));
     }}
@@ -3376,6 +3842,57 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
     function cloneAoi(aoi) {{
       return aoi ? JSON.parse(JSON.stringify(aoi)) : null;
+    }}
+    function isHexColor(value) {{
+      return /^#[0-9a-f]{{6}}$/i.test(String(value || '').trim());
+    }}
+    function normalizeAoiStyle(value = {{}}) {{
+      const source = value && typeof value === 'object' ? value : {{}};
+      const color = isHexColor(source.color) ? source.color : DEFAULT_AOI_STYLE.color;
+      const fillColor = isHexColor(source.fillColor) ? source.fillColor : color;
+      const opacity = Number.isFinite(Number(source.opacity)) ? Math.max(0, Math.min(1, Number(source.opacity))) : DEFAULT_AOI_STYLE.opacity;
+      const fillOpacity = Number.isFinite(Number(source.fillOpacity)) ? Math.max(0, Math.min(0.6, Number(source.fillOpacity))) : DEFAULT_AOI_STYLE.fillOpacity;
+      const weight = Number.isFinite(Number(source.weight)) ? Math.max(1, Math.min(6, Number(source.weight))) : DEFAULT_AOI_STYLE.weight;
+      return {{ color, fillColor, opacity, fillOpacity, weight, shown: source.shown !== false }};
+    }}
+    function layerStyleProfile(layer) {{
+      if (!layer) return 'raster';
+      if (layer.id === AOI_LAYER_ID || layer.type === 'aoi') return 'aoi';
+      if (Array.isArray(layer.visParams?.bands) && layer.visParams.bands.length > 1) return 'rgb';
+      if (layer.styleProfile) return layer.styleProfile;
+      const text = `${{layer.dataset || ''}} ${{layer.type || ''}} ${{layer.method || ''}} ${{layer.name || ''}}`.toLowerCase();
+      if (text.includes('ndvi') || text.includes('vegetation')) return 'ndvi';
+      if (text.includes('water') || text.includes('jrc') || text.includes('gsw')) return 'water';
+      if (text.includes('lst') || text.includes('temperature') || text.includes('thermal')) return 'temperature';
+      if (text.includes('dem') || text.includes('elevation') || text.includes('terrain')) return 'terrain';
+      if (text.includes('viirs') || text.includes('night')) return 'nightlights';
+      if (text.includes('population') || text.includes('worldpop') || text.includes('ghsl')) return 'population';
+      if (String(layer.type || '').includes('categorical')) return 'categorical';
+      if (String(layer.type || '').includes('vector')) return 'vector';
+      return 'raster';
+    }}
+    function stylePresetOptions(layer) {{
+      const profile = layerStyleProfile(layer);
+      return VIS_PRESETS[profile] || VIS_PRESETS.raster;
+    }}
+    function stylePresetForLayer(layer, presetId) {{
+      const options = stylePresetOptions(layer);
+      return options.find(item => item.id === presetId) || options[0];
+    }}
+    function palettePreviewHtml(palette = []) {{
+      if (!Array.isArray(palette) || !palette.length) return '';
+      return `<div class="palette-preview">${{palette.map(color => `<span style="background:${{escapeHtml(color)}}"></span>`).join('')}}</div>`;
+    }}
+    function sanitizeVisParams(value) {{
+      if (!value || typeof value !== 'object') return {{}};
+      const out = {{}};
+      ['min', 'max', 'gamma'].forEach(key => {{
+        const num = Number(value[key]);
+        if (Number.isFinite(num)) out[key] = num;
+      }});
+      if (Array.isArray(value.bands)) out.bands = value.bands.map(String).filter(Boolean).slice(0, 4);
+      if (Array.isArray(value.palette)) out.palette = value.palette.map(String).filter(isHexColor).slice(0, 32);
+      return out;
     }}
     function readLocalJson(keys, fallbackText = 'null') {{
       for (const key of keys) {{
@@ -3487,6 +4004,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const restoredAoi = loadPersistedAoi();
       STATE.aoi = restoredAoi || generatedAoi || null;
       STATE.bounds = STATE.aoi ? STATE.aoi.bounds : null;
+      STATE.aoiStyle = normalizeAoiStyle(STATE.aoiStyle);
+      STATE.aoiShown = STATE.aoiShown !== false;
       const generatedMeasurements = Array.isArray(STATE.measurements) ? STATE.measurements.map(normalizeMeasurement).filter(Boolean) : [];
       const restoredMeasurements = loadPersistedMeasurements();
       STATE.measurements = restoredMeasurements.length ? restoredMeasurements : generatedMeasurements;
@@ -3511,6 +4030,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
           changed = true;
         }}
       }}
+      if (profile.visualPreferences && typeof profile.visualPreferences === 'object') {{
+        visualPreferences = {{ ...visualPreferences, ...profile.visualPreferences }};
+        changed = true;
+      }}
       const entry = profileProjectEntry(profile);
       if (entry) {{
         const profileAoi = normalizeAoi(entry.aoi);
@@ -3520,6 +4043,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
           persistAoi();
           changed = true;
           logMsg('log.aoiRestored');
+        }}
+        if (entry.aoiStyle && typeof entry.aoiStyle === 'object') {{
+          STATE.aoiStyle = normalizeAoiStyle(entry.aoiStyle);
+          changed = true;
+        }}
+        if (typeof entry.aoiShown === 'boolean') {{
+          STATE.aoiShown = entry.aoiShown;
+          changed = true;
         }}
         if (Array.isArray(entry.measurements)) {{
           const profileMeasurements = entry.measurements.map(normalizeMeasurement).filter(Boolean);
@@ -3540,6 +4071,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         const changed = applySessionProfile(payload.profile);
         if (changed) {{
           renderAoiLayer();
+          renderLayers();
           renderMeasurements();
           renderDatasets(filteredCatalog());
           resetHomeView();
@@ -3610,16 +4142,18 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }});
       $('lang-code').textContent = currentLang === 'zh' ? 'EN' : '中';
       $('catalog-count').textContent = t('pill.datasets', {{ count: STATE.catalog.length }});
-      $('layer-count').textContent = t('pill.layers', {{ count: STATE.layers.length }});
+      $('layer-count').textContent = t('pill.layers', {{ count: layerCount() }});
       $('click-state').textContent = t(clickStateKey);
       renderCatalogFacets();
       renderQuota();
       renderBasemapChoices();
+      updateInspector();
       if (currentModeKey && $('mode-chip').classList.contains('show')) {{
         $('mode-chip').textContent = t(currentModeKey.key, currentModeKey.vars);
       }}
     }}
     function layerKind(layer) {{
+      if (layer.type === 'aoi') return {{ label: 'A', className: 'aoi' }};
       if (layer.type.includes('categorical')) return {{ label: 'C', className: 'categorical' }};
       if (layer.type.includes('derived')) return {{ label: 'D', className: 'derived' }};
       return {{ label: 'R', className: 'raster' }};
@@ -3649,8 +4183,34 @@ def render_html(state: dict, leaflet_src: str) -> str:
       $('click-state').textContent = t(clickStateKey);
     }}
     function displayBasemapName() {{
-      const meta = BASEMAPS.find(item => item.id === currentBasemap) || BASEMAPS[0];
+      const meta = currentBasemapMeta();
       return t(meta.nameKey);
+    }}
+    function currentBasemapMeta() {{
+      return BASEMAPS.find(item => item.id === currentBasemap) || BASEMAPS[0];
+    }}
+    function basemapAttributionText() {{
+      const meta = currentBasemapMeta();
+      const holder = document.createElement('span');
+      holder.innerHTML = String((meta.options && meta.options.attribution) || '');
+      return (holder.textContent || holder.innerText || '').replace(/\s+/g, ' ').trim();
+    }}
+    function displayBasemapSource() {{
+      const attribution = basemapAttributionText();
+      const name = displayBasemapName();
+      return attribution ? `${{name}} - ${{attribution}}` : name;
+    }}
+    function compactBasemapBadge() {{
+      return t('badge.basemap', {{ basemap: displayBasemapName() }});
+    }}
+    function fullBasemapBadge() {{
+      return t('badge.basemapSource', {{ source: displayBasemapSource() }});
+    }}
+    function layerBadgeDataset(dataset) {{
+      return `${{dataset}} · ${{compactBasemapBadge()}}`;
+    }}
+    function layerBadgeTitle(name, dataset) {{
+      return `${{name}} - ${{dataset}} | ${{fullBasemapBadge()}}`;
     }}
     function renderBasemapChoices() {{
       const current = $('basemap-current');
@@ -3951,6 +4511,72 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function datasetById(datasetId) {{
       return (Array.isArray(STATE.catalog) ? STATE.catalog : []).find(item => item.id === datasetId) || null;
     }}
+    function defaultPreviewRecipeForDataset(item) {{
+      const datasetId = String(item?.id || '');
+      const type = normalizeCatalogType(item || {{}});
+      let operation = type === 'image_collection' ? 'imagecollection-median' : (type === 'image' ? 'image' : 'preview');
+      const recipe = {{
+        kind: 'preview',
+        source: 'map-console-default-preview',
+        datasetId,
+        label: item?.label || datasetId,
+        operation,
+        startDate: STATE.startDate,
+        endDate: STATE.endDate,
+        aoi: hasAoi() ? 'currentAOI' : 'currentMapBounds',
+        description: 'Default quick-preview recipe. Use an explicit recipe for analytical requests.',
+      }};
+      if (datasetId === 'MODIS/061/MOD13Q1') {{
+        Object.assign(recipe, {{ band: 'NDVI', temporalReducer: 'median', scaleFactor: 0.0001, outputBand: 'NDVI' }});
+      }} else if (datasetId === 'MODIS/061/MOD11A2') {{
+        Object.assign(recipe, {{ band: 'LST_Day_1km', temporalReducer: 'median', scaleFactor: 0.02, offset: -273.15, outputBand: 'LST_Day_C' }});
+      }} else if (datasetId === 'GOOGLE/DYNAMICWORLD/V1') {{
+        Object.assign(recipe, {{ band: 'label', temporalReducer: 'mode', outputBand: 'label' }});
+      }} else if (datasetId === 'COPERNICUS/S2_SR_HARMONIZED') {{
+        Object.assign(recipe, {{ bands: ['B4', 'B3', 'B2'], temporalReducer: 'median', output: 'rgb' }});
+      }}
+      return recipe;
+    }}
+    function datasetContext(item) {{
+      if (!item) return null;
+      const explicitAoi = hasAoi() ? cloneAoi(STATE.aoi) : null;
+      const processingAoi = currentProcessingAoi();
+      const processingBounds = processingAoi ? processingAoi.bounds : null;
+      return {{
+        id: item.id,
+        label: item.label || item.id,
+        type: normalizeCatalogType(item),
+        source: item.source || '',
+        provider: datasetDetailValue(item.provider),
+        license: datasetDetailValue(item.license),
+        scale: datasetDetailValue(item.scale),
+        dateRange: datasetDateText(item),
+        startDate: datasetDetailValue(item.startDate),
+        endDate: datasetDetailValue(item.endDate),
+        tags: datasetDetailValue([item.category, item.tags].filter(Boolean).join(' · ')),
+        catalogUrl: datasetDetailValue(item.url),
+        sampleCode: datasetDetailValue(item.sampleCode),
+        currentAoi: explicitAoi,
+        currentBounds: processingBounds,
+        hasExplicitAoi: Boolean(explicitAoi),
+        processingAoi,
+        processingBounds,
+        mapDateRange: {{ startDate: STATE.startDate, endDate: STATE.endDate, cloudPct: STATE.cloudPct }},
+        defaultRecipe: defaultPreviewRecipeForDataset(item),
+      }};
+    }}
+    function selectedDatasetContext() {{
+      return activeDatasetId ? datasetContext(datasetById(activeDatasetId)) : null;
+    }}
+    function recipeSummary(recipe) {{
+      if (!recipe || typeof recipe !== 'object') return '-';
+      const band = recipe.outputBand || recipe.band || recipe.output || recipe.operation || recipe.kind || 'recipe';
+      const reducer = recipe.temporalReducer || recipe.operation || '';
+      const period = recipe.periodLabel || (recipe.year && Array.isArray(recipe.months)
+        ? `${{recipe.year}} months ${{recipe.months.join(',')}}`
+        : [recipe.startDate, recipe.endDate].filter(Boolean).join('..'));
+      return [band, reducer, period].filter(Boolean).join(' · ') || '-';
+    }}
     function datasetDetailValue(value) {{
       const text = String(value || '').trim();
       if (!text || text.toLowerCase() === 'na' || text.toLowerCase() === 'none') return '';
@@ -4015,6 +4641,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const thumb = datasetDetailValue(item.thumbnail);
       const catalogUrl = datasetDetailValue(item.url);
       const sampleCode = datasetDetailValue(item.sampleCode);
+      const previewRecipe = recipeSummary(defaultPreviewRecipeForDataset(item));
       return `
         <div class="dataset-detail-head">
           <div>
@@ -4035,9 +4662,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
           ${{datasetDetailSection('data.detailProvider', provider)}}
           ${{datasetDetailSection('data.detailDates', dates)}}
           ${{datasetDetailSection('data.detailTags', tags)}}
+          ${{datasetDetailSection('data.previewRecipe', previewRecipe)}}
           <div class="dataset-detail-actions">
             <button class="dataset-detail-command primary" id="dataset-detail-add" type="button">${{escapeHtml(t('data.addFromDetail'))}}</button>
             <button class="dataset-detail-command" id="dataset-detail-copy" type="button">${{escapeHtml(t('data.copyId'))}}</button>
+            <button class="dataset-detail-command" id="dataset-detail-copy-context" type="button">${{escapeHtml(t('data.copyContext'))}}</button>
             ${{catalogUrl ? `<a class="dataset-detail-link" href="${{escapeHtml(catalogUrl)}}" target="_blank" rel="noreferrer">${{escapeHtml(t('data.openCatalog'))}}</a>` : ''}}
             ${{sampleCode ? `<a class="dataset-detail-link" href="${{escapeHtml(sampleCode)}}" target="_blank" rel="noreferrer">${{escapeHtml(t('data.openSample'))}}</a>` : ''}}
           </div>
@@ -4070,11 +4699,20 @@ def render_html(state: dict, leaflet_src: str) -> str:
           showModeKey('log.clipboardUnavailable');
         }}
       }});
+      $('dataset-detail-copy-context')?.addEventListener('click', async () => {{
+        try {{
+          await navigator.clipboard.writeText(JSON.stringify(datasetContext(item), null, 2));
+          showModeKey('data.contextCopied');
+        }} catch (error) {{
+          showModeKey('log.clipboardUnavailable');
+        }}
+      }});
     }}
     function setActiveDataset(datasetId) {{
       activeDatasetId = datasetId;
       document.querySelectorAll('.dataset-item').forEach(item => item.classList.toggle('active', item.dataset.dataset === datasetId));
       renderDatasetDetail(datasetId);
+      syncSessionState('selected-dataset');
       logMsg('log.datasetSelected', {{ dataset: datasetId }});
     }}
     function setLanguage(lang) {{
@@ -4265,6 +4903,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
 
     $('quota-link').href = STATE.quota?.consoleUrl || `https://console.cloud.google.com/iam-admin/quotas?service=earthengine.googleapis.com&project=${{encodeURIComponent(STATE.project)}}`;
     initializePersistentState();
+    if (!activeLayerId && hasAoi()) activeLayerId = AOI_LAYER_ID;
 
     const map = L.map('map', {{ zoomControl: false, attributionControl: false }}).setView(STATE.center, STATE.zoom);
     const BASEMAPS = [
@@ -4328,7 +4967,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
       if (meta.shown) tile.addTo(map);
       return tile;
     }}
-    STATE.layers.forEach(meta => registerLayer(meta));
+    STATE.layers.forEach(meta => {{
+      meta.styleProfile = meta.styleProfile || layerStyleProfile(meta);
+      meta.stylePreset = meta.stylePreset || visualPreferences[meta.styleProfile] || 'default';
+      registerLayer(meta);
+    }});
 
     function addGeneratedLayer(meta) {{
       const existingIndex = STATE.layers.findIndex(layer => layer.id === meta.id);
@@ -4338,23 +4981,54 @@ def render_html(state: dict, leaflet_src: str) -> str:
         STATE.layers.splice(existingIndex, 1);
       }}
       meta.shown = true;
+      meta.opacity = Number.isFinite(Number(meta.opacity)) ? Number(meta.opacity) : 0.82;
+      meta.styleProfile = meta.styleProfile || layerStyleProfile(meta);
+      if (!meta.stylePreset && visualPreferences[meta.styleProfile]) meta.stylePreset = visualPreferences[meta.styleProfile];
       STATE.layers.unshift(meta);
       const tile = registerLayer(meta);
       if (!map.hasLayer(tile)) tile.addTo(map);
-      $('layer-count').textContent = t('pill.layers', {{ count: STATE.layers.length }});
+      $('layer-count').textContent = t('pill.layers', {{ count: layerCount() }});
       renderLayers();
       renderDatasets(filteredCatalog());
       setActiveLayer(meta.id);
       syncSessionState('layer-added');
     }}
 
+    function aoiLayerModel() {{
+      if (!hasAoi()) return null;
+      return {{
+        id: AOI_LAYER_ID,
+        name: 'AOI',
+        dataset: STATE.aoi.type === 'polygon' ? 'Drawn polygon AOI' : 'Drawn rectangle AOI',
+        type: 'aoi',
+        shown: STATE.aoiShown !== false,
+        opacity: STATE.aoiStyle.opacity,
+        styleProfile: 'aoi',
+        legend: [[STATE.aoiStyle.color, 'AOI boundary']],
+      }};
+    }}
+    function layerModels() {{
+      const system = aoiLayerModel();
+      return system ? [system, ...STATE.layers] : [...STATE.layers];
+    }}
+    function layerCount() {{
+      return layerModels().length;
+    }}
     function renderAoiLayer() {{
       if (aoiLayer && map.hasLayer(aoiLayer)) map.removeLayer(aoiLayer);
       aoiLayer = null;
-      if (!hasAoi()) return;
-      const options = {{ color: '#d23b3b', weight: 2, fill: false }};
+      if (!hasAoi() || STATE.aoiShown === false) return;
+      STATE.aoiStyle = normalizeAoiStyle(STATE.aoiStyle);
+      const options = {{
+        color: STATE.aoiStyle.color,
+        weight: STATE.aoiStyle.weight,
+        opacity: STATE.aoiStyle.opacity,
+        fill: true,
+        fillColor: STATE.aoiStyle.fillColor,
+        fillOpacity: STATE.aoiStyle.fillOpacity,
+      }};
       if (STATE.aoi.type === 'polygon') {{
-        aoiLayer = L.polygon(STATE.aoi.coordinates, {{ ...options, fill: true, fillOpacity: 0.04 }}).addTo(map);
+        aoiLayer = L.polygon(STATE.aoi.coordinates, options).addTo(map);
       }} else {{
         aoiLayer = L.rectangle(STATE.aoi.bounds, options).addTo(map);
       }}
@@ -4496,9 +5170,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
       catalogListItems = items;
       catalogRenderedCount = 0;
       const list = $('dataset-list');
-      if (activeDatasetId && !items.some(item => item.id === activeDatasetId)) {{
+      if (activeDatasetId && !datasetById(activeDatasetId)) {{
         activeDatasetId = null;
         closeDatasetDetail();
+        syncSessionState('selected-dataset');
       }}
       if (!items.length) {{
         updateCatalogCount();
@@ -4525,6 +5200,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
             project: STATE.project,
             datasetId,
             catalogItem: item,
+            recipe: defaultPreviewRecipeForDataset(item),
             aoi: currentProcessingAoi(),
             bounds: currentProcessingBounds(),
             startDate: STATE.startDate,
@@ -4590,14 +5266,121 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }}
     }}
 
+    function clearAoi() {{
+      STATE.aoi = null;
+      STATE.bounds = null;
+      STATE.aoiShown = true;
+      STATE.aoiStyle = normalizeAoiStyle(STATE.aoiStyle);
+      persistAoi();
+      renderAoiLayer();
+      renderLayers();
+      if (activeLayerId === AOI_LAYER_ID) setActiveLayer(STATE.layers[0]?.id || null, {{ reveal: false }});
+      syncSessionState('aoi-cleared');
+      logMsg('log.aoiCleared');
+      return true;
+    }}
+    function removeLayer(id) {{
+      if (id === AOI_LAYER_ID) return clearAoi();
+      const index = STATE.layers.findIndex(layer => layer.id === id);
+      if (index < 0) return false;
+      const [layer] = STATE.layers.splice(index, 1);
+      const record = layerRegistry.get(id);
+      if (record && map.hasLayer(record.tile)) map.removeLayer(record.tile);
+      layerRegistry.delete(id);
+      let nextActive = null;
+      if (activeLayerId === id) {{
+        nextActive = aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null;
+        activeLayerId = null;
+      }}
+      renderLayers();
+      if (nextActive) setActiveLayer(nextActive, {{ reveal: false }});
+      else updateInspector();
+      renderDatasets(filteredCatalog());
+      logMsg('log.layerRemoved', {{ layer: layer.name }});
+      syncSessionState('layer-removed');
+      return true;
+    }}
+    async function applyLayerPreset(id, presetId) {{
+      const record = layerRegistry.get(id);
+      if (!record) return false;
+      const preset = stylePresetForLayer(record.meta, presetId);
+      const profile = layerStyleProfile(record.meta);
+      showModeKey('mode.styleBuilding', {{ layer: record.meta.name }}, true);
+      try {{
+        const response = await fetch('/api/layer', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{
+            project: STATE.project,
+            datasetId: record.meta.dataset,
+            catalogItem: {{ id: record.meta.dataset, label: record.meta.name, type: record.meta.type }},
+            recipe: record.meta.recipe || null,
+            aoi: record.meta.aoi || currentProcessingAoi(),
+            bounds: record.meta.bounds || currentProcessingBounds(),
+            startDate: record.meta.summary?.startDate || STATE.startDate,
+            endDate: record.meta.summary?.endDate || STATE.endDate,
+            cloudPct: record.meta.summary?.cloudPct ?? STATE.cloudPct,
+            visParams: sanitizeVisParams(preset.visParams),
+            legend: preset.legend,
+            stylePreset: preset.id,
+          }}),
+        }});
+        const payload = await response.json().catch(() => ({{ ok: false, error: response.statusText || 'request failed' }}));
+        if (!response.ok || !payload.ok || !payload.layer) {{
+          throw new Error(payload.error || `HTTP ${{response.status}}`);
+        }}
+        const wasShown = map.hasLayer(record.tile);
+        if (wasShown) map.removeLayer(record.tile);
+        const nextMeta = {{
+          ...record.meta,
+          ...payload.layer,
+          id: record.meta.id,
+          shown: record.meta.shown,
+          opacity: record.meta.opacity,
+          styleProfile: profile,
+          stylePreset: preset.id,
+          visParams: sanitizeVisParams(preset.visParams),
+          legend: preset.legend || payload.layer.legend || record.meta.legend,
+        }};
+        record.meta = nextMeta;
+        const stateIndex = STATE.layers.findIndex(layer => layer.id === id);
+        if (stateIndex >= 0) STATE.layers[stateIndex] = nextMeta;
+        record.tile = L.tileLayer(nextMeta.tileUrl, {{ opacity: nextMeta.opacity, attribution: 'Google Earth Engine' }});
+        if (wasShown || nextMeta.shown) record.tile.addTo(map);
+        visualPreferences[profile] = preset.id;
+        renderLayers();
+        updateInspector();
+        showModeKey('mode.styleApplied', {{ layer: nextMeta.name }});
+        logMsg('log.layerStyled', {{ layer: nextMeta.name }});
+        syncSessionState('layer-style');
+        return true;
+      }} catch (error) {{
+        const message = error && error.message ? error.message : String(error);
+        showModeKey('mode.styleFailed', {{ message: message.slice(0, 90) }}, true);
+        logMsg('log.layerStyleFailed', {{ layer: record.meta.name }});
+        renderLayers();
+        return false;
+      }}
+    }}
     function renderLayers() {{
-      if (!STATE.layers.length) {{
+      const models = layerModels();
+      $('layer-count').textContent = t('pill.layers', {{ count: models.length }});
+      if (!models.length) {{
         $('layer-list').innerHTML = `<div class="empty-list">${{escapeHtml(t('layers.empty'))}}</div>`;
         updateInspector();
         return;
       }}
-      $('layer-list').innerHTML = STATE.layers.map(layer => {{
+      $('layer-list').innerHTML = models.map(layer => {{
         const kind = layerKind(layer);
+        const isAoi = layer.id === AOI_LAYER_ID;
+        const presets = isAoi ? [] : stylePresetOptions(layer);
+        let selectedPreset = layer.stylePreset || visualPreferences[layerStyleProfile(layer)] || 'default';
+        const preset = isAoi ? null : stylePresetForLayer(layer, selectedPreset);
+        if (preset) selectedPreset = preset.id;
+        const palette = isAoi ? [STATE.aoiStyle.color] : (preset?.visParams?.palette || layer.visParams?.palette || []);
+        const styleControl = isAoi
+          ? `<div class="layer-style-row"><span>${{escapeHtml(t('label.color'))}}</span><input type="color" data-action="aoi-color" value="${{escapeHtml(STATE.aoiStyle.color)}}"></div>`
+          : `<div class="layer-style-row"><span>${{escapeHtml(t('label.palette'))}}</span><select data-action="style-preset">${{presets.map(item => `<option value="${{escapeHtml(item.id)}}" ${{item.id === selectedPreset ? 'selected' : ''}}>${{escapeHtml(item.label)}}</option>`).join('')}}</select></div>${{palettePreviewHtml(palette)}}`;
         return `
         <div class="layer-item" data-layer="${{escapeHtml(layer.id)}}">
           <div class="layer-top">
@@ -4606,7 +5389,12 @@ def render_html(state: dict, leaflet_src: str) -> str:
               <div class="layer-title-row"><span class="type-dot ${{kind.className}}">${{kind.label}}</span><div class="layer-name">${{escapeHtml(layer.name)}}</div></div>
               <div class="layer-dataset">${{escapeHtml(layer.dataset)}}</div>
             </div>
+            <div class="layer-actions">
+              <button class="layer-action icon-btn" data-action="style-focus" title="${{escapeHtml(t('tool.styleLayer'))}}" aria-label="${{escapeHtml(t('tool.styleLayer'))}}" type="button">{svg_icon("style")}</button>
+              <button class="layer-action icon-btn danger" data-action="remove" title="${{escapeHtml(isAoi ? t('tool.clearAoi') : t('tool.removeLayer'))}}" aria-label="${{escapeHtml(isAoi ? t('tool.clearAoi') : t('tool.removeLayer'))}}" type="button">{svg_icon("trash")}</button>
+            </div>
           </div>
+          ${{styleControl}}
           <div class="opacity-row">
             <span>${{escapeHtml(t('label.opacity'))}}</span>
             <input type="range" min="0" max="1" step="0.01" value="${{layer.opacity}}" data-action="opacity">
@@ -4617,12 +5405,20 @@ def render_html(state: dict, leaflet_src: str) -> str:
       document.querySelectorAll('.layer-item').forEach(item => {{
         const id = item.dataset.layer;
         const record = layerRegistry.get(id);
-        if (!record) return;
         item.addEventListener('click', event => {{
           if (event.target?.dataset?.action) return;
           setActiveLayer(id);
         }});
         item.querySelector('[data-action="toggle"]').addEventListener('change', event => {{
+          if (id === AOI_LAYER_ID) {{
+            STATE.aoiShown = event.target.checked;
+            STATE.aoiStyle = normalizeAoiStyle({{ ...STATE.aoiStyle, shown: STATE.aoiShown }});
+            renderAoiLayer();
+            if (STATE.aoiShown) setActiveLayer(AOI_LAYER_ID);
+            syncSessionState('aoi-visibility');
+            return;
+          }}
+          if (!record) return;
           record.meta.shown = event.target.checked;
           if (record.meta.shown) {{
             record.tile.addTo(map);
@@ -4636,12 +5432,48 @@ def render_html(state: dict, leaflet_src: str) -> str:
         }});
         item.querySelector('[data-action="opacity"]').addEventListener('input', event => {{
           const value = Number(event.target.value);
+          if (id === AOI_LAYER_ID) {{
+            STATE.aoiStyle = normalizeAoiStyle({{ ...STATE.aoiStyle, opacity: value }});
+            renderAoiLayer();
+            item.querySelector('[data-opacity-label]').textContent = `${{Math.round(value * 100)}}%`;
+            if (activeLayerId === id) updateInspector();
+            syncSessionState('aoi-style');
+            return;
+          }}
+          if (!record) return;
           record.meta.opacity = value;
           record.tile.setOpacity(value);
           item.querySelector('[data-opacity-label]').textContent = `${{Math.round(value * 100)}}%`;
           if (activeLayerId === id) updateInspector();
           syncSessionState('layer-opacity');
         }});
+        item.querySelector('[data-action="remove"]').addEventListener('click', event => {{
+          event.stopPropagation();
+          removeLayer(id);
+        }});
+        item.querySelector('[data-action="style-focus"]').addEventListener('click', event => {{
+          event.stopPropagation();
+          setActiveLayer(id);
+          item.querySelector('[data-action="aoi-color"], [data-action="style-preset"]')?.focus();
+        }});
+        const colorInput = item.querySelector('[data-action="aoi-color"]');
+        if (colorInput) {{
+          colorInput.addEventListener('input', event => {{
+            const color = event.target.value;
+            if (!isHexColor(color)) return;
+            STATE.aoiStyle = normalizeAoiStyle({{ ...STATE.aoiStyle, color, fillColor: color }});
+            renderAoiLayer();
+            renderLayers();
+            setActiveLayer(AOI_LAYER_ID, {{ reveal: false }});
+            syncSessionState('aoi-style');
+          }});
+        }}
+        const styleSelect = item.querySelector('[data-action="style-preset"]');
+        if (styleSelect) {{
+          styleSelect.addEventListener('change', event => {{
+            applyLayerPreset(id, event.target.value);
+          }});
+        }}
       }});
     }}
 
@@ -4656,29 +5488,48 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
 
     function updateInspector() {{
+      if (activeLayerId === AOI_LAYER_ID && hasAoi()) {{
+        const layer = aoiLayerModel();
+        $('active-name').textContent = layer.name;
+        $('active-dataset').textContent = layerBadgeDataset(layer.dataset);
+        const badgeLabel = layerBadgeTitle(layer.name, layer.dataset);
+        $('active-layer-badge').title = badgeLabel;
+        $('active-layer-badge').setAttribute('aria-label', badgeLabel);
+        $('detail-name').textContent = layer.name;
+        $('detail-dataset').textContent = layer.dataset;
+        $('detail-type').textContent = 'AOI';
+        $('detail-recipe').textContent = '-';
+        $('detail-opacity').textContent = `${{Math.round(layer.opacity * 100)}}%`;
+        $('legend').innerHTML = `<div class="legend-row"><span class="swatch" style="background:${{escapeHtml(STATE.aoiStyle.color)}}"></span><span>AOI</span></div>`;
+        return;
+      }}
       const record = layerRegistry.get(activeLayerId);
       if (!record) {{
         const noLayer = t('layer.none');
+        const basemapLabel = fullBasemapBadge();
         $('active-name').textContent = 'EasyGEE';
-        $('active-dataset').textContent = noLayer;
-        $('active-layer-badge').title = t('badge.noLayer');
-        $('active-layer-badge').setAttribute('aria-label', t('badge.noLayer'));
+        $('active-dataset').textContent = basemapLabel;
+        const badgeLabel = `${{t('badge.noLayer')}} - ${{basemapLabel}}`;
+        $('active-layer-badge').title = badgeLabel;
+        $('active-layer-badge').setAttribute('aria-label', badgeLabel);
         $('detail-name').textContent = noLayer;
-        $('detail-dataset').textContent = '-';
+        $('detail-dataset').textContent = displayBasemapSource();
         $('detail-type').textContent = '-';
+        $('detail-recipe').textContent = '-';
         $('detail-opacity').textContent = '-';
         $('legend').innerHTML = `<div class="empty-list">${{escapeHtml(noLayer)}}</div>`;
         return;
       }}
       const layer = record.meta;
       $('active-name').textContent = layer.name;
-      $('active-dataset').textContent = layer.dataset;
-      const badgeLabel = `${{layer.name}} - ${{layer.dataset}}`;
+      $('active-dataset').textContent = layerBadgeDataset(layer.dataset);
+      const badgeLabel = layerBadgeTitle(layer.name, layer.dataset);
       $('active-layer-badge').title = badgeLabel;
       $('active-layer-badge').setAttribute('aria-label', badgeLabel);
       $('detail-name').textContent = layer.name;
       $('detail-dataset').textContent = layer.dataset;
       $('detail-type').textContent = layer.type;
+      $('detail-recipe').textContent = recipeSummary(layer.recipe);
       $('detail-opacity').textContent = `${{Math.round(layer.opacity * 100)}}%`;
       $('legend').innerHTML = (layer.legend || []).map(([color, label]) => `
         <div class="legend-row"><span class="swatch" style="background:${{escapeHtml(color)}}"></span><span>${{escapeHtml(label)}}</span></div>
@@ -4772,7 +5623,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
       if (!normalized) return false;
       STATE.aoi = normalized;
       STATE.bounds = normalized.bounds;
+      STATE.aoiShown = true;
       renderAoiLayer();
+      renderLayers();
+      setActiveLayer(AOI_LAYER_ID, {{ reveal: false }});
       if (options.persist !== false) persistAoi();
       syncSessionState('aoi');
       return true;
@@ -5043,27 +5897,47 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
 
     function buildProjectState() {{
+      const explicitAoi = hasAoi() ? cloneAoi(STATE.aoi) : null;
+      const processingAoi = currentProcessingAoi();
+      const processingBounds = processingAoi ? processingAoi.bounds : null;
       return {{
         title: STATE.title,
         project: STATE.project,
         projectSource: STATE.projectSource || 'unknown',
         agentProtocolVersion: AGENT_PROTOCOL_VERSION,
+        startDate: STATE.startDate,
+        endDate: STATE.endDate,
+        cloudPct: STATE.cloudPct,
         center: [map.getCenter().lat, map.getCenter().lng],
         zoom: map.getZoom(),
         basemap: currentBasemap,
-        bounds: currentAoiBounds(),
-        aoi: hasAoi() ? cloneAoi(STATE.aoi) : null,
+        bounds: processingBounds,
+        aoiBounds: explicitAoi ? explicitAoi.bounds : null,
+        aoi: explicitAoi,
+        hasExplicitAoi: Boolean(explicitAoi),
+        processingAoi,
+        processingBounds,
+        aoiShown: STATE.aoiShown !== false,
+        aoiStyle: normalizeAoiStyle(STATE.aoiStyle),
         measurements: STATE.measurements.map(item => ({{ ...item }})),
         measurementSummary: measurementSummary(),
         language: currentLang,
+        selectedDataset: selectedDatasetContext(),
         favoriteDatasets: [...favoriteDatasetIds].sort(),
+        visualPreferences: {{ ...visualPreferences }},
         quota: STATE.quota,
         layers: STATE.layers.map(layer => ({{
           id: layer.id,
           name: layer.name,
           dataset: layer.dataset,
+          type: layer.type,
           shown: layerRegistry.has(layer.id) ? map.hasLayer(layerRegistry.get(layer.id).tile) : Boolean(layer.shown),
           opacity: layer.opacity,
+          styleProfile: layer.styleProfile || layerStyleProfile(layer),
+          stylePreset: layer.stylePreset || 'default',
+          ...(layer.visParams ? {{ visParams: layer.visParams }} : {{}}),
+          ...(layer.legend ? {{ legend: layer.legend }} : {{}}),
+          ...(layer.recipe ? {{ recipe: layer.recipe }} : {{}}),
           ...(layer.summary ? {{ summary: layer.summary }} : {{}}),
           ...(layer.aoi ? {{ aoi: layer.aoi }} : {{}}),
         }}))
@@ -5107,6 +5981,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
         }}
         return false;
       }}
+      if (type === 'selectdataset' || type === 'select-dataset') {{
+        const datasetId = String(action.datasetId || action.id || '');
+        if (datasetId && datasetById(datasetId)) {{
+          setActiveDataset(datasetId);
+          return true;
+        }}
+        return false;
+      }}
       if (type === 'setaoi' || type === 'set-aoi') {{
         if (action.aoi && updateAoi(action.aoi)) {{
           resetHomeView();
@@ -5115,11 +5997,34 @@ def render_html(state: dict, leaflet_src: str) -> str:
         return false;
       }}
       if (type === 'clearaoi' || type === 'clear-aoi') {{
-        STATE.aoi = null;
-        STATE.bounds = null;
-        persistAoi();
+        clearAoi();
+        return true;
+      }}
+      if (type === 'removelayer' || type === 'remove-layer') {{
+        if (action.layerId || action.id) return removeLayer(String(action.layerId || action.id));
+        return false;
+      }}
+      if (type === 'setaoistyle' || type === 'set-aoi-style') {{
+        STATE.aoiStyle = normalizeAoiStyle({{ ...STATE.aoiStyle, ...(action.style || action) }});
+        if (typeof action.shown === 'boolean') STATE.aoiShown = action.shown;
         renderAoiLayer();
-        syncSessionState('aoi-cleared');
+        renderLayers();
+        syncSessionState('aoi-style');
+        return true;
+      }}
+      if (type === 'updatelayerstyle' || type === 'update-layer-style') {{
+        const layerId = String(action.layerId || action.id || activeLayerId || '');
+        if (!layerId) return false;
+        if (layerId === AOI_LAYER_ID) {{
+          STATE.aoiStyle = normalizeAoiStyle({{ ...STATE.aoiStyle, ...(action.style || action) }});
+          renderAoiLayer();
+          renderLayers();
+          syncSessionState('aoi-style');
+          return true;
+        }}
+        if (action.preset || action.stylePreset) {{
+          return applyLayerPreset(layerId, String(action.preset || action.stylePreset));
+        }}
         return true;
       }}
       if (type === 'clearmeasurements' || type === 'clear-measurements') {{
@@ -5173,6 +6078,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       if (!nextLayer) return;
       if (nextBasemap === currentBasemap) {{
         renderBasemapChoices();
+        updateInspector();
         return;
       }}
       const currentLayer = basemapLayers.get(currentBasemap);
@@ -5180,6 +6086,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       if (!map.hasLayer(nextLayer)) nextLayer.addTo(map);
       currentBasemap = nextBasemap;
       renderBasemapChoices();
+      updateInspector();
       showModeKey('mode.basemap', {{ basemap: displayBasemapName() }});
       logMsg('log.basemap', {{ basemap: displayBasemapName() }});
     }}
@@ -5367,18 +6274,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
       getAoi: () => hasAoi() ? cloneAoi(STATE.aoi) : null,
       setAoi: aoi => updateAoi(aoi),
       clearAoi: () => {{
-        STATE.aoi = null;
-        STATE.bounds = null;
-        persistAoi();
-        renderAoiLayer();
-        syncSessionState('aoi-cleared');
-        return true;
+        return clearAoi();
       }},
       startRectangleAoi: () => startRectangleAoiMode(),
       startPolygonAoi: () => startPolygonAoiMode(),
       getMeasurements: () => STATE.measurements.map(item => ({{ ...item }})),
       getMeasurementSummary: () => measurementSummary(),
       clearMeasurements: () => clearMeasurements(),
+      getSelectedDataset: () => selectedDatasetContext(),
       extractNdvi: options => extractNdviForCurrentAoi(options || {{}}),
       addGeneratedLayer: meta => addGeneratedLayer(meta),
       syncState: reason => syncSessionState(reason || 'manual'),
@@ -5442,6 +6345,18 @@ def smoke() -> int:
         missing = [item for item in required if item not in text]
         if missing:
             print("FAIL missing markers: " + ", ".join(missing))
+            return 1
+        filtered = report_warnings_for_console(
+            {
+                "live_source": "Cloud Quotas REST API",
+                "warnings": [
+                    "Skipping gcloud quota command groups because local components are not installed: beta, alpha",
+                    "Cloud Monitoring request failed: permission denied",
+                ],
+            }
+        )
+        if any("Skipping gcloud" in item for item in filtered) or not any("Monitoring" in item for item in filtered):
+            print("FAIL quota fallback warning filtering")
             return 1
     print("create_map_console smoke passed")
     return 0
