@@ -48,6 +48,7 @@ REQUIRED_SCRIPTS = [
     "authorize_geemap_once.py",
     "ensure_gcloud_cli.py",
     "show_ee_quotas.py",
+    "refresh_map_console_quota.py",
     "route_easygee_interaction.py",
     "route_geospatial_method.py",
     "search_easygee_references.py",
@@ -530,6 +531,7 @@ def audit(skill_dir: Path) -> list[Check]:
             "--catalog-mode",
             "curated",
             "--no-live-quota",
+            "--allow-default-quota-state",
             cwd=skill_dir,
         )
         add(checks, empty_plan.returncode == 0 and empty_path.exists(), "map-console-empty-runs", empty_plan.stdout.strip() or empty_plan.stderr.strip())

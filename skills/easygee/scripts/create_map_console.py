@@ -2306,6 +2306,9 @@ def shell_css() -> str:
     .icon-btn > svg { display: block; }
     .icon-btn:hover { border-color: var(--line-strong); background: var(--panel-2); }
     .icon-btn.active { border-color: rgba(22, 115, 77, 0.55); background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 0 2px rgba(22, 115, 77, 0.14), 0 3px 12px rgba(16, 24, 40, 0.10); }
+    .icon-btn[disabled] { cursor: default; opacity: 0.42; box-shadow: none; }
+    .icon-btn[disabled]:hover { border-color: rgba(215, 223, 218, 0.95); background: rgba(255,255,255,0.82); }
+    .tool-rail .icon-btn[disabled]:hover { border-color: rgba(215, 223, 218, 0.86); background: rgba(255,255,255,0.9); }
     .panel-close { width: 26px; height: 26px; flex: 0 0 26px; padding: 0; margin-left: auto; align-self: center; font-size: 12px; display: grid !important; place-items: center; }
     .panel-close svg { width: 14px; height: 14px; }
     .tool-rail {
@@ -2611,6 +2614,7 @@ def shell_css() -> str:
     .layer-name { font-size: 13px; font-weight: 700; line-height: 1.25; }
     .type-dot { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; color: #fff; font-size: 10px; font-weight: 800; flex: 0 0 auto; }
     .type-dot.aoi { background: #c2410c; }
+    .type-dot.measurements { background: #0f766e; }
     .type-dot.raster { background: #2f7d55; }
     .type-dot.derived { background: #7a58a8; }
     .type-dot.categorical { background: #2f6fa3; }
@@ -3321,6 +3325,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "tool.inspector": "查看器",
         "tool.drawAoi": "绘制 AOI",
         "tool.measure": "测距",
+        "tool.clearMeasurements": "清除测距",
         "tool.basemap": "底图",
         "tool.quota": "配额状态",
         "tool.drive": "Google 云盘",
@@ -3379,6 +3384,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "task.driveSearch": "Drive 搜索",
         "task.createdAt": "创建于",
         "layer.none": "未选择图层",
+        "measurements.layerName": "测距",
+        "measurements.layerDataset": "已保存测距标记（:count 条）",
+        "measurements.legend": "测距线",
+        "measurements.count": "数量",
+        "measurements.summary": ":count 条，合计 :total",
         "badge.noLayer": "EasyGEE 地图",
         "badge.basemap": "底图：:basemap",
         "badge.basemapSource": "底图来源：:source",
@@ -3503,6 +3513,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.measureEndpoint": "测距：选择终点",
         "mode.distance": "距离：:distance",
         "mode.measureSaved": "测量已保存：:distance（共 :count 条，均值 :mean）",
+        "mode.measureCleared": "测距标记已清除",
         "basemap.osm": "OpenStreetMap",
         "basemap.osmNote": "道路与标注",
         "basemap.light": "浅色",
@@ -3548,6 +3559,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.measureOff": "测距模式已关闭",
         "log.measured": "测得距离：:distance",
         "log.measureSummary": "测量统计：共 :count 条，均值 :mean",
+        "log.measureCleared": "测距标记已清除：:count 条",
         "log.copied": "项目状态已复制",
         "log.clipboardUnavailable": "剪贴板不可用",
         "log.downloaded": "项目 JSON 已下载",
@@ -3561,6 +3573,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "tool.inspector": "Inspector",
         "tool.drawAoi": "Draw AOI",
         "tool.measure": "Measure distance",
+        "tool.clearMeasurements": "Clear measurements",
         "tool.basemap": "Basemap",
         "tool.quota": "Quota status",
         "tool.drive": "Google Drive",
@@ -3619,6 +3632,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "task.driveSearch": "Drive search",
         "task.createdAt": "Created",
         "layer.none": "No layer selected",
+        "measurements.layerName": "Measurements",
+        "measurements.layerDataset": "Saved distance markers (:count)",
+        "measurements.legend": "Measurement line",
+        "measurements.count": "Count",
+        "measurements.summary": ":count total, :total",
         "badge.noLayer": "EasyGEE map",
         "badge.basemap": "Basemap: :basemap",
         "badge.basemapSource": "Basemap source: :source",
@@ -3743,6 +3761,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.measureEndpoint": "Measure: choose endpoint",
         "mode.distance": "Distance: :distance",
         "mode.measureSaved": "Measurement saved: :distance (:count total, mean :mean)",
+        "mode.measureCleared": "Measurement markers cleared",
         "basemap.osm": "OpenStreetMap",
         "basemap.osmNote": "Roads and labels",
         "basemap.light": "Light",
@@ -3788,6 +3807,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.measureOff": "Measure mode off",
         "log.measured": "Measured distance: :distance",
         "log.measureSummary": "Measurements: :count total, mean :mean",
+        "log.measureCleared": "Measurement markers cleared: :count",
         "log.copied": "Project state copied",
         "log.clipboardUnavailable": "Clipboard write unavailable",
         "log.downloaded": "Project JSON downloaded",
@@ -3823,7 +3843,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
     const ACTION_SET_AOI_STYLE = 'setAoiStyle';
     const ACTION_UPDATE_LAYER_STYLE = 'updateLayerStyle';
     const AOI_LAYER_ID = '__easygee_aoi__';
+    const MEASUREMENTS_LAYER_ID = '__easygee_measurements__';
     const DEFAULT_AOI_STYLE = {{ color: '#d23b3b', fillColor: '#d23b3b', opacity: 1, fillOpacity: 0.08, weight: 2, shown: true }};
+    const DEFAULT_MEASUREMENTS_STYLE = {{ color: '#16734d', opacity: 1, weight: 3, shown: true }};
     const VIS_PRESETS = {{
       ndvi: [
         {{ id: 'default', label: 'NDVI purple-green', visParams: {{ min: 0, max: 0.8, palette: ['#2c105c', '#4856a5', '#31a354', '#addd8e', '#f7fcb9'] }}, legend: [['#2c105c', 'Low'], ['#31a354', 'Medium'], ['#f7fcb9', 'High']] }},
@@ -3931,6 +3953,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
     let favoriteDatasetIds = loadFavoriteDatasetIds();
     STATE.aoiStyle = {{ ...DEFAULT_AOI_STYLE, ...(STATE.aoiStyle || {{}}) }};
     STATE.aoiShown = STATE.aoiShown !== false;
+    STATE.measurementsShown = STATE.measurementsShown !== false;
+    STATE.measurementsOpacity = normalizeMeasurementsOpacity(STATE.measurementsOpacity);
     let visualPreferences = (STATE.visualPreferences && typeof STATE.visualPreferences === 'object') ? {{ ...STATE.visualPreferences }} : {{}};
     function saveFavoriteDatasetIds() {{
       localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...favoriteDatasetIds].sort()));
@@ -4053,9 +4077,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const weight = Number.isFinite(Number(source.weight)) ? Math.max(1, Math.min(6, Number(source.weight))) : DEFAULT_AOI_STYLE.weight;
       return {{ color, fillColor, opacity, fillOpacity, weight, shown: source.shown !== false }};
     }}
+    function normalizeMeasurementsOpacity(value) {{
+      const opacity = Number(value);
+      return Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : DEFAULT_MEASUREMENTS_STYLE.opacity;
+    }}
     function layerStyleProfile(layer) {{
       if (!layer) return 'raster';
       if (layer.id === AOI_LAYER_ID || layer.type === 'aoi') return 'aoi';
+      if (layer.id === MEASUREMENTS_LAYER_ID || layer.type === 'measurements') return 'measurements';
       if (Array.isArray(layer.visParams?.bands) && layer.visParams.bands.length > 1) return 'rgb';
       if (layer.styleProfile) return layer.styleProfile;
       const text = `${{layer.dataset || ''}} ${{layer.type || ''}} ${{layer.method || ''}} ${{layer.name || ''}}`.toLowerCase();
@@ -4333,6 +4362,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
       STATE.bounds = STATE.aoi ? STATE.aoi.bounds : null;
       STATE.aoiStyle = normalizeAoiStyle(STATE.aoiStyle);
       STATE.aoiShown = STATE.aoiShown !== false;
+      STATE.measurementsShown = STATE.measurementsShown !== false;
+      STATE.measurementsOpacity = normalizeMeasurementsOpacity(STATE.measurementsOpacity);
       const generatedMeasurements = Array.isArray(STATE.measurements) ? STATE.measurements.map(normalizeMeasurement).filter(Boolean) : [];
       const restoredMeasurements = loadPersistedMeasurements();
       STATE.measurements = restoredMeasurements.length ? restoredMeasurements : generatedMeasurements;
@@ -4387,6 +4418,17 @@ def render_html(state: dict, leaflet_src: str) -> str:
           if (JSON.stringify(profileMeasurements) !== JSON.stringify(STATE.measurements || [])) {{
             STATE.measurements = profileMeasurements;
             persistMeasurements();
+            changed = true;
+          }}
+        }}
+        if (typeof entry.measurementsShown === 'boolean') {{
+          STATE.measurementsShown = entry.measurementsShown;
+          changed = true;
+        }}
+        if (entry.measurementsOpacity !== undefined) {{
+          const opacity = normalizeMeasurementsOpacity(entry.measurementsOpacity);
+          if (opacity !== STATE.measurementsOpacity) {{
+            STATE.measurementsOpacity = opacity;
             changed = true;
           }}
         }}
@@ -4494,6 +4536,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
     function layerKind(layer) {{
       if (layer.type === 'aoi') return {{ label: 'A', className: 'aoi' }};
+      if (layer.type === 'measurements') return {{ label: 'M', className: 'measurements' }};
       if (layer.type.includes('categorical')) return {{ label: 'C', className: 'categorical' }};
       if (layer.type.includes('derived')) return {{ label: 'D', className: 'derived' }};
       return {{ label: 'R', className: 'raster' }};
@@ -5244,6 +5287,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
 
     $('quota-link').href = STATE.quota?.consoleUrl || `https://console.cloud.google.com/iam-admin/quotas?service=earthengine.googleapis.com&project=${{encodeURIComponent(STATE.project)}}`;
     initializePersistentState();
+    if (!activeLayerId && hasMeasurements()) activeLayerId = MEASUREMENTS_LAYER_ID;
     if (!activeLayerId && hasAoi()) activeLayerId = AOI_LAYER_ID;
 
     const map = L.map('map', {{ zoomControl: false, attributionControl: false }}).setView(STATE.center, STATE.zoom);
@@ -5348,9 +5392,26 @@ def render_html(state: dict, leaflet_src: str) -> str:
         legend: [[STATE.aoiStyle.color, 'AOI boundary']],
       }};
     }}
+    function hasMeasurements() {{
+      return measurementSummary().count > 0;
+    }}
+    function measurementsLayerModel() {{
+      const summary = measurementSummary();
+      if (!summary.count) return null;
+      return {{
+        id: MEASUREMENTS_LAYER_ID,
+        name: t('measurements.layerName'),
+        dataset: t('measurements.layerDataset', {{ count: summary.count }}),
+        type: 'measurements',
+        shown: STATE.measurementsShown !== false,
+        opacity: normalizeMeasurementsOpacity(STATE.measurementsOpacity),
+        styleProfile: 'measurements',
+        legend: [[DEFAULT_MEASUREMENTS_STYLE.color, t('measurements.legend')]],
+        summary,
+      }};
+    }}
     function layerModels() {{
-      const system = aoiLayerModel();
-      return system ? [system, ...STATE.layers] : [...STATE.layers];
+      return [measurementsLayerModel(), aoiLayerModel(), ...STATE.layers].filter(Boolean);
     }}
     function layerCount() {{
       return layerModels().length;
@@ -5622,6 +5683,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
     function removeLayer(id) {{
       if (id === AOI_LAYER_ID) return clearAoi();
+      if (id === MEASUREMENTS_LAYER_ID) return clearMeasurements();
       const index = STATE.layers.findIndex(layer => layer.id === id);
       if (index < 0) return false;
       const [layer] = STATE.layers.splice(index, 1);
@@ -5630,7 +5692,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       layerRegistry.delete(id);
       let nextActive = null;
       if (activeLayerId === id) {{
-        nextActive = aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null;
+        nextActive = measurementsLayerModel()?.id || aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null;
         activeLayerId = null;
       }}
       renderLayers();
@@ -5660,6 +5722,21 @@ def render_html(state: dict, leaflet_src: str) -> str:
         syncSessionState(options.reason || 'aoi-visibility');
         return true;
       }}
+      if (id === MEASUREMENTS_LAYER_ID) {{
+        if (!hasMeasurements()) return false;
+        STATE.measurementsShown = nextShown;
+        renderMeasurements();
+        renderLayers();
+        if (nextShown && options.activate !== false) {{
+          setActiveLayer(MEASUREMENTS_LAYER_ID, {{ reveal: options.reveal !== false }});
+        }} else if (!nextShown && activeLayerId === MEASUREMENTS_LAYER_ID) {{
+          setActiveLayer(aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null, {{ reveal: false }});
+        }} else {{
+          updateInspector();
+        }}
+        syncSessionState(options.reason || 'measurements-visibility');
+        return true;
+      }}
       const record = layerRegistry.get(id);
       if (!record) return false;
       record.meta.shown = nextShown;
@@ -5674,7 +5751,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       if (nextShown && options.activate !== false) {{
         setActiveLayer(id, {{ reveal: options.reveal !== false }});
       }} else if (!nextShown && activeLayerId === id) {{
-        setActiveLayer(aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null, {{ reveal: false }});
+        setActiveLayer(measurementsLayerModel()?.id || aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null, {{ reveal: false }});
       }} else {{
         updateInspector();
       }}
@@ -5694,6 +5771,15 @@ def render_html(state: dict, leaflet_src: str) -> str:
         syncSessionState(options.reason || 'aoi-opacity');
         return true;
       }}
+      if (id === MEASUREMENTS_LAYER_ID) {{
+        if (!hasMeasurements()) return false;
+        STATE.measurementsOpacity = opacity;
+        renderMeasurements();
+        if (options.render !== false) renderLayers();
+        if (activeLayerId === id) updateInspector();
+        syncSessionState(options.reason || 'measurements-opacity');
+        return true;
+      }}
       const record = layerRegistry.get(id);
       if (!record) return false;
       record.meta.opacity = opacity;
@@ -5708,6 +5794,12 @@ def render_html(state: dict, leaflet_src: str) -> str:
       if (id === AOI_LAYER_ID) {{
         if (!hasAoi()) return false;
         setActiveLayer(AOI_LAYER_ID, {{ reveal: options.reveal !== false }});
+        syncSessionState(options.reason || 'layer-selected');
+        return true;
+      }}
+      if (id === MEASUREMENTS_LAYER_ID) {{
+        if (!hasMeasurements()) return false;
+        setActiveLayer(MEASUREMENTS_LAYER_ID, {{ reveal: options.reveal !== false }});
         syncSessionState(options.reason || 'layer-selected');
         return true;
       }}
@@ -5789,14 +5881,19 @@ def render_html(state: dict, leaflet_src: str) -> str:
       $('layer-list').innerHTML = models.map(layer => {{
         const kind = layerKind(layer);
         const isAoi = layer.id === AOI_LAYER_ID;
+        const isMeasurements = layer.id === MEASUREMENTS_LAYER_ID;
         const presets = isAoi ? [] : stylePresetOptions(layer);
         let selectedPreset = layer.stylePreset || visualPreferences[layerStyleProfile(layer)] || 'default';
         const preset = isAoi ? null : stylePresetForLayer(layer, selectedPreset);
         if (preset) selectedPreset = preset.id;
-        const palette = isAoi ? [STATE.aoiStyle.color] : (preset?.visParams?.palette || layer.visParams?.palette || []);
+        const palette = isAoi ? [STATE.aoiStyle.color] : isMeasurements ? [DEFAULT_MEASUREMENTS_STYLE.color] : (preset?.visParams?.palette || layer.visParams?.palette || []);
         const styleControl = isAoi
           ? `<div class="layer-style-row"><span>${{escapeHtml(t('label.color'))}}</span><input type="color" data-action="aoi-color" value="${{escapeHtml(STATE.aoiStyle.color)}}"></div>`
+          : isMeasurements
+            ? `<div class="layer-style-row"><span>${{escapeHtml(t('measurements.count'))}}</span><span>${{escapeHtml(t('measurements.summary', {{ count: layer.summary.count, total: layer.summary.totalLabel }}))}}</span></div>${{palettePreviewHtml(palette)}}`
           : `<div class="layer-style-row"><span>${{escapeHtml(t('label.palette'))}}</span><select data-action="style-preset">${{presets.map(item => `<option value="${{escapeHtml(item.id)}}" ${{item.id === selectedPreset ? 'selected' : ''}}>${{escapeHtml(item.label)}}</option>`).join('')}}</select></div>${{palettePreviewHtml(palette)}}`;
+        const removeTitle = isAoi ? t('tool.clearAoi') : isMeasurements ? t('tool.clearMeasurements') : t('tool.removeLayer');
+        const styleButton = isMeasurements ? '' : `<button class="layer-action icon-btn" data-action="style-focus" title="${{escapeHtml(t('tool.styleLayer'))}}" aria-label="${{escapeHtml(t('tool.styleLayer'))}}" type="button">{svg_icon("style")}</button>`;
         return `
         <div class="layer-item" data-layer="${{escapeHtml(layer.id)}}">
           <div class="layer-top">
@@ -5806,8 +5903,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
               <div class="layer-dataset">${{escapeHtml(layer.dataset)}}</div>
             </div>
             <div class="layer-actions">
-              <button class="layer-action icon-btn" data-action="style-focus" title="${{escapeHtml(t('tool.styleLayer'))}}" aria-label="${{escapeHtml(t('tool.styleLayer'))}}" type="button">{svg_icon("style")}</button>
-              <button class="layer-action icon-btn danger" data-action="remove" title="${{escapeHtml(isAoi ? t('tool.clearAoi') : t('tool.removeLayer'))}}" aria-label="${{escapeHtml(isAoi ? t('tool.clearAoi') : t('tool.removeLayer'))}}" type="button">{svg_icon("trash")}</button>
+              ${{styleButton}}
+              <button class="layer-action icon-btn danger" data-action="remove" title="${{escapeHtml(removeTitle)}}" aria-label="${{escapeHtml(removeTitle)}}" type="button">{svg_icon("trash")}</button>
             </div>
           </div>
           ${{styleControl}}
@@ -5826,18 +5923,20 @@ def render_html(state: dict, leaflet_src: str) -> str:
           setActiveLayer(id);
         }});
         item.querySelector('[data-action="toggle"]').addEventListener('change', event => {{
-          setLayerVisibility(id, event.target.checked, {{ reason: id === AOI_LAYER_ID ? 'aoi-visibility' : 'layer-toggle' }});
+          const reason = id === AOI_LAYER_ID ? 'aoi-visibility' : id === MEASUREMENTS_LAYER_ID ? 'measurements-visibility' : 'layer-toggle';
+          setLayerVisibility(id, event.target.checked, {{ reason }});
         }});
         item.querySelector('[data-action="opacity"]').addEventListener('input', event => {{
           const value = Number(event.target.value);
-          if (!setLayerOpacity(id, value, {{ render: false, reason: id === AOI_LAYER_ID ? 'aoi-style' : 'layer-opacity' }})) return;
+          const reason = id === AOI_LAYER_ID ? 'aoi-style' : id === MEASUREMENTS_LAYER_ID ? 'measurements-opacity' : 'layer-opacity';
+          if (!setLayerOpacity(id, value, {{ render: false, reason }})) return;
           item.querySelector('[data-opacity-label]').textContent = `${{Math.round(value * 100)}}%`;
         }});
         item.querySelector('[data-action="remove"]').addEventListener('click', event => {{
           event.stopPropagation();
           removeLayer(id);
         }});
-        item.querySelector('[data-action="style-focus"]').addEventListener('click', event => {{
+        item.querySelector('[data-action="style-focus"]')?.addEventListener('click', event => {{
           event.stopPropagation();
           setActiveLayer(id);
           item.querySelector('[data-action="aoi-color"], [data-action="style-preset"]')?.focus();
@@ -5887,6 +5986,22 @@ def render_html(state: dict, leaflet_src: str) -> str:
         $('detail-recipe').textContent = '-';
         $('detail-opacity').textContent = `${{Math.round(layer.opacity * 100)}}%`;
         $('legend').innerHTML = `<div class="legend-row"><span class="swatch" style="background:${{escapeHtml(STATE.aoiStyle.color)}}"></span><span>AOI</span></div>`;
+        return;
+      }}
+      if (activeLayerId === MEASUREMENTS_LAYER_ID && hasMeasurements()) {{
+        const layer = measurementsLayerModel();
+        const summary = layer.summary;
+        $('active-name').textContent = layer.name;
+        $('active-dataset').textContent = layerBadgeDataset(layer.dataset);
+        const badgeLabel = layerBadgeTitle(layer.name, layer.dataset);
+        $('active-layer-badge').title = badgeLabel;
+        $('active-layer-badge').setAttribute('aria-label', badgeLabel);
+        $('detail-name').textContent = layer.name;
+        $('detail-dataset').textContent = t('measurements.summary', {{ count: summary.count, total: summary.totalLabel }});
+        $('detail-type').textContent = 'Measurements';
+        $('detail-recipe').textContent = '-';
+        $('detail-opacity').textContent = `${{Math.round(layer.opacity * 100)}}%`;
+        $('legend').innerHTML = `<div class="legend-row"><span class="swatch" style="background:${{escapeHtml(DEFAULT_MEASUREMENTS_STYLE.color)}}"></span><span>${{escapeHtml(t('measurements.legend'))}}</span></div>`;
         return;
       }}
       const record = layerRegistry.get(activeLayerId);
@@ -6190,22 +6305,26 @@ def render_html(state: dict, leaflet_src: str) -> str:
 
     function renderMeasurements() {{
       measureLayer.clearLayers();
+      if (STATE.measurementsShown === false) return;
+      const opacity = normalizeMeasurementsOpacity(STATE.measurementsOpacity);
       (STATE.measurements || []).forEach(item => {{
         const start = L.latLng(item.start[0], item.start[1]);
         const end = L.latLng(item.end[0], item.end[1]);
-        L.polyline([start, end], {{ color: '#16734d', weight: 3, dashArray: '6 5' }})
+        L.polyline([start, end], {{ color: DEFAULT_MEASUREMENTS_STYLE.color, weight: DEFAULT_MEASUREMENTS_STYLE.weight, opacity, dashArray: '6 5' }})
           .bindTooltip(item.lengthLabel || formatDistance(item.lengthMeters), {{
             permanent: true,
             direction: 'center',
             className: 'measure-label',
+            opacity,
           }})
           .addTo(measureLayer);
         [start, end].forEach(point => {{
           L.circleMarker(point, {{
             radius: 3,
-            color: '#16734d',
-            fillColor: '#16734d',
-            fillOpacity: 1,
+            color: DEFAULT_MEASUREMENTS_STYLE.color,
+            fillColor: DEFAULT_MEASUREMENTS_STYLE.color,
+            fillOpacity: opacity,
+            opacity,
             weight: 1.5,
             interactive: false,
           }}).addTo(measureLayer);
@@ -6223,20 +6342,30 @@ def render_html(state: dict, leaflet_src: str) -> str:
         createdAt: new Date().toISOString(),
       }};
       STATE.measurements.push(row);
+      STATE.measurementsShown = true;
       persistMeasurements();
       renderMeasurements();
       const summary = measurementSummary();
+      renderLayers();
+      setActiveLayer(MEASUREMENTS_LAYER_ID, {{ reveal: false }});
       showModeKey('mode.measureSaved', {{ distance: row.lengthLabel, count: summary.count, mean: summary.meanLabel }}, true);
       logMsg('log.measureSummary', {{ count: summary.count, mean: summary.meanLabel }});
       syncSessionState('measurement');
       return row;
     }}
     function clearMeasurements() {{
+      const count = Array.isArray(STATE.measurements) ? STATE.measurements.length : 0;
       STATE.measurements = [];
       persistMeasurements();
       measureLayer.clearLayers();
       measureDraftLayer.clearLayers();
       measurePoints = [];
+      measureMode = false;
+      syncToolState();
+      renderLayers();
+      if (activeLayerId === MEASUREMENTS_LAYER_ID) setActiveLayer(aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null, {{ reveal: false }});
+      showModeKey('mode.measureCleared', {{}}, false);
+      logMsg('log.measureCleared', {{ count }});
       syncSessionState('measurements-cleared');
       return measurementSummary();
     }}
@@ -6352,6 +6481,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
         aoiShown: STATE.aoiShown !== false,
         aoiStyle: normalizeAoiStyle(STATE.aoiStyle),
         measurements: STATE.measurements.map(item => ({{ ...item }})),
+        measurementsShown: STATE.measurementsShown !== false,
+        measurementsOpacity: normalizeMeasurementsOpacity(STATE.measurementsOpacity),
         measurementSummary: measurementSummary(),
         language: currentLang,
         selectedDataset: selectedDatasetContext(),
@@ -6854,6 +6985,11 @@ def main() -> int:
     parser.add_argument("--live", action="store_true", help="Create a pre-populated Earth Engine demo with default layers")
     parser.add_argument("--no-live-quota", action="store_true", help="Skip Cloud Quotas / Monitoring quota lookup")
     parser.add_argument("--no-quota-usage", action="store_true", help="Skip recent Cloud Monitoring quota usage lookup")
+    parser.add_argument(
+        "--allow-default-quota-state",
+        action="store_true",
+        help="Allow --no-live-quota to write default-only quota state to a non-sample page. Use only for explicit no-network previews.",
+    )
     parser.add_argument("--quota-minutes", type=int, default=60, help="Lookback window for quota usage metrics")
     parser.add_argument(
         "--catalog-mode",
@@ -6871,6 +7007,12 @@ def main() -> int:
 
     if args.smoke:
         return smoke()
+    if args.no_live_quota and not (args.sample or args.allow_default_quota_state):
+        parser.error(
+            "--no-live-quota would write default-only quota state to a user-facing page. "
+            "Use live quota lookup, run refresh_map_console_quota.py for quota-only updates, "
+            "or add --allow-default-quota-state only for an explicit no-network preview."
+        )
 
     resolved_project = easygee_project.resolve_project(args.project, remember_discovered=True)
     args.project = resolved_project.project
