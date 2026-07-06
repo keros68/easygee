@@ -18,6 +18,13 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import easygee_project
+import resolve_ambiguous_geo_request as ambiguous_requests
+
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = SKILL_DIR / "references" / "map-console-agent-contract.json"
@@ -128,6 +135,12 @@ def command_state(args: argparse.Namespace) -> int:
     return code
 
 
+def command_profile(args: argparse.Namespace) -> int:
+    payload = http_json("GET", api_url(args.url, "/api/session/profile"), timeout=args.timeout)
+    print_json(payload, args.pretty)
+    return 0 if payload.get("ok") else 1
+
+
 def command_aoi(args: argparse.Namespace) -> int:
     code, payload = substate_payload(args, "aoi")
     print_json(payload, args.pretty)
@@ -146,6 +159,48 @@ def command_measurement_summary(args: argparse.Namespace) -> int:
     return code
 
 
+def visible_layer_label(state: dict[str, Any]) -> str | None:
+    layers = state.get("layers")
+    if not isinstance(layers, list):
+        return None
+    for layer in layers:
+        if not isinstance(layer, dict):
+            continue
+        if layer.get("shown") is False:
+            continue
+        label = layer.get("name") or layer.get("label") or layer.get("id")
+        if label:
+            return str(label)
+    return None
+
+
+def command_plan(args: argparse.Namespace) -> int:
+    context: dict[str, Any] = {
+        "has_aoi": bool(args.has_aoi),
+        "has_map_state": False,
+        "has_active_image": bool(args.has_active_image),
+        "active_layer": args.active_layer,
+    }
+    state_response: dict[str, Any] | None = None
+    if args.url:
+        code, state_response = state_payload(args)
+        state = state_response.get("state") if isinstance(state_response.get("state"), dict) else {}
+        context["has_map_state"] = code == 0
+        context["has_aoi"] = bool(context["has_aoi"] or isinstance(state.get("aoi"), dict))
+        layer_label = args.active_layer or visible_layer_label(state)
+        if layer_label:
+            context["active_layer"] = layer_label
+            context["has_active_image"] = True
+    prompt = " ".join(args.task).strip()
+    plan = ambiguous_requests.build_plan(prompt, context)
+    payload: dict[str, Any] = {"ok": True, "plan": plan}
+    if state_response is not None:
+        payload["stateSyncedAt"] = state_response.get("syncedAt")
+        payload["stateContext"] = context
+    print_json(payload, args.pretty)
+    return 0
+
+
 def command_extract_ndvi(args: argparse.Namespace) -> int:
     code, state_response = state_payload(args)
     state = state_response.get("state") if isinstance(state_response.get("state"), dict) else {}
@@ -154,11 +209,10 @@ def command_extract_ndvi(args: argparse.Namespace) -> int:
         return code
     aoi = state.get("aoi")
     project = args.project or state.get("project")
+    if not easygee_project.is_concrete_project(project):
+        project = None
     if not isinstance(aoi, dict):
         print_json({"ok": False, "error": "No AOI is available in the Map Console state."}, args.pretty)
-        return 2
-    if not project:
-        print_json({"ok": False, "error": "No Earth Engine project is available in the Map Console state."}, args.pretty)
         return 2
     request = {
         "project": project,
@@ -195,11 +249,14 @@ def command_enqueue(args: argparse.Namespace) -> int:
 
 def command_smoke(args: argparse.Namespace) -> int:
     contract = load_contract()
+    vague_plan = ambiguous_requests.build_plan("提取这个AOI中的水体", {"has_aoi": True})
     checks = {
         "contractVersion": contract.get("version") == 1,
         "stateEndpoint": contract.get("stateEndpoint") == "/api/session/state",
+        "profileEndpoint": contract.get("profileEndpoint") == "/api/session/profile",
         "actionsEndpoint": contract.get("actionsEndpoint") == "/api/session/actions",
         "ndviEndpoint": contract.get("analysisEndpoints", {}).get("ndvi") == "/api/analysis/ndvi",
+        "ambiguousPlanner": vague_plan.get("recommended_route") == "ask_user",
         "apiUrl": api_url("http://127.0.0.1:5000/map.html", "/api/session/state")
         == "http://127.0.0.1:5000/api/session/state",
     }
@@ -229,6 +286,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_url_args(state)
     state.set_defaults(func=command_state)
 
+    profile = subparsers.add_parser("profile", help="Read the persistent Map Console profile.")
+    profile.add_argument("--url", required=True)
+    profile.add_argument("--timeout", type=float, default=30.0)
+    profile.add_argument("--pretty", action="store_true")
+    profile.set_defaults(func=command_profile)
+
     aoi = subparsers.add_parser("aoi", help="Read the latest synced AOI.")
     add_url_args(aoi)
     aoi.set_defaults(func=command_aoi)
@@ -240,6 +303,17 @@ def build_parser() -> argparse.ArgumentParser:
     summary = subparsers.add_parser("measurement-summary", help="Read distance measurement summary.")
     add_url_args(summary)
     summary.set_defaults(func=command_measurement_summary)
+
+    plan = subparsers.add_parser("plan", help="Resolve a vague extraction request against current Map Console context.")
+    plan.add_argument("task", nargs="+", help="User request text, for example '提取这个AOI中的水体'.")
+    plan.add_argument("--url", help="Optional Map Console URL used to read AOI/layer state.")
+    plan.add_argument("--wait", type=float, default=0.0, help="Seconds to wait for browser state when --url is used.")
+    plan.add_argument("--timeout", type=float, default=60.0, help="HTTP timeout in seconds.")
+    plan.add_argument("--has-aoi", action="store_true", help="Treat the current session as having a usable AOI.")
+    plan.add_argument("--has-active-image", action="store_true", help="Treat the current browser image/layer as a valid visual input.")
+    plan.add_argument("--active-layer", help="Human-readable active layer name.")
+    plan.add_argument("--pretty", action="store_true")
+    plan.set_defaults(func=command_plan)
 
     ndvi = subparsers.add_parser("extract-ndvi", help="Run NDVI analysis and optionally sync the layer to the browser.")
     add_url_args(ndvi)

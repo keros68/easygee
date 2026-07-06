@@ -27,8 +27,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import easygee_project
 
-DEFAULT_PROJECT = "YOUR_EE_PROJECT"
+
+DEFAULT_PROJECT = easygee_project.DEFAULT_PROJECT
 DEFAULT_EMPTY_CENTER = [20.0, 0.0]
 DEFAULT_EMPTY_ZOOM = 2
 UNLIMITED_QUOTA_THRESHOLD = 9_000_000_000_000_000_000
@@ -109,6 +111,7 @@ def easygee_logo_data_uri() -> str:
 class ConsolePlan:
     output: str
     project: str
+    project_source: str
     title: str
     center: tuple[float, float]
     layer_count: int
@@ -1067,7 +1070,8 @@ def known_catalog_image(
 def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
     import ee
 
-    project = str(payload.get("project") or DEFAULT_PROJECT).strip()
+    resolved_project = easygee_project.resolve_project(payload.get("project"), remember_discovered=True)
+    project = resolved_project.project
     dataset_id = str(payload.get("datasetId") or payload.get("dataset") or "").strip()
     if not dataset_id:
         raise ValueError("datasetId is required")
@@ -1176,7 +1180,8 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
 def build_ndvi_analysis(payload: dict[str, Any]) -> dict[str, Any]:
     import ee
 
-    project = str(payload.get("project") or DEFAULT_PROJECT).strip()
+    resolved_project = easygee_project.resolve_project(payload.get("project"), remember_discovered=True)
+    project = resolved_project.project
     if not project or project == DEFAULT_PROJECT:
         raise ValueError("A concrete Earth Engine project id is required")
     aoi = normalize_aoi(payload)
@@ -2615,7 +2620,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     safe_title = html.escape(state["title"])
     safe_leaflet_src = html.escape(leaflet_src, quote=True)
     logo_data_uri = html.escape(easygee_logo_data_uri(), quote=True)
-    state_json = json.dumps(state, ensure_ascii=False).replace("</", "<\\/")
+    state_json = json.dumps(state, ensure_ascii=True).replace("</", "<\\/")
     logo_mark = (
         f'<img src="{logo_data_uri}" alt="" loading="eager" decoding="async">'
         if logo_data_uri
@@ -3190,9 +3195,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
     let catalogRenderedCount = 0;
     const CATALOG_RENDER_BATCH = 120;
     const FAVORITES_STORAGE_KEY = 'easygee-dataset-favorites';
-    const PROJECT_STORAGE_ID = String(STATE.project || STATE.title || 'default').replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80) || 'default';
-    const AOI_STORAGE_KEY = `easygee-aoi:${{PROJECT_STORAGE_ID}}`;
-    const MEASUREMENTS_STORAGE_KEY = `easygee-measurements:${{PROJECT_STORAGE_ID}}`;
+    const PROJECT_STORAGE_SOURCE = String((STATE.project && STATE.project !== 'YOUR_EE_PROJECT') ? STATE.project : (STATE.title || 'default'));
+    const PROJECT_STORAGE_ID = PROJECT_STORAGE_SOURCE.replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80) || 'default';
+    const LEGACY_PROJECT_STORAGE_ID = String(STATE.project || STATE.title || 'default').replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80) || 'default';
+    const AOI_STORAGE_KEYS = [...new Set([`easygee-aoi:${{PROJECT_STORAGE_ID}}`, `easygee-aoi:${{LEGACY_PROJECT_STORAGE_ID}}`])];
+    const MEASUREMENTS_STORAGE_KEYS = [...new Set([`easygee-measurements:${{PROJECT_STORAGE_ID}}`, `easygee-measurements:${{LEGACY_PROJECT_STORAGE_ID}}`])];
     const AGENT_PROTOCOL_VERSION = 1;
     const SESSION_SYNC_INTERVAL_MS = 1200;
     const SESSION_ACTION_POLL_MS = 900;
@@ -3248,10 +3255,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
       return String(value).replace(/[&<>"']/g, ch => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[ch]));
     }}
     function fmt(num, digits = 5) {{ return Number(num).toFixed(digits); }}
+    function normalizeFavoriteDatasetIds(value) {{
+      if (!Array.isArray(value)) return [];
+      return [...new Set(value.map(item => String(item || '').trim()).filter(Boolean))].sort();
+    }}
     function loadFavoriteDatasetIds() {{
       try {{
         const parsed = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '[]');
-        return new Set(Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : []);
+        return new Set(normalizeFavoriteDatasetIds(parsed));
       }} catch {{
         return new Set();
       }}
@@ -3277,6 +3288,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       renderDatasets(filteredCatalog());
       showModeKey(added ? 'mode.favoriteAdded' : 'mode.favoriteRemoved', {{ dataset: id }});
       logMsg(added ? 'log.favoriteAdded' : 'log.favoriteRemoved', {{ dataset: id }});
+      syncSessionState('favorites');
     }}
     function normalizeBounds(value) {{
       if (!Array.isArray(value) || value.length !== 2 || !Array.isArray(value[0]) || !Array.isArray(value[1])) return null;
@@ -3365,9 +3377,22 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function cloneAoi(aoi) {{
       return aoi ? JSON.parse(JSON.stringify(aoi)) : null;
     }}
+    function readLocalJson(keys, fallbackText = 'null') {{
+      for (const key of keys) {{
+        try {{
+          const raw = localStorage.getItem(key);
+          if (raw != null) return JSON.parse(raw);
+        }} catch {{}}
+      }}
+      try {{
+        return JSON.parse(fallbackText);
+      }} catch {{
+        return null;
+      }}
+    }}
     function loadPersistedAoi() {{
       try {{
-        const parsed = JSON.parse(localStorage.getItem(AOI_STORAGE_KEY) || 'null');
+        const parsed = readLocalJson(AOI_STORAGE_KEYS, 'null');
         const restored = normalizeAoi(parsed && parsed.aoi ? parsed.aoi : parsed);
         return restored || null;
       }} catch {{
@@ -3376,10 +3401,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
     function persistAoi() {{
       if (!STATE.aoi) {{
-        localStorage.removeItem(AOI_STORAGE_KEY);
+        AOI_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
         return;
       }}
-      localStorage.setItem(AOI_STORAGE_KEY, JSON.stringify({{
+      localStorage.setItem(AOI_STORAGE_KEYS[0], JSON.stringify({{
         project: STATE.project,
         title: STATE.title,
         aoi: STATE.aoi,
@@ -3430,14 +3455,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
     function loadPersistedMeasurements() {{
       try {{
-        const parsed = JSON.parse(localStorage.getItem(MEASUREMENTS_STORAGE_KEY) || '[]');
+        const parsed = readLocalJson(MEASUREMENTS_STORAGE_KEYS, '[]');
         return Array.isArray(parsed) ? parsed.map(normalizeMeasurement).filter(Boolean) : [];
       }} catch {{
         return [];
       }}
     }}
     function persistMeasurements() {{
-      localStorage.setItem(MEASUREMENTS_STORAGE_KEY, JSON.stringify(STATE.measurements || []));
+      localStorage.setItem(MEASUREMENTS_STORAGE_KEYS[0], JSON.stringify(STATE.measurements || []));
     }}
     function measurementSummary(measurements = STATE.measurements) {{
       const rows = Array.isArray(measurements) ? measurements.filter(item => Number.isFinite(Number(item.lengthMeters))) : [];
@@ -3462,8 +3487,68 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const restoredAoi = loadPersistedAoi();
       STATE.aoi = restoredAoi || generatedAoi || null;
       STATE.bounds = STATE.aoi ? STATE.aoi.bounds : null;
-      STATE.measurements = Array.isArray(STATE.measurements) ? STATE.measurements.map(normalizeMeasurement).filter(Boolean) : loadPersistedMeasurements();
+      const generatedMeasurements = Array.isArray(STATE.measurements) ? STATE.measurements.map(normalizeMeasurement).filter(Boolean) : [];
+      const restoredMeasurements = loadPersistedMeasurements();
+      STATE.measurements = restoredMeasurements.length ? restoredMeasurements : generatedMeasurements;
       if (restoredAoi) logMsg('log.aoiRestored');
+    }}
+    function profileProjectEntry(profile) {{
+      if (!profile || typeof profile !== 'object' || !profile.projects || typeof profile.projects !== 'object') return null;
+      if (profile.projects[PROJECT_STORAGE_ID] && typeof profile.projects[PROJECT_STORAGE_ID] === 'object') return profile.projects[PROJECT_STORAGE_ID];
+      const project = String(STATE.project || '');
+      const title = String(STATE.title || '');
+      return Object.values(profile.projects).find(entry => entry && typeof entry === 'object' && (entry.project === project || entry.title === title)) || null;
+    }}
+    function applySessionProfile(profile) {{
+      if (!profile || typeof profile !== 'object') return false;
+      let changed = false;
+      if (Array.isArray(profile.favoriteDatasets) && (profile.updatedAt || profile.favoriteDatasets.length)) {{
+        const nextFavorites = normalizeFavoriteDatasetIds(profile.favoriteDatasets);
+        const currentFavorites = [...favoriteDatasetIds].sort();
+        if (JSON.stringify(nextFavorites) !== JSON.stringify(currentFavorites)) {{
+          favoriteDatasetIds = new Set(nextFavorites);
+          saveFavoriteDatasetIds();
+          changed = true;
+        }}
+      }}
+      const entry = profileProjectEntry(profile);
+      if (entry) {{
+        const profileAoi = normalizeAoi(entry.aoi);
+        if (profileAoi && JSON.stringify(profileAoi) !== JSON.stringify(STATE.aoi || null)) {{
+          STATE.aoi = profileAoi;
+          STATE.bounds = profileAoi.bounds;
+          persistAoi();
+          changed = true;
+          logMsg('log.aoiRestored');
+        }}
+        if (Array.isArray(entry.measurements)) {{
+          const profileMeasurements = entry.measurements.map(normalizeMeasurement).filter(Boolean);
+          if (JSON.stringify(profileMeasurements) !== JSON.stringify(STATE.measurements || [])) {{
+            STATE.measurements = profileMeasurements;
+            persistMeasurements();
+            changed = true;
+          }}
+        }}
+      }}
+      return changed;
+    }}
+    async function restoreProfileFromServer() {{
+      try {{
+        const response = await fetch('/api/session/profile');
+        if (!response.ok) return false;
+        const payload = await response.json();
+        const changed = applySessionProfile(payload.profile);
+        if (changed) {{
+          renderAoiLayer();
+          renderMeasurements();
+          renderDatasets(filteredCatalog());
+          resetHomeView();
+          syncSessionState('profile-restored');
+        }}
+        return changed;
+      }} catch {{
+        return false;
+      }}
     }}
     function showMode(message, persist = false) {{
       currentModeKey = null;
@@ -4961,6 +5046,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       return {{
         title: STATE.title,
         project: STATE.project,
+        projectSource: STATE.projectSource || 'unknown',
         agentProtocolVersion: AGENT_PROTOCOL_VERSION,
         center: [map.getCenter().lat, map.getCenter().lng],
         zoom: map.getZoom(),
@@ -5300,10 +5386,6 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }};
     renderAoiLayer();
     renderMeasurements();
-    syncSessionState('loaded');
-    window.setInterval(() => syncSessionState('interval'), SESSION_SYNC_INTERVAL_MS);
-    window.setInterval(pollSessionActions, SESSION_ACTION_POLL_MS);
-    pollSessionActions();
     applyI18n();
     renderDatasets(filteredCatalog());
     renderLayers();
@@ -5322,6 +5404,13 @@ def render_html(state: dict, leaflet_src: str) -> str:
       updateScaleLine();
     }});
     logMsg('log.loaded');
+    function startSessionProtocol() {{
+      syncSessionState('loaded');
+      window.setInterval(() => syncSessionState('interval'), SESSION_SYNC_INTERVAL_MS);
+      window.setInterval(pollSessionActions, SESSION_ACTION_POLL_MS);
+      pollSessionActions();
+    }}
+    restoreProfileFromServer().finally(startSessionProtocol);
     refreshCatalogFromApi();
   </script>
 </body>
@@ -5393,12 +5482,16 @@ def main() -> int:
     if args.smoke:
         return smoke()
 
+    resolved_project = easygee_project.resolve_project(args.project, remember_discovered=True)
+    args.project = resolved_project.project
+
     if args.sample:
         state = sample_state(args.project, args.title)
     elif args.live:
         state = live_state(args)
     else:
         state = empty_state(args)
+    state["projectSource"] = resolved_project.source
     state["quota"] = build_quota_state(
         args.project,
         include_usage=not args.no_quota_usage,
@@ -5410,6 +5503,7 @@ def main() -> int:
     plan = ConsolePlan(
         output=str(args.output),
         project=args.project,
+        project_source=resolved_project.source,
         title=args.title,
         center=(args.lat, args.lon),
         layer_count=len(state["layers"]),
@@ -5422,6 +5516,7 @@ def main() -> int:
     else:
         print(f"Wrote EasyGEE Map Console: {args.output}")
         print(f"Project: {args.project}")
+        print(f"Project source: {resolved_project.source}")
         print(f"Layers: {len(state['layers'])}")
     return 0
 

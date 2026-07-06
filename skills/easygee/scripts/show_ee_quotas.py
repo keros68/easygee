@@ -23,6 +23,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+import easygee_project
+
 
 DEFAULT_SERVICE = "earthengine.googleapis.com"
 CONSOLE_URL = "https://console.cloud.google.com/iam-admin/quotas"
@@ -555,10 +557,16 @@ def build_report(args: argparse.Namespace) -> QuotaReport:
     usage_source: str | None = None
     gcloud = find_gcloud()
 
+    if not project:
+        resolved = easygee_project.resolve_project(None, remember_discovered=True)
+        if easygee_project.is_concrete_project(resolved.project):
+            project = resolved.project
+            warnings.append(f"Using locally configured project from {resolved.source}.")
+
     if not project and gcloud:
         project = get_config_project(gcloud)
         if project:
-            warnings.append(f"Using gcloud configured project: {project}")
+            warnings.append("Using gcloud configured project.")
 
     if not project:
         warnings.append("No project id was provided. Pass --project PROJECT_ID or a Cloud Console quota URL with project=.")

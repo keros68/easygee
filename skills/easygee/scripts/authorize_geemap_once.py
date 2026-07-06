@@ -25,6 +25,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import ee_auth_workflow  # noqa: E402
+import easygee_project  # noqa: E402
 import ensure_gcloud_cli  # noqa: E402
 import show_ee_quotas  # noqa: E402
 
@@ -328,6 +329,12 @@ def run_flow(args: argparse.Namespace) -> list[StepResult]:
     results.append(run_verify(preflight, verbose=args.verbose))
     if not results[-1].ok:
         return results
+    try:
+        remembered = easygee_project.remember_project(preflight.project, source="authorize_geemap_once")
+        results.append(StepResult("remember-project", True, f"project saved to user settings: {remembered.settings_path}"))
+    except Exception as exc:
+        results.append(StepResult("remember-project", False, f"could not save user-level project setting: {type(exc).__name__}"))
+        return results
     if args.quota_mode != "skip" and not preflight.gcloud_cli:
         install = ensure_gcloud_cli.install_from_archive(
             ensure_gcloud_cli.default_fixed_root(),
@@ -403,7 +410,11 @@ def main() -> int:
     if args.smoke:
         return smoke()
     if not args.project:
-        parser.error("--project is required unless --smoke is used")
+        resolved_project = easygee_project.resolve_project(None, remember_discovered=True)
+        if easygee_project.is_concrete_project(resolved_project.project):
+            args.project = resolved_project.project
+        else:
+            parser.error("--project is required unless a local EasyGEE/Earth Engine/gcloud project is already configured")
     if args.skip_auth and args.force_auth:
         parser.error("--skip-auth and --force-auth cannot be used together")
     if args.no_quota_usage and args.quota_mode == "required-usage":

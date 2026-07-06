@@ -111,6 +111,11 @@ What this can automate:
 3. Suppress OAuth command output so auth URLs, verification codes, and tokens
    are not copied into chat or logs.
 4. Run `earthengine set_project YOUR_EE_PROJECT`.
+
+Project selection is user-local state. EasyGEE should remember a successfully
+verified project in its local user settings and also respect the user's
+Earth Engine/gcloud defaults on later runs. Do not commit a real user's project
+id into repository files; use placeholders in docs and tests.
 5. Verify `ee.Initialize(project="YOUR_EE_PROJECT")` with
    `scripts/check_gee_geemap.py`.
 6. Ensure Google Cloud CLI is available as the fixed EasyGEE resource at

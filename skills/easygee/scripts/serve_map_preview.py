@@ -13,6 +13,7 @@ import functools
 import html
 import json
 import os
+import re
 import socket
 import tempfile
 import threading
@@ -166,6 +167,12 @@ SESSION_SYNCED_AT: float | None = None
 SESSION_ACTIONS: list[dict[str, object]] = []
 SESSION_ACTION_COUNTER = 0
 SESSION_ACTION_LIMIT = 100
+PROFILE_VERSION = 1
+PROFILE_LOCK = threading.Lock()
+PROFILE_PATH: Path | None = None
+EXACT_FAVORITE_REASONS = {"favorites", "favorite-updated"}
+CLEAR_AOI_REASONS = {"aoi-cleared"}
+CLEAR_MEASUREMENT_REASONS = {"measurements-cleared"}
 
 
 def contract_path() -> Path:
@@ -182,13 +189,182 @@ def load_agent_contract() -> dict[str, object]:
     return {"name": "EasyGEE Map Console Agent Contract", "version": 1}
 
 
+def default_profile_path() -> Path:
+    explicit = os.environ.get("EASYGEE_MAP_CONSOLE_PROFILE")
+    if explicit:
+        return Path(explicit).expanduser()
+    if os.name == "nt":
+        root = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+    else:
+        root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    return root / "EasyGEE" / "map-console-profile.json"
+
+
+def configure_profile_path(path: Path | None) -> None:
+    global PROFILE_PATH
+    PROFILE_PATH = path.expanduser().resolve() if path else default_profile_path()
+
+
+def profile_path() -> Path:
+    global PROFILE_PATH
+    if PROFILE_PATH is None:
+        PROFILE_PATH = default_profile_path()
+    return PROFILE_PATH
+
+
+def now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def json_clone(value: object) -> object:
+    return json.loads(json.dumps(value, ensure_ascii=False))
+
+
+def empty_profile() -> dict[str, object]:
+    return {
+        "version": PROFILE_VERSION,
+        "favoriteDatasets": [],
+        "projects": {},
+        "updatedAt": None,
+    }
+
+
+def normalize_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in value:
+        text = str(item or "").strip()
+        if text and text not in seen:
+            seen.add(text)
+            result.append(text)
+    return sorted(result)
+
+
+def normalize_profile(payload: object) -> dict[str, object]:
+    profile = empty_profile()
+    if isinstance(payload, dict):
+        profile.update(payload)
+    profile["version"] = PROFILE_VERSION
+    profile["favoriteDatasets"] = normalize_string_list(profile.get("favoriteDatasets"))
+    projects = profile.get("projects")
+    profile["projects"] = projects if isinstance(projects, dict) else {}
+    return profile
+
+
+def read_profile_unlocked() -> dict[str, object]:
+    path = profile_path()
+    if not path.exists():
+        return empty_profile()
+    try:
+        return normalize_profile(json.loads(path.read_text(encoding="utf-8")))
+    except Exception:
+        return empty_profile()
+
+
+def write_profile_unlocked(profile: dict[str, object]) -> None:
+    path = profile_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(normalize_profile(profile), ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def load_profile() -> dict[str, object]:
+    with PROFILE_LOCK:
+        return json_clone(read_profile_unlocked())  # type: ignore[return-value]
+
+
+def project_key_from_state(state: dict[str, object]) -> str:
+    project = str(state.get("project") or "").strip()
+    title = str(state.get("title") or "").strip()
+    source = project if project and project != "YOUR_EE_PROJECT" else title
+    source = source or "default"
+    key = re.sub(r"[^a-z0-9_-]+", "-", source, flags=re.IGNORECASE).strip("-")[:80]
+    return key or "default"
+
+
+def state_project_entry(profile: dict[str, object], state: dict[str, object]) -> dict[str, object]:
+    projects = profile.setdefault("projects", {})
+    if not isinstance(projects, dict):
+        projects = {}
+        profile["projects"] = projects
+    key = project_key_from_state(state)
+    entry = projects.get(key)
+    if not isinstance(entry, dict):
+        entry = {}
+        projects[key] = entry
+    project = str(state.get("project") or "").strip()
+    title = str(state.get("title") or "").strip()
+    if project:
+        entry["project"] = project
+    if title:
+        entry["title"] = title
+    entry["updatedAt"] = now_iso()
+    return entry
+
+
+def sanitize_recent_layers(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    allowed = {"id", "name", "dataset", "shown", "opacity", "summary", "aoi"}
+    layers: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        safe = {key: json_clone(item[key]) for key in allowed if key in item}
+        if safe:
+            layers.append(safe)  # type: ignore[arg-type]
+    return layers[:50]
+
+
+def merge_profile_with_state(state: dict[str, object]) -> dict[str, object]:
+    reason = str(state.get("sessionReason") or "").lower()
+    with PROFILE_LOCK:
+        profile = read_profile_unlocked()
+        favorites = normalize_string_list(state.get("favoriteDatasets"))
+        if reason in EXACT_FAVORITE_REASONS:
+            profile["favoriteDatasets"] = favorites
+        elif favorites:
+            profile["favoriteDatasets"] = normalize_string_list([*normalize_string_list(profile.get("favoriteDatasets")), *favorites])
+
+        language = state.get("language")
+        if isinstance(language, str) and language:
+            profile["language"] = language
+
+        entry = state_project_entry(profile, state)
+        center = state.get("center")
+        zoom = state.get("zoom")
+        basemap = state.get("basemap")
+        if isinstance(center, list) and len(center) == 2 and isinstance(zoom, (int, float)):
+            entry["view"] = {"center": json_clone(center), "zoom": zoom, "basemap": basemap}
+        if isinstance(state.get("aoi"), dict):
+            entry["aoi"] = json_clone(state["aoi"])
+        elif "aoi" in state and reason in CLEAR_AOI_REASONS:
+            entry.pop("aoi", None)
+        measurements = state.get("measurements")
+        if isinstance(measurements, list) and (measurements or reason in CLEAR_MEASUREMENT_REASONS):
+            entry["measurements"] = json_clone(measurements)
+        layers = sanitize_recent_layers(state.get("layers"))
+        if layers:
+            entry["recentLayers"] = layers
+
+        profile["updatedAt"] = now_iso()
+        write_profile_unlocked(profile)
+        return json_clone(profile)  # type: ignore[return-value]
+
+
 def session_state_payload() -> dict[str, object]:
     with SESSION_LOCK:
-        return {
-            "ok": True,
-            "state": json.loads(json.dumps(SESSION_STATE, ensure_ascii=False)),
-            "syncedAt": SESSION_SYNCED_AT,
-        }
+        state = json.loads(json.dumps(SESSION_STATE, ensure_ascii=False))
+        synced_at = SESSION_SYNCED_AT
+    profile = load_profile()
+    return {
+        "ok": True,
+        "state": state,
+        "syncedAt": synced_at,
+        "profile": profile,
+        "profileUpdatedAt": profile.get("updatedAt"),
+    }
 
 
 def enqueue_session_action(action: dict[str, object]) -> dict[str, object]:
@@ -232,6 +408,10 @@ class EasyGeeHandler(QuietHandler):
         if parsed.path == "/api/session/capabilities":
             self.send_json({"ok": True, "contract": load_agent_contract()})
             return
+        if parsed.path == "/api/session/profile":
+            profile = load_profile()
+            self.send_json({"ok": True, "profile": profile, "profileUpdatedAt": profile.get("updatedAt")})
+            return
         if parsed.path == "/api/session/state":
             self.send_json(session_state_payload())
             return
@@ -269,10 +449,13 @@ class EasyGeeHandler(QuietHandler):
                 if not isinstance(state, dict):
                     raise ValueError("state must be a JSON object")
                 global SESSION_STATE, SESSION_SYNCED_AT
+                state_copy = json.loads(json.dumps(state, ensure_ascii=False))
                 with SESSION_LOCK:
-                    SESSION_STATE = json.loads(json.dumps(state, ensure_ascii=False))
+                    SESSION_STATE = state_copy
                     SESSION_SYNCED_AT = time.time()
-                self.send_json({"ok": True, "syncedAt": SESSION_SYNCED_AT})
+                    synced_at = SESSION_SYNCED_AT
+                profile = merge_profile_with_state(state_copy)
+                self.send_json({"ok": True, "syncedAt": synced_at, "profileUpdatedAt": profile.get("updatedAt")})
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, status=500)
             return
@@ -334,6 +517,7 @@ def serve(plan: PreviewPlan, host: str, port: int) -> None:
 def smoke() -> int:
     with tempfile.TemporaryDirectory(prefix="easygee-preview-smoke-") as tmp:
         root = Path(tmp)
+        configure_profile_path(root / "profile.json")
         plan = build_plan(None, "127.0.0.1", 0, "EasyGEE Smoke", root)
         if not Path(plan.target).exists():
             print("FAIL: placeholder was not created")
@@ -355,6 +539,22 @@ def smoke() -> int:
         if not action_response.get("ok") or not action_response.get("action", {}).get("id"):
             print("FAIL: session action queue is not working")
             return 1
+        profile = merge_profile_with_state(
+            {
+                "title": "Smoke Map",
+                "project": "YOUR_EE_PROJECT",
+                "favoriteDatasets": ["COPERNICUS/S2_SR_HARMONIZED"],
+                "measurements": [{"id": "m1", "start": [0, 0], "end": [0, 1], "lengthMeters": 1}],
+                "sessionReason": "favorites",
+            }
+        )
+        if profile.get("favoriteDatasets") != ["COPERNICUS/S2_SR_HARMONIZED"]:
+            print("FAIL: profile favorites were not persisted")
+            return 1
+        payload = session_state_payload()
+        if not isinstance(payload.get("profile"), dict):
+            print("FAIL: session state does not include profile")
+            return 1
     print("serve_map_preview smoke passed")
     return 0
 
@@ -366,10 +566,13 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1", help="Bind host. Default: 127.0.0.1")
     parser.add_argument("--port", type=int, default=0, help="Bind port. Default: choose a free port.")
     parser.add_argument("--title", default="EasyGEE Preview", help="Title for generated placeholder pages.")
+    parser.add_argument("--profile", type=Path, help="Persistent Map Console profile JSON path. Defaults to local app data.")
     parser.add_argument("--plan", action="store_true", help="Print the preview plan and exit without starting a server.")
     parser.add_argument("--json", action="store_true", help="Print the preview plan as JSON. Implies --plan.")
     parser.add_argument("--smoke", action="store_true", help="Run offline self-checks.")
     args = parser.parse_args()
+
+    configure_profile_path(args.profile)
 
     if args.smoke:
         return smoke()

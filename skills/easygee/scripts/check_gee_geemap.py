@@ -12,6 +12,8 @@ import shutil
 import sys
 from pathlib import Path
 
+import easygee_project
+
 
 PACKAGES = [
     ("ee", "earthengine-api"),
@@ -91,15 +93,22 @@ def try_initialize(project: str | None) -> dict:
 
 
 def build_report(args: argparse.Namespace) -> dict:
+    resolved_project = easygee_project.resolve_project(args.project, remember_discovered=False)
     report = {
         "python": sys.executable,
         "python_version": sys.version.split()[0],
         "packages": [package_status(*pkg) for pkg in PACKAGES],
         "earthengine_cli": earthengine_cli(),
         "credential_paths": credential_paths(),
+        "resolved_project": {
+            "project": resolved_project.project,
+            "source": resolved_project.source,
+            "settings_path": resolved_project.settings_path,
+        },
     }
     if args.initialize:
-        report["initialize"] = try_initialize(args.project)
+        project = resolved_project.project if easygee_project.is_concrete_project(resolved_project.project) else args.project
+        report["initialize"] = try_initialize(project)
     return report
 
 
@@ -116,6 +125,8 @@ def print_text(report: dict) -> None:
     for row in report["credential_paths"]:
         status = "exists" if row["exists"] else "missing"
         print(f"  - {row['path']}: {status}")
+    resolved = report.get("resolved_project") or {}
+    print(f"Resolved project: {resolved.get('project') or 'none'} ({resolved.get('source') or 'none'})")
     if "initialize" in report:
         init = report["initialize"]
         print(f"Initialize: {'ok' if init['ok'] else 'failed'}")

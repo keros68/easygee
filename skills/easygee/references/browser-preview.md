@@ -101,6 +101,20 @@ Map Console syncs its current state to `/api/session/state` and polls
 `/api/session/actions`; agents can read AOI/measurements as small JSON and
 enqueue layer updates after background analysis.
 
+For vague extraction requests made while a Map Console is open, run
+`scripts/map_console_agent.py plan --url <localhost-url> "<prompt>" --pretty`
+before computing. The planner uses current AOI and layer state to decide whether
+to use a catalog product, a reproducible remote-sensing workflow, current-image
+visual recognition, or a one-question clarification. Results still return to
+the existing layer stack or task log; the workbench should not grow
+task-specific buttons such as "NDVI", "Water", or "Rooftop".
+
+Dataset favorites, AOI, and measurement history should survive browser reloads,
+preview server restarts, and localhost port changes. The preview server stores a
+small profile JSON in local app data by default and exposes it through
+`/api/session/profile`. Browser `localStorage` remains a per-origin cache only;
+do not treat it as the durable source of workbench state.
+
 ## When To Use This
 
 - Interactive geemap map previews.

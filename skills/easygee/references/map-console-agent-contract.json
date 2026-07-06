@@ -2,21 +2,36 @@
   "name": "EasyGEE Map Console Agent Contract",
   "version": 1,
   "stateEndpoint": "/api/session/state",
+  "profileEndpoint": "/api/session/profile",
   "actionsEndpoint": "/api/session/actions",
   "capabilitiesEndpoint": "/api/session/capabilities",
   "analysisEndpoints": {
     "ndvi": "/api/analysis/ndvi"
   },
+  "planner": {
+    "script": "scripts/resolve_ambiguous_geo_request.py",
+    "agentCommand": "map_console_agent.py plan",
+    "routes": ["gee_product", "gee_remote_sensing", "current_image_vision", "ask_user"],
+    "purpose": "Resolve vague extraction requests such as water, rooftops, or visible-image objects before running analysis."
+  },
   "stateFields": [
     "title",
     "project",
+    "projectSource",
     "center",
     "zoom",
     "bounds",
     "aoi",
     "measurements",
     "measurementSummary",
-    "layers"
+    "layers",
+    "favoriteDatasets"
+  ],
+  "profileFields": [
+    "favoriteDatasets",
+    "projects",
+    "language",
+    "updatedAt"
   ],
   "aoi": {
     "defaultType": "rectangle",
@@ -33,6 +48,8 @@
   },
   "rules": [
     "Agents should use this contract or scripts/map_console_agent.py instead of reading generated HTML.",
+    "Persistent profile state is the durable source for dataset favorites, AOI, and measurements across localhost ports.",
+    "For vague extraction requests, run the planner first and ask one multiple-choice clarification when the route is ask_user.",
     "Do not add task-specific toolbar buttons; analysis results must sync back as normal map layers.",
     "Generated Earth Engine tile URLs are preview material and should not be copied into chat logs."
   ]

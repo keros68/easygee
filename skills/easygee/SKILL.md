@@ -105,6 +105,11 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 - Read `references/SOURCES.md` when attribution, upstream links, licensing, or
   evidence for the skill's distilled guidance is needed.
 - Use `scripts/check_gee_geemap.py` for a quick local readiness report.
+- Use `scripts/easygee_project.py resolve --json` when an EasyGEE workflow
+  needs the user's Earth Engine / Google Cloud project id and none was passed
+  explicitly. It resolves from user-level local settings, environment,
+  Earth Engine defaults, and gcloud config without reading credential file
+  contents or writing the id into the repository.
 - Use `scripts/ensure_gcloud_cli.py --project <project>` when Google Cloud CLI
   status, installation, login, project selection, or quota readiness is part of
   the setup. Treat `D:\Dev\tools\google-cloud-sdk` as the fixed Windows
@@ -168,6 +173,14 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   commands over reading generated HTML or browser DOM. The script talks to the
   local preview server's compact `/api/session/*` protocol and can enqueue
   browser-visible layer actions.
+- Use `scripts/resolve_ambiguous_geo_request.py "<task>" --json` before acting
+  on vague extraction requests such as "extract water in this AOI", "提取这个影像里的屋顶",
+  or "识别当前图层里的目标". It ranks existing GEE products, reproducible
+  remote-sensing workflows, and current-image visual recognition, and returns
+  multiple-choice clarification prompts when the wording changes the method.
+  When a Map Console is open, prefer `scripts/map_console_agent.py plan --url
+  <localhost-url> "<task>" --pretty` so AOI and visible-layer state are included
+  without rereading generated HTML.
 - Use `scripts/search_gee_dataset.py "<task>" --workflow` before selecting
   datasets for exploratory or Chinese/English task requests; treat the
   high-confidence workflow results and expanded official/community catalog
@@ -194,6 +207,12 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 
 - Prefer `ee.Initialize(project='...')` over project-less initialization. Earth
   Engine now expects an explicit Cloud project in most local Python workflows.
+- Treat the Earth Engine project id as user-level local configuration, not
+  repository state. Do not hard-code a user's project id into docs, code, test
+  fixtures, generated HTML committed to git, or plugin bundles. After a
+  successful authorization, persist it only through EasyGEE local settings or
+  the user's Earth Engine/gcloud environment, and reuse it on later plugin
+  runs.
 - For authentication, follow the standard ladder in `references/setup-auth.md`:
   diagnose with `check_gee_geemap.py`, generate user-run steps with
   `ee_auth_workflow.py`, let the user complete OAuth, then verify with
@@ -242,10 +261,22 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   `getMeasurementSummary()`, and `extractNdvi()` for follow-up automation.
   Default AOI drawing is rectangular; polygon AOI is supported through the same
   AOI tool state/API without expanding the fixed toolbar.
+- Treat the Map Console profile as the durable source for dataset favorites,
+  AOI, and measurements. The preview server persists profile JSON in local app
+  data by default, with `serve_map_preview.py --profile <path>` available for
+  tests or explicit workspaces. Browser `localStorage` is only a cache and may
+  be isolated by localhost port.
 - For token-efficient follow-up work, read `references/map-console-agent-contract.json`
   or run `map_console_agent.py capabilities` once, then use the agent protocol
   cache. Do not reread the generated Map Console HTML/CSS or `create_map_console.py`
   merely to discover stable UI capabilities.
+- For vague geospatial extraction, do not guess a dataset from the noun alone.
+  First resolve whether the user means a product-backed AOI analysis,
+  remote-sensing derivation, or current-image visual recognition. If the
+  planner returns `ask_user`, ask one multiple-choice question and continue
+  only after the answer fixes the route. Once the route is clear, run the work
+  in the background and sync outputs as ordinary Map Console layers, vectors,
+  summaries, or exports without adding task-specific toolbar buttons.
 - Do not call `ee.Authenticate()` automatically from reusable scripts. Put auth
   in a setup cell, setup command, or explicit user-guided step because OAuth
   opens a browser or asks the user to complete a code flow.

@@ -18,6 +18,37 @@ Before coding, write down:
 If any of these are missing, choose a conservative default only when the user is
 exploring; label it as a placeholder in the notebook/script.
 
+## Ambiguous Extraction Requests
+
+Use `scripts/resolve_ambiguous_geo_request.py "<prompt>" --json` before running
+analysis when the user gives a target noun without method details, for example
+"提取这个 AOI 中的水体", "extract water here", "提取这个影像里的屋顶", or "识别当前图层里的目标".
+
+Default order:
+
+1. Prefer a reproducible GEE product or remote-sensing workflow when the user is
+   asking for an AOI result, a statistic, an export, or a layer that should be
+   explainable later.
+2. Use current-image visual recognition when the user explicitly says "this
+   image/current image/这个影像/屏幕可见" or when no suitable GEE product or
+   sensor workflow can answer the target at the needed resolution.
+3. If the target wording changes the answer, ask one multiple-choice
+   clarification before computing. Do not silently choose among permanent water,
+   current water, flood water, building footprints, roof surfaces, and
+   screen-visible annotations.
+
+Common clarifications:
+
+| Prompt | Ask | Routes |
+|---|---|---|
+| Water in an AOI | Long-term/permanent water, current water, or flood/event water? | JRC/Dynamic World product; Sentinel-2/Landsat water index; Sentinel-1 SAR flood workflow |
+| Rooftops/buildings in current image | Visible rooftops, building footprints, or roof surface/material? | Current-image visual recognition; Open Buildings/built-up products where covered; custom segmentation/classification |
+| Unknown object/class | Existing catalog class, custom remote-sensing method, or current-image visible object? | Dataset search; supervised/threshold workflow; visual annotation |
+
+When the route is ready, run the work in the background and sync results back to
+the Map Console as ordinary layers, vectors, task-log entries, or tables. Do not
+add a new toolbar button for each analysis.
+
 ## Pattern Router
 
 | User Intent | Prefer | Read Also | First Probe | Common Failure |

@@ -13,6 +13,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+
 REQUIRED_REFERENCES = [
     "setup-auth.md",
     "quota-monitoring.md",
@@ -34,6 +38,7 @@ REQUIRED_REFERENCES = [
 ]
 
 REQUIRED_SCRIPTS = [
+    "easygee_project.py",
     "check_gee_geemap.py",
     "ee_auth_workflow.py",
     "geemap_auth_workflow.py",
@@ -45,6 +50,7 @@ REQUIRED_SCRIPTS = [
     "serve_map_preview.py",
     "create_map_console.py",
     "map_console_agent.py",
+    "resolve_ambiguous_geo_request.py",
     "scaffold_geemap_workflow.py",
     "search_gee_dataset.py",
     "scaffold_gee_template.py",
@@ -162,6 +168,50 @@ def audit(skill_dir: Path) -> list[Check]:
     zh_choose_output = zh_choose.stdout.lower()
     for expected in ("draw-aoi", "export-image"):
         add(checks, expected in zh_choose_output, f"choose-zh-detects:{expected}", zh_choose.stdout.strip())
+
+    project_smoke = run_python(skill_dir / "scripts" / "easygee_project.py", "smoke", cwd=skill_dir)
+    add(checks, project_smoke.returncode == 0, "project-resolver-smoke", project_smoke.stdout.strip() or project_smoke.stderr.strip())
+
+    ambiguous_smoke = run_python(skill_dir / "scripts" / "resolve_ambiguous_geo_request.py", "--smoke", cwd=skill_dir)
+    add(checks, ambiguous_smoke.returncode == 0, "ambiguous-request-smoke", ambiguous_smoke.stdout.strip() or ambiguous_smoke.stderr.strip())
+
+    ambiguous_cases = [
+        (
+            "ambiguous-water-aoi",
+            ("提取这个AOI中的水体", "--has-aoi", "--json"),
+            "water",
+            "ask_user",
+            "water_semantics",
+        ),
+        (
+            "ambiguous-long-term-water",
+            ("提取这个AOI里的长期水体", "--has-aoi", "--json"),
+            "water",
+            "gee_product",
+            None,
+        ),
+        (
+            "ambiguous-current-image-rooftop",
+            ("提取这个影像里的屋顶", "--has-active-image", "--active-layer", "visible satellite image", "--json"),
+            "rooftop",
+            "ask_user",
+            "building_output",
+        ),
+    ]
+    for name, args, expected_target, expected_route, expected_question in ambiguous_cases:
+        planned = run_python(skill_dir / "scripts" / "resolve_ambiguous_geo_request.py", *args, cwd=skill_dir)
+        add(checks, planned.returncode == 0, f"{name}:runs", planned.stderr.strip() or "ran")
+        try:
+            payload = json.loads(planned.stdout)
+        except json.JSONDecodeError:
+            payload = {}
+        question_ids = {item.get("id") for item in payload.get("clarifying_questions", []) if isinstance(item, dict)}
+        routes = {item.get("route") for item in payload.get("candidate_routes", []) if isinstance(item, dict)}
+        add(checks, payload.get("intent", {}).get("target") == expected_target, f"{name}:target", planned.stdout.strip())
+        add(checks, payload.get("recommended_route") == expected_route, f"{name}:route", planned.stdout.strip())
+        add(checks, {"gee_product", "gee_remote_sensing", "current_image_vision"}.issubset(routes), f"{name}:routes", planned.stdout.strip())
+        if expected_question:
+            add(checks, expected_question in question_ids, f"{name}:question", planned.stdout.strip())
 
     auth_smoke = run_python(skill_dir / "scripts" / "ee_auth_workflow.py", "--smoke", cwd=skill_dir)
     add(checks, auth_smoke.returncode == 0, "auth-workflow-smoke", auth_smoke.stdout.strip() or auth_smoke.stderr.strip())
@@ -413,13 +463,17 @@ def audit(skill_dir: Path) -> list[Check]:
             "easygee-aoi:",
             "easygee-measurements:",
             "/api/session/state",
+            "/api/session/profile",
             "/api/session/actions",
             "window.EasyGEE",
+            "restoreProfileFromServer",
+            "applySessionProfile",
             "syncState",
             "pollActions",
             "getMeasurementSummary",
             "extractNdvi",
             "STATE =",
+            "projectSource",
         ):
             add(checks, expected in console_text, f"map-console-contains:{expected}", str(console_path))
         add(checks, "ndvi-btn" not in console_text, "map-console-no-ndvi-toolbar-button", str(console_path))
