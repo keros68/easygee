@@ -22,6 +22,7 @@ import os
 import re
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -901,6 +902,138 @@ def sentinel2_ndvi_image(
     return image, collection, method
 
 
+def sanitize_drive_folder(value: Any, default: str = "EasyGEE") -> str:
+    text = str(value or "").strip() or default
+    text = re.sub(r"[\\/]+", "_", text)
+    return text[:120].strip() or default
+
+
+def sanitize_export_token(value: Any, default: str, max_len: int = 90) -> str:
+    text = str(value or "").strip() or default
+    text = re.sub(r"[^A-Za-z0-9_-]+", "_", text).strip("_")
+    return (text[:max_len].strip("_") or default)
+
+
+def truthy_export_flag(value: Any, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"0", "false", "no", "off"}:
+        return False
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    return default
+
+
+def build_ndvi_drive_export(payload: dict[str, Any]) -> dict[str, Any]:
+    import ee
+
+    resolved_project = easygee_project.resolve_project(payload.get("project"), remember_discovered=True)
+    project = resolved_project.project
+    if not project or project == DEFAULT_PROJECT:
+        raise ValueError("A concrete Earth Engine project id is required")
+    aoi = normalize_aoi(payload)
+    start_date = str(payload.get("startDate") or "2024-01-01")
+    end_date = str(payload.get("endDate") or datetime.now(timezone.utc).date().isoformat())
+    try:
+        cloud_pct = float(payload.get("cloudPct") or 80)
+    except Exception:
+        cloud_pct = 80.0
+    try:
+        scale = float(payload.get("scale") or 10)
+    except Exception:
+        scale = 10.0
+    if scale <= 0:
+        raise ValueError("scale must be greater than 0")
+    try:
+        max_pixels = int(float(payload.get("maxPixels") or 1_000_000_000))
+    except Exception:
+        max_pixels = 1_000_000_000
+    max_pixels = max(1, max_pixels)
+
+    ee.Initialize(project=project)
+    roi = ee_geometry_from_aoi(ee, aoi)
+    warnings: list[str] = []
+    ndvi, collection, method = sentinel2_ndvi_image(ee, roi, start_date, end_date, cloud_pct, warnings)
+    aoi_digest = hashlib.sha1(json.dumps(aoi, sort_keys=True).encode("utf-8")).hexdigest()[:8]
+    date_token = sanitize_export_token(f"{start_date}_{end_date}", "date_range", max_len=32)
+    default_prefix = f"easygee_ndvi_{date_token}_{aoi_digest}"
+    folder = sanitize_drive_folder(payload.get("folder"), "EasyGEE")
+    file_name_prefix = sanitize_export_token(payload.get("fileNamePrefix"), default_prefix)
+    description = sanitize_export_token(payload.get("description"), file_name_prefix, max_len=100)
+    file_format = str(payload.get("fileFormat") or "GeoTIFF").strip() or "GeoTIFF"
+    cloud_optimized = truthy_export_flag(payload.get("cloudOptimized"), True)
+    start_task = truthy_export_flag(payload.get("start"), True)
+    crs = str(payload.get("crs") or "").strip()
+
+    export_kwargs: dict[str, Any] = {
+        "image": ndvi.rename("NDVI").toFloat(),
+        "description": description,
+        "folder": folder,
+        "fileNamePrefix": file_name_prefix,
+        "region": roi,
+        "scale": scale,
+        "maxPixels": max_pixels,
+        "fileFormat": file_format,
+    }
+    if crs:
+        export_kwargs["crs"] = crs
+    if file_format.lower() == "geotiff" and cloud_optimized:
+        export_kwargs["formatOptions"] = {"cloudOptimized": True}
+
+    task = ee.batch.Export.image.toDrive(**export_kwargs)
+    if start_task:
+        task.start()
+    try:
+        status = task.status()
+    except Exception:
+        status = {}
+    try:
+        scene_count = int(collection.size().getInfo())
+    except Exception:
+        scene_count = None
+    task_id = str(status.get("id") or getattr(task, "id", "") or "")
+    state = str(status.get("state") or ("STARTED" if start_task else "READY"))
+    created_at = datetime.now(timezone.utc).isoformat()
+    drive_search_url = "https://drive.google.com/drive/search?q=" + urllib.parse.quote(file_name_prefix)
+    task_record = {
+        "id": task_id or f"drive-{description}-{aoi_digest}",
+        "type": "drive-export",
+        "analysis": "ndvi",
+        "title": "NDVI export to Google Drive",
+        "status": state,
+        "destination": "Google Drive",
+        "folder": folder,
+        "fileNamePrefix": file_name_prefix,
+        "taskId": task_id,
+        "taskName": description,
+        "driveSearchUrl": drive_search_url,
+        "createdAt": created_at,
+        "updatedAt": created_at,
+        "params": {
+            "dataset": "COPERNICUS/S2_SR_HARMONIZED",
+            "index": "NDVI",
+            "method": method,
+            "startDate": start_date,
+            "endDate": end_date,
+            "cloudPct": cloud_pct,
+            "scale": scale,
+            "fileFormat": file_format,
+            "cloudOptimized": cloud_optimized if file_format.lower() == "geotiff" else False,
+            "maxPixels": max_pixels,
+            "sceneCount": scene_count,
+            "aoi": aoi,
+        },
+        "notes": [
+            "Drive file URLs are only available after the Earth Engine task finishes; search Drive by fileNamePrefix.",
+        ],
+        "warnings": warnings,
+    }
+    return {"ok": True, "task": task_record, "export": task_record, "warnings": warnings}
+
+
 def safe_band_names(image: Any, limit: int = 16) -> list[str]:
     try:
         bands = image.bandNames().getInfo()
@@ -1477,6 +1610,11 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
                     attempts.append(f"FeatureCollection failed: {vector_exc}")
                     raise ValueError("; ".join(attempts)) from vector_exc
 
+    requested_name = str(payload.get("name") or "").strip()
+    if requested_name:
+        name = requested_name[:120]
+        layer_recipe["name"] = name
+        layer_recipe["label"] = name
     style_profile = style_profile_for_layer(dataset_id, layer_type, method, name)
     default_style_preset = str(payload.get("stylePreset") or "default")
     vis_override = payload.get("visParams") if isinstance(payload.get("visParams"), dict) else layer_recipe.get("visParams")
@@ -2163,6 +2301,8 @@ def shell_css() -> str:
       position: relative;
     }
     .icon-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .icon-btn .drive-mark { width: 18px; height: 18px; }
+    .icon-btn .drive-mark path { stroke: none; }
     .icon-btn > svg { display: block; }
     .icon-btn:hover { border-color: var(--line-strong); background: var(--panel-2); }
     .icon-btn.active { border-color: rgba(22, 115, 77, 0.55); background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 0 2px rgba(22, 115, 77, 0.14), 0 3px 12px rgba(16, 24, 40, 0.10); }
@@ -2449,10 +2589,20 @@ def shell_css() -> str:
     }
     .dataset-toolbar .tag { flex: 0 0 auto; }
     .dataset-hint { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .layer-list, .dataset-list, .kv, .log-list { display: grid; gap: 8px; }
+    .layer-list, .dataset-list, .kv, .log-list, .task-list { display: grid; gap: 8px; }
     .layer-item, .dataset-item, .stat-row, .task-row {
       border: 1px solid var(--line); background: #fff; border-radius: 6px;
     }
+    .task-row { padding: 9px; min-width: 0; }
+    .task-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-width: 0; }
+    .task-title { font-size: 12px; font-weight: 760; line-height: 1.25; min-width: 0; overflow-wrap: anywhere; }
+    .task-status { flex: 0 0 auto; border: 1px solid rgba(22,115,77,0.18); border-radius: 999px; padding: 2px 7px; color: var(--accent); background: var(--accent-soft); font-size: 10px; line-height: 1.2; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .task-row.status-failed .task-status, .task-row.status-cancelled .task-status { color: #a32929; background: #fff1f1; border-color: rgba(163,41,41,0.2); }
+    .task-row.status-completed .task-status, .task-row.status-done .task-status { color: #16734d; background: #eef8f2; }
+    .task-meta { margin-top: 6px; display: grid; gap: 3px; color: var(--muted); font-size: 11px; line-height: 1.3; overflow-wrap: anywhere; }
+    .task-actions { margin-top: 7px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .task-link { color: var(--accent); text-decoration: none; font-size: 11px; font-weight: 700; }
+    .task-link:hover { text-decoration: underline; }
     .layer-item { padding: 9px; min-width: 0; }
     .layer-top { display: flex; align-items: flex-start; gap: 8px; }
     .layer-top input { margin-top: 3px; }
@@ -2986,6 +3136,7 @@ def svg_icon(name: str) -> str:
         "measure": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 17 13-13 3 3L7 20l-3-3Z"/><path d="m14 6 2 2M11 9l2 2M8 12l2 2"/></svg>',
         "basemap": '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1.8"/><path d="M7 19c2.4-3.4 3.4-6.2 3.1-12"/><path d="M18 7c-3.9 1.1-6.7 3.2-9.2 6.2"/><path d="M13.4 19c.3-3 1.7-5.5 4.1-7.3"/><path d="M7 13h10"/></svg>',
         "quota": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M12 14l4-5"/><path d="M5 18h14"/><path d="M8 18v2M16 18v2"/></svg>',
+        "drive": '<svg class="drive-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4f8f70" d="M8.4 3.1c.3-.5.8-.8 1.4-.8h4.7l6.3 10.9h-5.7L8.4 3.1Z"/><path fill="#5d86b6" d="M20.8 13.2 17.6 19c-.3.5-.8.8-1.4.8H4.8l3.3-6.6h12.7Z"/><path fill="#c2a44f" d="M20.8 13.2h-5.7L8.4 3.1l1.4-.8h4.7l6.3 10.9Z" fill-opacity=".88"/><path fill="#3e7f66" d="M8.4 3.1 2.2 13.8c-.3.5-.3 1.1 0 1.6l2.6 4.4 6.6-11.5-3-5.2Z"/><path fill="#fff" fill-opacity=".9" d="M11.4 8.3 15 13.2H8.1l3.3-4.9Z"/></svg>',
         "tasks": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12"/><path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"/></svg>',
         "home": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
         "zoom-in": '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 7v6M7 10h6M15 15l5 5"/></svg>',
@@ -3038,6 +3189,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       <div class="rail-break" aria-hidden="true"></div>
       <button class="icon-btn" id="basemap-btn" title="Basemap" aria-label="Basemap" data-i18n-title="tool.basemap">{svg_icon("basemap")}</button>
       <button class="icon-btn quota-ready" id="quota-btn" title="Quota status" aria-label="Quota status" data-i18n-title="tool.quota">{svg_icon("quota")}<span class="quota-indicator"></span></button>
+      <button class="icon-btn" id="drive-btn" title="Google Drive" aria-label="Google Drive" data-i18n-title="tool.drive">{svg_icon("drive")}</button>
       <div class="rail-break" aria-hidden="true"></div>
       <button class="icon-btn" id="home-btn" title="Zoom to AOI" aria-label="Zoom to AOI" data-i18n-title="tool.home">{svg_icon("home")}</button>
       <button class="icon-btn" id="lang-btn" title="Switch language" aria-label="Switch language" data-i18n-title="tool.lang">{svg_icon("language")}<span class="lang-code" id="lang-code">中</span></button>
@@ -3126,6 +3278,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
           <h2 data-i18n="card.legend">Legend</h2>
           <div class="legend" id="legend"></div>
         </section>
+        <section class="right-card">
+          <h2 data-i18n="card.tasks">Tasks</h2>
+          <div class="task-list" id="task-list"></div>
+        </section>
       </div>
     </aside>
 
@@ -3155,6 +3311,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     const STATE = {state_json};
     STATE.layers = Array.isArray(STATE.layers) ? STATE.layers : [];
     STATE.catalog = Array.isArray(STATE.catalog) ? STATE.catalog : [];
+    STATE.tasks = Array.isArray(STATE.tasks) ? STATE.tasks : [];
     const logLines = [];
     const layerRegistry = new Map();
     const I18N = {{
@@ -3166,6 +3323,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "tool.measure": "测距",
         "tool.basemap": "底图",
         "tool.quota": "配额状态",
+        "tool.drive": "Google 云盘",
+        "tool.driveRecent": "打开最近的 Drive 导出",
+        "tool.driveRoot": "打开 Google 云盘",
         "tool.home": "回到初始视图",
         "tool.zoomIn": "放大",
         "tool.zoomOut": "缩小",
@@ -3197,6 +3357,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "card.mapClick": "地图点击",
         "card.activeLayer": "当前图层",
         "card.legend": "图例",
+        "card.tasks": "任务",
         "key.latitude": "纬度",
         "key.longitude": "经度",
         "key.zoom": "缩放",
@@ -3209,6 +3370,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "label.color": "颜色",
         "label.palette": "色带",
         "layers.empty": "还没有图层。点“添加图层”搜索 GEE 数据集。",
+        "tasks.empty": "暂无任务。Agent 发起的导出和后台处理会显示在这里。",
+        "task.destination": "目的地",
+        "task.folder": "文件夹",
+        "task.prefix": "文件前缀",
+        "task.id": "任务 ID",
+        "task.params": "参数",
+        "task.driveSearch": "Drive 搜索",
+        "task.createdAt": "创建于",
         "layer.none": "未选择图层",
         "badge.noLayer": "EasyGEE 地图",
         "badge.basemap": "底图：:basemap",
@@ -3281,6 +3450,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.ndviDone": "NDVI 均值 :mean，像元 :count",
         "mode.ndviNoAoi": "请先绘制 AOI 再提取 NDVI",
         "mode.ndviFailed": "NDVI 提取失败：:message",
+        "mode.driveExportBuilding": "正在发起 Drive 导出",
+        "mode.driveExportDone": "Drive 导出任务已创建：:task",
+        "mode.driveExportFailed": "Drive 导出失败：:message",
         "mode.styleBuilding": "正在更新图层样式：:layer",
         "mode.styleApplied": "图层样式已更新：:layer",
         "mode.styleFailed": "样式更新失败：:message",
@@ -3367,6 +3539,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.ndviStarted": "已开始 NDVI 提取",
         "log.ndviDone": "NDVI 摘要已生成：均值 :mean",
         "log.ndviFailed": "NDVI 提取失败",
+        "log.driveExportStarted": "正在发起 Drive 导出",
+        "log.driveExportDone": "Drive 导出任务已加入：:task",
+        "log.driveExportFailed": "Drive 导出失败",
+        "log.driveOpened": "已打开 Drive：:target",
+        "log.taskAdded": "任务已记录：:task",
         "log.measureOn": "测距模式已开启",
         "log.measureOff": "测距模式已关闭",
         "log.measured": "测得距离：:distance",
@@ -3386,6 +3563,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "tool.measure": "Measure distance",
         "tool.basemap": "Basemap",
         "tool.quota": "Quota status",
+        "tool.drive": "Google Drive",
+        "tool.driveRecent": "Open latest Drive export",
+        "tool.driveRoot": "Open Google Drive",
         "tool.home": "Home view",
         "tool.zoomIn": "Zoom in",
         "tool.zoomOut": "Zoom out",
@@ -3417,6 +3597,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "card.mapClick": "Map Click",
         "card.activeLayer": "Active Layer",
         "card.legend": "Legend",
+        "card.tasks": "Tasks",
         "key.latitude": "Latitude",
         "key.longitude": "Longitude",
         "key.zoom": "Zoom",
@@ -3429,6 +3610,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "label.color": "Color",
         "label.palette": "Palette",
         "layers.empty": "No layers yet. Use Add layers to search the GEE catalog.",
+        "tasks.empty": "No tasks yet. Agent-started exports and background processing appear here.",
+        "task.destination": "Destination",
+        "task.folder": "Folder",
+        "task.prefix": "File prefix",
+        "task.id": "Task ID",
+        "task.params": "Params",
+        "task.driveSearch": "Drive search",
+        "task.createdAt": "Created",
         "layer.none": "No layer selected",
         "badge.noLayer": "EasyGEE map",
         "badge.basemap": "Basemap: :basemap",
@@ -3501,6 +3690,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.ndviDone": "NDVI mean :mean from :count pixels",
         "mode.ndviNoAoi": "Draw an AOI before extracting NDVI",
         "mode.ndviFailed": "NDVI failed: :message",
+        "mode.driveExportBuilding": "Starting Drive export",
+        "mode.driveExportDone": "Drive export task created: :task",
+        "mode.driveExportFailed": "Drive export failed: :message",
         "mode.styleBuilding": "Updating layer style: :layer",
         "mode.styleApplied": "Layer style updated: :layer",
         "mode.styleFailed": "Style update failed: :message",
@@ -3587,6 +3779,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.ndviStarted": "NDVI extraction started",
         "log.ndviDone": "NDVI summary ready: mean :mean",
         "log.ndviFailed": "NDVI extraction failed",
+        "log.driveExportStarted": "Starting Drive export",
+        "log.driveExportDone": "Drive export task added: :task",
+        "log.driveExportFailed": "Drive export failed",
+        "log.driveOpened": "Opened Drive: :target",
+        "log.taskAdded": "Task recorded: :task",
         "log.measureOn": "Measure mode on",
         "log.measureOff": "Measure mode off",
         "log.measured": "Measured distance: :distance",
@@ -3619,7 +3816,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
     const LEGACY_PROJECT_STORAGE_ID = String(STATE.project || STATE.title || 'default').replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80) || 'default';
     const AOI_STORAGE_KEYS = [...new Set([`easygee-aoi:${{PROJECT_STORAGE_ID}}`, `easygee-aoi:${{LEGACY_PROJECT_STORAGE_ID}}`])];
     const MEASUREMENTS_STORAGE_KEYS = [...new Set([`easygee-measurements:${{PROJECT_STORAGE_ID}}`, `easygee-measurements:${{LEGACY_PROJECT_STORAGE_ID}}`])];
-    const AGENT_PROTOCOL_VERSION = 1;
+    const TASKS_STORAGE_KEYS = [...new Set([`easygee-tasks:${{PROJECT_STORAGE_ID}}`, `easygee-tasks:${{LEGACY_PROJECT_STORAGE_ID}}`])];
+    const AGENT_PROTOCOL_VERSION = 2;
     const SESSION_SYNC_INTERVAL_MS = 1200;
     const SESSION_ACTION_POLL_MS = 900;
     const ACTION_SET_AOI_STYLE = 'setAoiStyle';
@@ -3981,6 +4179,135 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function persistMeasurements() {{
       localStorage.setItem(MEASUREMENTS_STORAGE_KEYS[0], JSON.stringify(STATE.measurements || []));
     }}
+    function normalizeTask(item) {{
+      if (!item || typeof item !== 'object') return null;
+      const taskId = item.taskId || item.eeTaskId || item.id || '';
+      const id = String(item.id || taskId || item.name || item.title || `task-${{Date.now().toString(36)}}-${{Math.random().toString(36).slice(2, 7)}}`);
+      const title = String(item.title || item.name || item.analysis || item.type || 'Task');
+      const status = String(item.status || item.state || 'ready').toLowerCase();
+      const normalized = {{
+        ...item,
+        id,
+        title,
+        status,
+        type: item.type || 'task',
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || item.createdAt || new Date().toISOString(),
+      }};
+      if (taskId) normalized.taskId = String(taskId);
+      return normalized;
+    }}
+    function loadPersistedTasks() {{
+      try {{
+        const parsed = readLocalJson(TASKS_STORAGE_KEYS, '[]');
+        return Array.isArray(parsed) ? parsed.map(normalizeTask).filter(Boolean) : [];
+      }} catch {{
+        return [];
+      }}
+    }}
+    function persistTasks() {{
+      localStorage.setItem(TASKS_STORAGE_KEYS[0], JSON.stringify((STATE.tasks || []).slice(0, 30)));
+    }}
+    function taskStatusClass(status) {{
+      return String(status || 'ready').toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
+    }}
+    function taskParamsText(task) {{
+      const params = task && typeof task.params === 'object' ? task.params : null;
+      if (!params) return '';
+      return [
+        params.index,
+        params.dataset,
+        params.startDate && params.endDate ? `${{params.startDate}} to ${{params.endDate}}` : '',
+        params.scale ? `${{params.scale}} m` : '',
+      ].filter(Boolean).join(' | ');
+    }}
+    function latestDriveTask() {{
+      return (Array.isArray(STATE.tasks) ? STATE.tasks : []).map(normalizeTask).filter(task => {{
+        return task && (task.driveSearchUrl || task.destination === 'Google Drive' || task.type === 'drive-export');
+      }})[0] || null;
+    }}
+    function driveTargetUrl() {{
+      const task = latestDriveTask();
+      if (task?.driveSearchUrl) return task.driveSearchUrl;
+      if (task?.fileNamePrefix) return `https://drive.google.com/drive/search?q=${{encodeURIComponent(task.fileNamePrefix)}}`;
+      return 'https://drive.google.com/drive/my-drive';
+    }}
+    function driveTargetLabel() {{
+      const task = latestDriveTask();
+      if (task?.fileNamePrefix) return task.fileNamePrefix;
+      if (task?.title) return task.title;
+      return 'Google Drive';
+    }}
+    function updateDriveButtonTitle() {{
+      const button = $('drive-btn');
+      if (!button) return;
+      const key = latestDriveTask() ? 'tool.driveRecent' : 'tool.driveRoot';
+      const label = t(key);
+      button.title = label;
+      button.setAttribute('aria-label', label);
+    }}
+    function openDriveTarget() {{
+      const url = driveTargetUrl();
+      const opened = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!opened) window.location.href = url;
+      logMsg('log.driveOpened', {{ target: driveTargetLabel() }});
+    }}
+    function renderTasks() {{
+      const target = $('task-list');
+      if (!target) return;
+      const rows = Array.isArray(STATE.tasks) ? STATE.tasks.map(normalizeTask).filter(Boolean) : [];
+      STATE.tasks = rows;
+      updateDriveButtonTitle();
+      if (!rows.length) {{
+        target.innerHTML = `<div class="quota-note">${{escapeHtml(t('tasks.empty'))}}</div>`;
+        return;
+      }}
+      target.innerHTML = rows.slice(0, 12).map(task => {{
+        const title = task.title || task.name || 'Task';
+        const status = task.status || 'ready';
+        const meta = [
+          task.destination ? `${{t('task.destination')}}: ${{task.destination}}` : '',
+          task.folder ? `${{t('task.folder')}}: ${{task.folder}}` : '',
+          task.fileNamePrefix ? `${{t('task.prefix')}}: ${{task.fileNamePrefix}}` : '',
+          task.taskId ? `${{t('task.id')}}: ${{task.taskId}}` : '',
+          taskParamsText(task) ? `${{t('task.params')}}: ${{taskParamsText(task)}}` : '',
+        ].filter(Boolean);
+        const search = task.driveSearchUrl
+          ? `<a class="task-link" href="${{escapeHtml(task.driveSearchUrl)}}" target="_blank" rel="noreferrer">${{escapeHtml(t('task.driveSearch'))}}</a>`
+          : '';
+        const note = Array.isArray(task.notes) && task.notes.length ? `<div>${{escapeHtml(task.notes[0])}}</div>` : '';
+        return `
+          <div class="task-row status-${{escapeHtml(taskStatusClass(status))}}">
+            <div class="task-head">
+              <div class="task-title">${{escapeHtml(title)}}</div>
+              <div class="task-status" title="${{escapeHtml(status)}}">${{escapeHtml(status)}}</div>
+            </div>
+            <div class="task-meta">${{meta.map(item => `<div>${{escapeHtml(item)}}</div>`).join('')}}${{note}}</div>
+            ${{search ? `<div class="task-actions">${{search}}</div>` : ''}}
+          </div>
+        `;
+      }}).join('');
+    }}
+    function addTask(task, options = {{}}) {{
+      const normalized = normalizeTask(task);
+      if (!normalized) return false;
+      const index = (STATE.tasks || []).findIndex(item => {{
+        const existing = normalizeTask(item);
+        return existing && (existing.id === normalized.id || (existing.taskId && normalized.taskId && existing.taskId === normalized.taskId));
+      }});
+      normalized.updatedAt = new Date().toISOString();
+      if (index >= 0) {{
+        STATE.tasks.splice(index, 1);
+      }}
+      STATE.tasks.unshift(normalized);
+      STATE.tasks = STATE.tasks.slice(0, 30);
+      persistTasks();
+      renderTasks();
+      updateDriveButtonTitle();
+      logMsg(options.logKey || 'log.taskAdded', {{ task: normalized.title }});
+      syncSessionState(options.reason || 'task-added');
+      return true;
+    }}
     function measurementSummary(measurements = STATE.measurements) {{
       const rows = Array.isArray(measurements) ? measurements.filter(item => Number.isFinite(Number(item.lengthMeters))) : [];
       const lengths = rows.map(item => Number(item.lengthMeters));
@@ -4009,6 +4336,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const generatedMeasurements = Array.isArray(STATE.measurements) ? STATE.measurements.map(normalizeMeasurement).filter(Boolean) : [];
       const restoredMeasurements = loadPersistedMeasurements();
       STATE.measurements = restoredMeasurements.length ? restoredMeasurements : generatedMeasurements;
+      const generatedTasks = Array.isArray(STATE.tasks) ? STATE.tasks.map(normalizeTask).filter(Boolean) : [];
+      const restoredTasks = loadPersistedTasks();
+      STATE.tasks = restoredTasks.length ? restoredTasks : generatedTasks;
       if (restoredAoi) logMsg('log.aoiRestored');
     }}
     function profileProjectEntry(profile) {{
@@ -4060,6 +4390,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
             changed = true;
           }}
         }}
+        if (Array.isArray(entry.tasks)) {{
+          const profileTasks = entry.tasks.map(normalizeTask).filter(Boolean);
+          if (profileTasks.length && JSON.stringify(profileTasks) !== JSON.stringify(STATE.tasks || [])) {{
+            STATE.tasks = profileTasks;
+            persistTasks();
+            changed = true;
+          }}
+        }}
       }}
       return changed;
     }}
@@ -4073,6 +4411,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
           renderAoiLayer();
           renderLayers();
           renderMeasurements();
+          renderTasks();
           renderDatasets(filteredCatalog());
           resetHomeView();
           syncSessionState('profile-restored');
@@ -4146,6 +4485,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       $('click-state').textContent = t(clickStateKey);
       renderCatalogFacets();
       renderQuota();
+      renderTasks();
       renderBasemapChoices();
       updateInspector();
       if (currentModeKey && $('mode-chip').classList.contains('show')) {{
@@ -4724,6 +5064,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         renderDatasetDetail(activeDatasetId);
       }}
       renderLayers();
+      renderTasks();
       setActiveLayer(activeLayerId, {{ reveal: false }});
       updateScaleLine();
       logMsg('log.language');
@@ -5300,6 +5641,81 @@ def render_html(state: dict, leaflet_src: str) -> str:
       syncSessionState('layer-removed');
       return true;
     }}
+
+    function setLayerVisibility(id, shown, options = {{}}) {{
+      const nextShown = shown !== false;
+      if (id === AOI_LAYER_ID) {{
+        if (!hasAoi()) return false;
+        STATE.aoiShown = nextShown;
+        STATE.aoiStyle = normalizeAoiStyle({{ ...STATE.aoiStyle, shown: nextShown }});
+        renderAoiLayer();
+        renderLayers();
+        if (nextShown && options.activate !== false) {{
+          setActiveLayer(AOI_LAYER_ID, {{ reveal: options.reveal !== false }});
+        }} else if (!nextShown && activeLayerId === AOI_LAYER_ID) {{
+          setActiveLayer(STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null, {{ reveal: false }});
+        }} else {{
+          updateInspector();
+        }}
+        syncSessionState(options.reason || 'aoi-visibility');
+        return true;
+      }}
+      const record = layerRegistry.get(id);
+      if (!record) return false;
+      record.meta.shown = nextShown;
+      if (nextShown) {{
+        if (!map.hasLayer(record.tile)) record.tile.addTo(map);
+        logMsg('log.layerOn', {{ layer: record.meta.name }});
+      }} else {{
+        if (map.hasLayer(record.tile)) map.removeLayer(record.tile);
+        logMsg('log.layerOff', {{ layer: record.meta.name }});
+      }}
+      renderLayers();
+      if (nextShown && options.activate !== false) {{
+        setActiveLayer(id, {{ reveal: options.reveal !== false }});
+      }} else if (!nextShown && activeLayerId === id) {{
+        setActiveLayer(aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null, {{ reveal: false }});
+      }} else {{
+        updateInspector();
+      }}
+      syncSessionState(options.reason || 'layer-visibility');
+      return true;
+    }}
+
+    function setLayerOpacity(id, value, options = {{}}) {{
+      const opacity = Math.max(0, Math.min(1, Number(value)));
+      if (!Number.isFinite(opacity)) return false;
+      if (id === AOI_LAYER_ID) {{
+        if (!hasAoi()) return false;
+        STATE.aoiStyle = normalizeAoiStyle({{ ...STATE.aoiStyle, opacity }});
+        renderAoiLayer();
+        if (options.render !== false) renderLayers();
+        if (activeLayerId === id) updateInspector();
+        syncSessionState(options.reason || 'aoi-opacity');
+        return true;
+      }}
+      const record = layerRegistry.get(id);
+      if (!record) return false;
+      record.meta.opacity = opacity;
+      record.tile.setOpacity(opacity);
+      if (options.render !== false) renderLayers();
+      if (activeLayerId === id) updateInspector();
+      syncSessionState(options.reason || 'layer-opacity');
+      return true;
+    }}
+
+    function selectLayer(id, options = {{}}) {{
+      if (id === AOI_LAYER_ID) {{
+        if (!hasAoi()) return false;
+        setActiveLayer(AOI_LAYER_ID, {{ reveal: options.reveal !== false }});
+        syncSessionState(options.reason || 'layer-selected');
+        return true;
+      }}
+      if (!layerRegistry.has(id)) return false;
+      setActiveLayer(id, {{ reveal: options.reveal !== false }});
+      syncSessionState(options.reason || 'layer-selected');
+      return true;
+    }}
     async function applyLayerPreset(id, presetId) {{
       const record = layerRegistry.get(id);
       if (!record) return false;
@@ -5410,42 +5826,12 @@ def render_html(state: dict, leaflet_src: str) -> str:
           setActiveLayer(id);
         }});
         item.querySelector('[data-action="toggle"]').addEventListener('change', event => {{
-          if (id === AOI_LAYER_ID) {{
-            STATE.aoiShown = event.target.checked;
-            STATE.aoiStyle = normalizeAoiStyle({{ ...STATE.aoiStyle, shown: STATE.aoiShown }});
-            renderAoiLayer();
-            if (STATE.aoiShown) setActiveLayer(AOI_LAYER_ID);
-            syncSessionState('aoi-visibility');
-            return;
-          }}
-          if (!record) return;
-          record.meta.shown = event.target.checked;
-          if (record.meta.shown) {{
-            record.tile.addTo(map);
-            setActiveLayer(id);
-            logMsg('log.layerOn', {{ layer: record.meta.name }});
-          }} else {{
-            map.removeLayer(record.tile);
-            logMsg('log.layerOff', {{ layer: record.meta.name }});
-          }}
-          syncSessionState('layer-toggle');
+          setLayerVisibility(id, event.target.checked, {{ reason: id === AOI_LAYER_ID ? 'aoi-visibility' : 'layer-toggle' }});
         }});
         item.querySelector('[data-action="opacity"]').addEventListener('input', event => {{
           const value = Number(event.target.value);
-          if (id === AOI_LAYER_ID) {{
-            STATE.aoiStyle = normalizeAoiStyle({{ ...STATE.aoiStyle, opacity: value }});
-            renderAoiLayer();
-            item.querySelector('[data-opacity-label]').textContent = `${{Math.round(value * 100)}}%`;
-            if (activeLayerId === id) updateInspector();
-            syncSessionState('aoi-style');
-            return;
-          }}
-          if (!record) return;
-          record.meta.opacity = value;
-          record.tile.setOpacity(value);
+          if (!setLayerOpacity(id, value, {{ render: false, reason: id === AOI_LAYER_ID ? 'aoi-style' : 'layer-opacity' }})) return;
           item.querySelector('[data-opacity-label]').textContent = `${{Math.round(value * 100)}}%`;
-          if (activeLayerId === id) updateInspector();
-          syncSessionState('layer-opacity');
         }});
         item.querySelector('[data-action="remove"]').addEventListener('click', event => {{
           event.stopPropagation();
@@ -5895,6 +6281,51 @@ def render_html(state: dict, leaflet_src: str) -> str:
         syncToolState();
       }}
     }}
+    async function exportNdviToDrive(options = {{}}) {{
+      if (!hasAoi()) {{
+        showModeKey('mode.ndviNoAoi', {{}}, true);
+        return {{ ok: false, error: 'AOI is required' }};
+      }}
+      showModeKey('mode.driveExportBuilding', {{}}, true);
+      logMsg('log.driveExportStarted');
+      try {{
+        const response = await fetch('/api/export/ndvi-drive', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{
+            project: STATE.project,
+            aoi: cloneAoi(STATE.aoi),
+            bounds: STATE.aoi.bounds,
+            startDate: options.startDate || STATE.startDate,
+            endDate: options.endDate || STATE.endDate,
+            cloudPct: options.cloudPct ?? STATE.cloudPct,
+            scale: options.scale || 10,
+            folder: options.folder || 'EasyGEE',
+            fileNamePrefix: options.fileNamePrefix,
+            description: options.description,
+            fileFormat: options.fileFormat || 'GeoTIFF',
+            cloudOptimized: options.cloudOptimized !== false,
+            maxPixels: options.maxPixels || 1000000000,
+            start: options.start !== false,
+          }}),
+        }});
+        const payload = await response.json().catch(() => ({{ ok: false, error: response.statusText || 'request failed' }}));
+        if (!response.ok || !payload.ok || !(payload.task || payload.export)) {{
+          throw new Error(payload.error || `HTTP ${{response.status}}`);
+        }}
+        const task = payload.task || payload.export;
+        addTask(task, {{ logKey: 'log.driveExportDone', reason: 'drive-export' }});
+        showModeKey('mode.driveExportDone', {{ task: task.fileNamePrefix || task.taskId || task.title || 'Drive' }});
+        return payload;
+      }} catch (error) {{
+        const message = error && error.message ? error.message : String(error);
+        showModeKey('mode.driveExportFailed', {{ message: message.slice(0, 90) }}, true);
+        logMsg('log.driveExportFailed');
+        return {{ ok: false, error: message }};
+      }} finally {{
+        syncToolState();
+      }}
+    }}
 
     function buildProjectState() {{
       const explicitAoi = hasAoi() ? cloneAoi(STATE.aoi) : null;
@@ -5911,6 +6342,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         center: [map.getCenter().lat, map.getCenter().lng],
         zoom: map.getZoom(),
         basemap: currentBasemap,
+        activeLayerId,
         bounds: processingBounds,
         aoiBounds: explicitAoi ? explicitAoi.bounds : null,
         aoi: explicitAoi,
@@ -5926,6 +6358,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         favoriteDatasets: [...favoriteDatasetIds].sort(),
         visualPreferences: {{ ...visualPreferences }},
         quota: STATE.quota,
+        tasks: STATE.tasks.map(item => ({{ ...item }})),
         layers: STATE.layers.map(layer => ({{
           id: layer.id,
           name: layer.name,
@@ -6004,6 +6437,26 @@ def render_html(state: dict, leaflet_src: str) -> str:
         if (action.layerId || action.id) return removeLayer(String(action.layerId || action.id));
         return false;
       }}
+      if (type === 'selectlayer' || type === 'select-layer') {{
+        const layerId = String(action.layerId || action.id || activeLayerId || '');
+        if (!layerId) return false;
+        return selectLayer(layerId, {{ reveal: action.reveal !== false }});
+      }}
+      if (type === 'showlayer' || type === 'show-layer' || type === 'hidelayer' || type === 'hide-layer' || type === 'setlayervisibility' || type === 'set-layer-visibility') {{
+        const layerId = String(action.layerId || action.id || activeLayerId || '');
+        if (!layerId) return false;
+        const shown = type === 'showlayer' || type === 'show-layer'
+          ? true
+          : type === 'hidelayer' || type === 'hide-layer'
+            ? false
+            : action.shown !== false;
+        return setLayerVisibility(layerId, shown, {{ activate: action.activate !== false, reveal: action.reveal !== false }});
+      }}
+      if (type === 'setlayeropacity' || type === 'set-layer-opacity' || type === 'setopacity' || type === 'set-opacity') {{
+        const layerId = String(action.layerId || action.id || activeLayerId || '');
+        if (!layerId) return false;
+        return setLayerOpacity(layerId, action.opacity ?? action.value, {{ render: true }});
+      }}
       if (type === 'setaoistyle' || type === 'set-aoi-style') {{
         STATE.aoiStyle = normalizeAoiStyle({{ ...STATE.aoiStyle, ...(action.style || action) }});
         if (typeof action.shown === 'boolean') STATE.aoiShown = action.shown;
@@ -6031,8 +6484,15 @@ def render_html(state: dict, leaflet_src: str) -> str:
         clearMeasurements();
         return true;
       }}
+      if (type === 'addtask' || type === 'add-task') {{
+        return addTask(action.task || action.export || action, {{ reason: 'task-action' }});
+      }}
       if (type === 'extractndvi' || type === 'extract-ndvi') {{
         await extractNdviForCurrentAoi(action.options || action);
+        return true;
+      }}
+      if (type === 'exportndvidrive' || type === 'export-ndvi-drive' || type === 'drivendviexport' || type === 'drive-ndvi-export') {{
+        await exportNdviToDrive(action.options || action);
         return true;
       }}
       return false;
@@ -6215,6 +6675,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     $('layers-btn').addEventListener('click', () => togglePanel('layers'));
     $('inspector-btn').addEventListener('click', () => togglePanel('right'));
     $('quota-btn').addEventListener('click', showQuotaStatus);
+    $('drive-btn').addEventListener('click', openDriveTarget);
     $('lang-btn').addEventListener('click', () => setLanguage(currentLang === 'zh' ? 'en' : 'zh'));
     $('active-layer-badge').addEventListener('click', () => {{
       if ($('active-layer-badge').classList.contains('collapsed')) revealActiveBadge(0);
@@ -6281,14 +6742,25 @@ def render_html(state: dict, leaflet_src: str) -> str:
       getMeasurements: () => STATE.measurements.map(item => ({{ ...item }})),
       getMeasurementSummary: () => measurementSummary(),
       clearMeasurements: () => clearMeasurements(),
+      getTasks: () => STATE.tasks.map(item => ({{ ...item }})),
+      addTask: task => addTask(task),
+      getDriveUrl: () => driveTargetUrl(),
+      openDrive: () => openDriveTarget(),
       getSelectedDataset: () => selectedDatasetContext(),
       extractNdvi: options => extractNdviForCurrentAoi(options || {{}}),
+      exportNdviToDrive: options => exportNdviToDrive(options || {{}}),
       addGeneratedLayer: meta => addGeneratedLayer(meta),
+      showLayer: id => setLayerVisibility(String(id || activeLayerId || ''), true),
+      hideLayer: id => setLayerVisibility(String(id || activeLayerId || ''), false),
+      setLayerVisibility: (id, shown) => setLayerVisibility(String(id || activeLayerId || ''), shown !== false),
+      setLayerOpacity: (id, opacity) => setLayerOpacity(String(id || activeLayerId || ''), opacity),
+      selectLayer: id => selectLayer(String(id || activeLayerId || '')),
       syncState: reason => syncSessionState(reason || 'manual'),
       pollActions: () => pollSessionActions(),
     }};
     renderAoiLayer();
     renderMeasurements();
+    renderTasks();
     applyI18n();
     renderDatasets(filteredCatalog());
     renderLayers();
@@ -6337,6 +6809,9 @@ def smoke() -> int:
             "Add layers",
             "Layers",
             "Inspector",
+            "Tasks",
+            "drive-btn",
+            "Google Drive",
             "Quota items",
             "quota-stat-grid",
             "STATE =",

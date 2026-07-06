@@ -22,6 +22,7 @@ EasyGEE 把 Google Earth Engine、geemap、GeoMaster 方法知识和本地浏览
 - 查询 Earth Engine 项目配额和用量，并把结果转成 Agent 可读的摘要。
 - 生成轻量 EasyGEE Map Console，用于 AOI 绘制、图层叠加、底图切换和视觉检查。
 - 内置 GeoMaster skill，覆盖 CRS、本地 GIS、遥感、机器学习、STAC/COG、科学领域方法和排错经验。
+- 内置 GEE Growth Diary skill，将 GEEer成长日记 153 篇 GEE 文章蒸馏为数据集选择、指数、时序、分类、水体、图表和导出方法库。
 
 ## 结构
 
@@ -35,7 +36,8 @@ easygee/
 ├── scripts/             # EasyGEE MCP server 启动入口
 ├── skills/
 │   ├── easygee/         # GEE / geemap / 地图控制台工作流
-│   └── geomaster/       # 本地 GIS 与遥感方法知识
+│   ├── geomaster/       # 本地 GIS 与遥感方法知识
+│   └── gee-growth-diary/ # GEEer成长日记蒸馏方法库
 └── adapters/            # Codex、Claude、Zcode、Qoder 适配说明
 ```
 
@@ -108,6 +110,9 @@ EasyGEE 参考并蒸馏了许多开放资料和项目经验。特别感谢：
 - [Google Earth Engine 官方文档](https://developers.google.com/earth-engine)：认证、初始化、配额、导出、客户端/服务端模型和遥感工作流的主要依据。
 - [Earth Engine Data Catalog](https://developers.google.com/earth-engine/datasets/) 与 [Earth Engine STAC Catalog](https://storage.googleapis.com/earthengine-stac/catalog/catalog.json)：EasyGEE 数据目录、数据集介绍和图层搜索的核心来源。
 - [GEE Community Catalog](https://gee-community-catalog.org/) 与 [community_datasets.csv](https://github.com/sadassimov/geemu-skill/blob/main/awesome-gee-community-datasets/community_datasets.csv)：用于扩展官方目录之外的社区数据集。
+- 微信公众号 [GEEer成长日记](https://mp.weixin.qq.com/mp/appmsgalbum?__biz=MzkzNjMxNDk1NQ==&action=getalbum&album_id=2182256849633247236)：提供了大量中文 GEE 实践案例和任务灵感，帮助 EasyGEE 梳理更贴近中文用户表达的遥感工作流。
+- 微信公众号 [野火遥感Fire Centre](https://mp.weixin.qq.com/s/pEVuV8Q4dH2BWv_zQCDmZQ)：提供了野火遥感、灾害监测与应用案例方面的中文实践参考。
+- [GEEMu Skill](https://github.com/sadassimov/geemu-skill)：启发了 EasyGEE 对本地轻量知识检索、数据语义记录、边界/计算 gate 和导出 dry-run 模式的进一步整理。
 - [geemap](https://geemap.org/) / [gee-community/geemap](https://github.com/gee-community/geemap)：GEE Python 交互式地图、Notebook 工作流、导出工具和数据集探索模式的重要参考。
 - [Qiusheng Wu 的 Earth-Engine-Catalog](https://github.com/giswqs/Earth-Engine-Catalog)：轻量机器可读 GEE 数据目录索引。
 - [OpenGeoAgent / GeoAgent](https://github.com/opengeos/GeoAgent)、[GeoLibre](https://github.com/opengeos/GeoLibre)、[leafmap](https://leafmap.org/) 与 [anymap](https://github.com/opengeos/anymap)：启发了 EasyGEE 的地图优先、Agent 驱动和本地优先 GIS 工作台设计。

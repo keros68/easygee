@@ -27,6 +27,9 @@ REQUIRED_REFERENCES = [
     "gee-agent-playbook.md",
     "geemap-agent-recipes.md",
     "geemap-api-surface.md",
+    "export-patterns.md",
+    "data-layer-records.md",
+    "boundary-compute-patterns.md",
     "dataset-qa-patterns.md",
     "task-patterns.md",
     "workflow-templates.md",
@@ -47,10 +50,12 @@ REQUIRED_SCRIPTS = [
     "show_ee_quotas.py",
     "route_easygee_interaction.py",
     "route_geospatial_method.py",
+    "search_easygee_references.py",
     "serve_map_preview.py",
     "create_map_console.py",
     "map_console_agent.py",
     "resolve_ambiguous_geo_request.py",
+    "plan_gee_export.py",
     "scaffold_geemap_workflow.py",
     "search_gee_dataset.py",
     "scaffold_gee_template.py",
@@ -76,6 +81,7 @@ SOURCE_MARKERS = [
     "docs.cloud.google.com/monitoring/alerts/using-quota-metrics",
     "developers.google.com/earth-engine/guides/client_server",
     "developers.google.com/earth-engine/guides/classification",
+    "developers.google.com/earth-engine/guides/exporting",
     "developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED",
     "developers.google.com/earth-engine/datasets/catalog/GOOGLE_CLOUD_SCORE_PLUS_V1_S2_HARMONIZED",
     "developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S1_GRD",
@@ -86,10 +92,14 @@ SOURCE_MARKERS = [
     "developers.google.com/earth-engine/datasets/catalog/JRC_GHSL_P2023A_GHS_POP",
     "developers.google.com/earth-engine/datasets/catalog/GOOGLE_Research_open-buildings_v3_polygons",
     "geemap.org/usage",
+    "geemap.org/common",
+    "book.geemap.org/chapters/07_data_export",
     "geemap.org/notebooks/00_geemap_key_features",
     "geemap.org/notebooks/11_export_image",
+    "github.com/sadassimov/geemu-skill",
     "github.com/opengeos/GeoAgent",
     "github.com/opengeos/GeoLibre",
+    "mp.weixin.qq.com/s/pEVuV8Q4dH2BWv_zQCDmZQ",
 ]
 
 
@@ -168,6 +178,98 @@ def audit(skill_dir: Path) -> list[Check]:
     zh_choose_output = zh_choose.stdout.lower()
     for expected in ("draw-aoi", "export-image"):
         add(checks, expected in zh_choose_output, f"choose-zh-detects:{expected}", zh_choose.stdout.strip())
+
+    export_smoke = run_python(
+        skill_dir / "scripts" / "plan_gee_export.py",
+        "export current AOI NDVI to Google Drive as a 10 m GeoTIFF",
+        "--json",
+        cwd=skill_dir,
+    )
+    add(checks, export_smoke.returncode == 0, "export-planner-runs", export_smoke.stderr.strip() or "ran")
+    try:
+        export_payload = json.loads(export_smoke.stdout)
+    except json.JSONDecodeError:
+        export_payload = {}
+    add(checks, export_payload.get("data_kind") == "image", "export-planner-image-kind", export_smoke.stdout.strip())
+    add(checks, export_payload.get("destination") == "drive", "export-planner-drive-destination", export_smoke.stdout.strip())
+    add(checks, export_payload.get("route") == "ee_batch_image_to_drive", "export-planner-image-drive-route", export_smoke.stdout.strip())
+    add(checks, export_payload.get("scale_m") == 10, "export-planner-scale", export_smoke.stdout.strip())
+    add(
+        checks,
+        "ee.batch.Export.image.toDrive" in set(export_payload.get("functions", [])),
+        "export-planner-image-function",
+        export_smoke.stdout.strip(),
+    )
+
+    export_table = run_python(
+        skill_dir / "scripts" / "plan_gee_export.py",
+        "export a monthly NDVI time series CSV for multiple polygons to Drive",
+        "--json",
+        cwd=skill_dir,
+    )
+    add(checks, export_table.returncode == 0, "export-planner-table-runs", export_table.stderr.strip() or "ran")
+    try:
+        table_payload = json.loads(export_table.stdout)
+    except json.JSONDecodeError:
+        table_payload = {}
+    add(checks, table_payload.get("data_kind") == "table", "export-planner-table-kind", export_table.stdout.strip())
+    add(checks, table_payload.get("route") == "ee_batch_table_to_drive", "export-planner-table-route", export_table.stdout.strip())
+
+    export_map = run_python(
+        skill_dir / "scripts" / "plan_gee_export.py",
+        "save the current map as HTML for sharing",
+        "--json",
+        cwd=skill_dir,
+    )
+    add(checks, export_map.returncode == 0, "export-planner-map-runs", export_map.stderr.strip() or "ran")
+    try:
+        map_payload = json.loads(export_map.stdout)
+    except json.JSONDecodeError:
+        map_payload = {}
+    add(checks, map_payload.get("data_kind") == "map", "export-planner-map-kind", export_map.stdout.strip())
+    add(checks, map_payload.get("route") == "geemap_map_communication_export", "export-planner-map-route", export_map.stdout.strip())
+
+    data_layer_search = run_python(
+        skill_dir / "scripts" / "search_easygee_references.py",
+        "data layer record official community band semantics scale offset QA",
+        "--json",
+        cwd=skill_dir,
+    )
+    add(checks, data_layer_search.returncode == 0, "local-reference-search-runs:data-layer", data_layer_search.stderr.strip() or "ran")
+    try:
+        data_layer_hits = json.loads(data_layer_search.stdout)
+    except json.JSONDecodeError:
+        data_layer_hits = []
+    data_layer_paths = {item.get("path") for item in data_layer_hits if isinstance(item, dict)}
+    add(checks, "references/data-layer-records.md" in data_layer_paths, "local-reference-search-data-layer", data_layer_search.stdout.strip())
+
+    boundary_search = run_python(
+        skill_dir / "scripts" / "search_easygee_references.py",
+        "boundary compute tiling tile count exact AOI export region",
+        "--json",
+        cwd=skill_dir,
+    )
+    add(checks, boundary_search.returncode == 0, "local-reference-search-runs:boundary", boundary_search.stderr.strip() or "ran")
+    try:
+        boundary_hits = json.loads(boundary_search.stdout)
+    except json.JSONDecodeError:
+        boundary_hits = []
+    boundary_paths = {item.get("path") for item in boundary_hits if isinstance(item, dict)}
+    add(checks, "references/boundary-compute-patterns.md" in boundary_paths, "local-reference-search-boundary-compute", boundary_search.stdout.strip())
+
+    export_ref_search = run_python(
+        skill_dir / "scripts" / "search_easygee_references.py",
+        "export product destination Drive GeoTIFF task metadata",
+        "--json",
+        cwd=skill_dir,
+    )
+    add(checks, export_ref_search.returncode == 0, "local-reference-search-runs:export", export_ref_search.stderr.strip() or "ran")
+    try:
+        export_ref_hits = json.loads(export_ref_search.stdout)
+    except json.JSONDecodeError:
+        export_ref_hits = []
+    export_ref_paths = {item.get("path") for item in export_ref_hits if isinstance(item, dict)}
+    add(checks, "references/export-patterns.md" in export_ref_paths, "local-reference-search-export-patterns", export_ref_search.stdout.strip())
 
     project_smoke = run_python(skill_dir / "scripts" / "easygee_project.py", "smoke", cwd=skill_dir)
     add(checks, project_smoke.returncode == 0, "project-resolver-smoke", project_smoke.stdout.strip() or project_smoke.stderr.strip())

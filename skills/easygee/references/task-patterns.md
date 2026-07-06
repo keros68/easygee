@@ -18,6 +18,48 @@ Before coding, write down:
 If any of these are missing, choose a conservative default only when the user is
 exploring; label it as a placeholder in the notebook/script.
 
+## ImageCollection Recipe Contract
+
+Use this contract for requests such as "2024 summer NDVI", "5-9 月 NDVImax",
+"add this MODIS collection to the map", or any ImageCollection preview/export.
+
+- Dataset id and source status: official catalog, community catalog, or user
+  asset.
+- AOI or processing extent: explicit AOI, current viewport fallback, admin
+  boundary, points, or asset geometry.
+- Date semantics: start/end, month filter, season, event window, baseline, or
+  cadence.
+- Dataset QA: cloud/shadow/snow mask, scale factors, nodata, QA bands, and
+  whether the user accepts a quick preview.
+- Derived variables: selected bands, index formula, renamed output bands, and
+  copied date properties.
+- Temporal reducer: median, mean, max, min, percentile, `qualityMosaic`,
+  monthly/yearly grouping, valid-observation count, or class mode.
+- Visualization: band mapping, min/max, palette, opacity, legend, and whether
+  the style is only a preview.
+- Output parameters: reducer, scale, CRS/projection if needed, region,
+  maxPixels, file format, destination, and task name.
+
+Treat this as the bridge between a conversational request and runnable Earth
+Engine code. Do not rely on a dataset's Add Layers quick preview as the final
+scientific recipe.
+
+## Tutorial And Cookbook Source Policy
+
+Public tutorials, WeChat articles, blog posts, and older Code Editor snippets
+are useful for discovering task shapes, but they are not authoritative for
+current dataset ids or QA behavior.
+
+- Use official Earth Engine catalog/docs and EasyGEE references before copying
+  dataset ids, band names, scale factors, QA bitmasks, or export syntax.
+- Watch for historical examples using deprecated or superseded collections such
+  as Landsat Collection 1, `MODIS/006/*`, older JRC product versions, or
+  QA60-only Sentinel-2 cloud masks.
+- If using an article-inspired method, write it as "article-inspired, verified
+  against current catalog/docs" or "article-inspired, not yet verified".
+- Keep source articles as attribution and retrieval context; do not vendor
+  article text or treat article code as a maintained template.
+
 ## Ambiguous Extraction Requests
 
 Use `scripts/resolve_ambiguous_geo_request.py "<prompt>" --json` before running

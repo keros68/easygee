@@ -23,7 +23,9 @@ All templates:
 - use an explicit fallback rectangle AOI,
 - prepare exports without starting them automatically,
 - include a small visual or numeric probe,
-- preserve dataset ids, QA assumptions, and limitations in the generated file.
+- preserve dataset ids, QA assumptions, and limitations in the generated file,
+- pair reusable exports with data-layer and boundary/compute notes when the
+  dataset semantics, AOI complexity, tiling, or task count affects correctness.
 
 ## Profiles
 

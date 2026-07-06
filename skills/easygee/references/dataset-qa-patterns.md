@@ -13,6 +13,8 @@ scientifically safe enough to export.
   availability notes over remembered snippets.
 - Record dataset id, band names, scale factors, QA mask method, projection/scale
   choice, and date range in notebooks and scripts.
+- When a dataset choice or export must be traceable, create a compact
+  data-layer record using `references/data-layer-records.md`.
 - For categorical products, use `mode()`, class counts, grouped reducers, or
   nearest-neighbor behavior. Do not average class labels.
 - For composites/mosaics, specify `scale` in reducers/exports. Inspect

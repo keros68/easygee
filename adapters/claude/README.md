@@ -8,6 +8,7 @@ Claude-compatible files are included at the plugin root:
 - `hooks/hooks.json`
 - `skills/easygee/SKILL.md`
 - `skills/geomaster/SKILL.md`
+- `skills/gee-growth-diary/SKILL.md`
 
 The hooks are intentionally lightweight:
 

@@ -53,7 +53,12 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 6. If the task needs remote-sensing domain methods beyond GEE/geemap plumbing
    (cloud masks, indices, classification, CRS, raster/vector operations), and
    the local `geomaster` skill exists, load it as a companion reference.
-7. If the user mentions OpenGeoAgent, GeoLibre, OpenGeo/opengeos projects,
+7. If the user mentions GEEer成长日记, a Chinese GEE tutorial/article corpus,
+   or asks what that article collection suggests, load `gee-growth-diary` as a
+   secondary source index. Keep EasyGEE references and official Earth Engine
+   docs as the authority for dataset ids, scale factors, QA masks, exports,
+   and current API behavior.
+8. If the user mentions OpenGeoAgent, GeoLibre, OpenGeo/opengeos projects,
    QGIS AI assistants, catalog browsers, map agents, or "distilling" Qiusheng
    Wu's geospatial workflow style, read `references/opengeos-patterns.md`.
 
@@ -86,6 +91,16 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   backends, map methods, drawing tools, catalog search, local-data bridges,
   export helpers, zonal statistics helpers, conversion tools, or timelapse/app
   utilities.
+- Read `references/export-patterns.md` when the user asks to export, download,
+  save to Drive/Cloud Storage/Asset/local files, or gives a natural-language
+  output request that must be turned into raster/table/vector/map export
+  parameters.
+- Read `references/data-layer-records.md` when dataset choice, official-vs-
+  community provenance, band semantics, scale factors, QA masks, class labels,
+  transformations, or output suitability must be made explicit.
+- Read `references/boundary-compute-patterns.md` when AOI source, geometry
+  complexity, filter bounds, final export region, reducer scale, tiling,
+  workload tags, or task-count risk affects the workflow.
 - Read `references/dataset-qa-patterns.md` when choosing datasets, applying
   cloud/shadow masks, handling scale factors, reviewing Sentinel/Landsat/MODIS
   workflows, or deciding scale/projection/export parameters.
@@ -148,6 +163,10 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   tasks that may be better served by GEE, local GIS, hybrid workflows, catalog
   search, or browser-first AOI/map inspection. Treat its `read` list as the
   minimal reference set to load from EasyGEE and GeoMaster.
+- Use `scripts/search_easygee_references.py "<query>"` for token-efficient
+  local recall across EasyGEE references and the distilled GEEer growth-diary
+  index. Treat results as pointers into local references, not as authority over
+  official Earth Engine docs.
 - Use `scripts/probe_bigquery_slot_usage.py --project <project>` when the
   BigQuery raster function slot-time quota shows a live limit but no usage
   time series. Explain that no Monitoring series usually means zero recent
@@ -169,10 +188,16 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   labels so community datasets are not mistaken for official catalog assets.
   Serve the generated HTML with `serve_map_preview.py`.
 - Use `scripts/map_console_agent.py` for agent-facing Map Console work. Prefer
-  its `capabilities`, `state`, `aoi`, `measurement-summary`, and `extract-ndvi`
-  commands over reading generated HTML or browser DOM. The script talks to the
-  local preview server's compact `/api/session/*` protocol and can enqueue
-  browser-visible layer actions.
+  its `capabilities`, `state --compact`, `aoi`, `measurement-summary`,
+  `quick-layer`, `render-recipe`, and `extract-ndvi` commands over reading
+  generated HTML or browser DOM. The script talks to the local preview server's
+  compact `/api/session/*` protocol and can enqueue browser-visible layer
+  actions.
+- Use `scripts/plan_gee_export.py "<export request>" --json` before handling
+  natural-language export/download requests. It classifies product type,
+  destination, backend (`ee.batch.Export.*`, geemap local helper, or map
+  export), format, AOI source, scale, ImageCollection materialization, missing
+  parameters, and the task lifecycle policy.
 - Use `scripts/resolve_ambiguous_geo_request.py "<task>" --json` before acting
   on vague extraction requests such as "extract water in this AOI", "提取这个影像里的屋顶",
   or "识别当前图层里的目标". It ranks existing GEE products, reproducible
@@ -277,6 +302,21 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   with dataset id, band/index, temporal reducer, date/month window, scale
   factor, AOI, and visualization parameters instead of relying on the Add
   Layers quick-preview default.
+- Treat export requests as a structured contract. Parse product kind
+  (raster/table/vector/map/video), destination, format, AOI, scale/CRS,
+  ImageCollection reducer, naming, and start policy before creating tasks. For
+  durable workbench exports, prefer direct `ee.batch.Export.*` calls so EasyGEE
+  can persist task id, status, destination, and parameters; use geemap local
+  download helpers mainly for notebook-scale local outputs.
+- Treat data-layer semantics as part of the deliverable, not hidden background
+  reasoning. For datasets and exports, record target variable, official or
+  community source, dataset id, time range, AOI source, bands/fields, units,
+  scale/offset, QA/mask, transformations, output target, and verification
+  status.
+- Treat boundary and compute risk as a separate gate. Use bbox/simplified
+  geometry for coarse filtering when helpful, exact AOI for final statistics or
+  exports when needed, and tiled export only for tile-safe algorithms after
+  reporting tile count and task naming.
 - Treat AOI and measurement data as first-class console state. The console
   exposes `window.EasyGEE.getAoi()`, `setAoi()`, `getMeasurements()`,
   `getMeasurementSummary()`, and `extractNdvi()` for follow-up automation.
@@ -288,9 +328,16 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   tests or explicit workspaces. Browser `localStorage` is only a cache and may
   be isolated by localhost port.
 - For token-efficient follow-up work, read `references/map-console-agent-contract.json`
-  or run `map_console_agent.py capabilities` once, then use the agent protocol
-  cache. Do not reread the generated Map Console HTML/CSS or `create_map_console.py`
-  merely to discover stable UI capabilities.
+  or run `map_console_agent.py capabilities` once, then use
+  `map_console_agent.py state --compact` for routine map context. Do not reread
+  the generated Map Console HTML/CSS or `create_map_console.py` merely to
+  discover stable UI capabilities. For existing layer state changes, enqueue
+  `show-layer`, `hide-layer`, `select-layer`, or `set-opacity` instead of
+  interacting with the browser DOM.
+- For common NDVI display requests, try `map_console_agent.py quick-layer`
+  before dataset search or custom recipes. It covers deterministic fast paths
+  such as Sentinel-2 10 m NDVI and MODIS NDVI max/median seasonal composites,
+  using the current AOI or viewport from Map Console state.
 - For vague geospatial extraction, do not guess a dataset from the noun alone.
   First resolve whether the user means a product-backed AOI analysis,
   remote-sensing derivation, or current-image visual recognition. If the

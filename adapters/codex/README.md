@@ -12,6 +12,7 @@ The entry points are:
 - `.mcp.json`
 - `skills/easygee/SKILL.md`
 - `skills/geomaster/SKILL.md`
+- `skills/gee-growth-diary/SKILL.md`
 - `assets/icon.png`
 
 After installing or updating the plugin in Codex, open a new thread so the refreshed skill and MCP metadata are loaded.

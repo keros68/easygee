@@ -5,7 +5,7 @@ skill. It exists for open-source transparency and future maintenance. It is not
 a substitute for reading upstream documentation before relying on a specific
 API, quota, or installation command.
 
-Reviewed date: 2026-07-04.
+Reviewed date: 2026-07-06.
 
 ## Google Earth Engine Official Sources
 
@@ -44,6 +44,7 @@ Reviewed date: 2026-07-04.
 | ImageCollection charts | https://developers.google.com/earth-engine/guides/charts_image_collection | Source for charting image collections and time-series summaries. |
 | Supervised classification | https://developers.google.com/earth-engine/guides/classification | Source for classifier workflow, sampleRegions, class-label requirements, and accuracy assessment. |
 | Join overview | https://developers.google.com/earth-engine/guides/joins_intro | Source for joining collections, including companion QA/cloud collections. |
+| Exporting data overview | https://developers.google.com/earth-engine/guides/exporting | Source for Earth Engine export destinations and task-oriented export model. |
 | Exporting images | https://developers.google.com/earth-engine/guides/exporting_images | Source for Drive, Cloud Storage, Asset exports, `scale`, `crs`, `crsTransform`, COG, nodata, `maxPixels`, and large-file behavior. |
 | Exporting tables | https://developers.google.com/earth-engine/guides/exporting_tables | Source for CSV/SHP/GeoJSON/KML/KMZ/TFRecord table export behavior. |
 | Projections | https://developers.google.com/earth-engine/guides/projections | Source for default WGS84/1-degree projection behavior in composites/mosaics and cautions around `reproject()`. |
@@ -72,6 +73,7 @@ Reviewed date: 2026-07-04.
 | Earth Engine Community GitHub | https://github.com/google/earthengine-community | Official community tutorial repository and contribution route. |
 | Earth Engine public STAC catalog | https://storage.googleapis.com/earthengine-stac/catalog/catalog.json | Machine-readable official catalog root used to ground dataset discovery and catalog source attribution. |
 | GEE Community datasets CSV | https://github.com/sadassimov/geemu-skill/blob/main/awesome-gee-community-datasets/community_datasets.csv | Machine-readable community dataset index used to expand EasyGEE Add Layers and catalog search beyond the official Earth Engine STAC catalog. |
+| GEEMu skill repository | https://github.com/sadassimov/geemu-skill | Reviewed as an upstream skill pattern for lightweight local JSONL knowledge search, data-layer records, boundary/compute gates, dry-run/export switches, and community dataset attribution. EasyGEE absorbs the patterns selectively; GEEMu's local knowledge database is not treated as an authoritative source for current API or dataset semantics. |
 
 ## geemap / Qiusheng Wu Sources
 
@@ -80,6 +82,7 @@ Reviewed date: 2026-07-04.
 | geemap documentation home | https://geemap.org/ | Feature inventory: JS-to-Python conversion, interactive layers, inspector, plotting, drawing, shapefiles, exports, zonal stats, timelapse, catalog search. |
 | geemap usage page | https://geemap.org/usage/ | Source for common API calls: maps, layers, local data conversion, exports, zonal stats, split maps, legends, timelapse, conversion, and map publishing. |
 | geemap API reference | https://geemap.org/geemap/ | Main ipyleaflet-based mapping API reference. |
+| geemap common functions | https://geemap.org/common/ | Source for export helper names and implementation shape for image/table/vector exports. |
 | geemap AI module | https://geemap.org/ai/ | Source for dataset search helpers such as `EarthEngineDatasetIndex.find_top_matches`. |
 | geemap GitHub | https://github.com/gee-community/geemap | Upstream package source and README. |
 | Earth-Engine-Catalog JSON index | https://github.com/giswqs/Earth-Engine-Catalog | Qiusheng Wu maintained machine-readable index of Earth Engine Data Catalog entries; used as a lightweight source of dataset ids, titles, keywords, and official Google catalog URLs. |
@@ -87,6 +90,7 @@ Reviewed date: 2026-07-04.
 | geemap installation | https://geemap.org/installation/ | Install paths and Earth Engine account requirement. |
 | geemap FAQ | https://geemap.org/faq/ | Citation and project support details. |
 | Earth Engine and Geemap book | https://book.geemap.org/ | Structured long-form learning path for GEE plus geemap. |
+| Geemap book data export chapter | https://book.geemap.org/chapters/07_data_export.html | Source for local image download, Drive exports, image collection download, table/vector export, and map export patterns. |
 | geebook repository | https://github.com/giswqs/geebook | Open book repository and CC-BY-4.0 attribution context. |
 | Export image notebook | https://geemap.org/notebooks/11_export_image/ | Source for `ee_export_image`, image collection download, Drive export, and NumPy extraction examples. |
 | Zonal statistics notebook | https://geemap.org/notebooks/12_zonal_statistics/ | Source for `geemap.zonal_stats()` output/stat options. |
@@ -130,6 +134,8 @@ Reviewed date: 2026-07-04.
 | World Bank Open Nighttime Lights geemap tutorial | https://worldbank.github.io/OpenNightLights/tutorials/mod2_5_GEE_PythonAPI_and_geemap.html | Clear explanation of geemap modules: geemap, eefolium, conversion, basemaps, legends. |
 | NASA ARSET GEE land monitoring training | https://www.earthdata.nasa.gov/learn/trainings/using-google-earth-engine-land-monitoring-applications | Applied remote-sensing workflow themes: change detection, time series, classification, accuracy assessment. |
 | Google Earth Engine community tutorials | https://developers.google.com/earth-engine/tutorials | Official route to community-contributed tutorials. |
+| GEEer成长日记 WeChat album "GEE" | https://mp.weixin.qq.com/mp/appmsgalbum?__biz=MzkzNjMxNDk1NQ==&action=getalbum&album_id=2182256849633247236 | Secondary cookbook corpus used to identify Chinese GEE task patterns and source titles for `gee-growth-diary`; not authoritative for current dataset ids, QA masks, scale factors, or API behavior. |
+| 野火遥感Fire Centre WeChat article | https://mp.weixin.qq.com/s/pEVuV8Q4dH2BWv_zQCDmZQ | Chinese wildfire remote-sensing and disaster-monitoring practice reference. Treat as a secondary applied source; verify dataset ids, algorithms, QA masks, and API behavior against official sources before using in EasyGEE workflows. |
 
 ## License And Reuse Notes
 

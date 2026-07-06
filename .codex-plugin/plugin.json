@@ -1,7 +1,7 @@
 {
   "name": "easygee",
   "version": "0.1.0",
-  "description": "Google Earth Engine, geemap, and bundled GeoMaster workflows with catalog search, auth guidance, quota checks, and a lightweight local map console.",
+  "description": "Google Earth Engine, geemap, GeoMaster, and GEE Growth Diary workflows with catalog search, auth guidance, quota checks, and a lightweight local map console.",
   "author": {
     "name": "Liang"
   },
@@ -21,7 +21,7 @@
   "interface": {
     "displayName": "EasyGEE",
     "shortDescription": "Use GEE, geemap, quotas, catalog search, and browser maps from Codex.",
-    "longDescription": "EasyGEE packages a Google Earth Engine and geemap workflow layer for agents, plus a bundled GeoMaster skill snapshot for local GIS, CRS, remote sensing, ML, STAC/COG, and scientific-domain methods. It provides credential-safe authentication guidance, Cloud project and quota checks, Earth Engine catalog search, GeoMaster-aware method routing, reusable GEE/geemap scripts, and a lightweight browser map console for AOI drawing, layer inspection, and visualization handoff.",
+    "longDescription": "EasyGEE packages a Google Earth Engine and geemap workflow layer for agents, plus bundled GeoMaster and GEE Growth Diary skill snapshots for local GIS, CRS, remote sensing, ML, STAC/COG, scientific-domain methods, and distilled Chinese GEE cookbook patterns. It provides credential-safe authentication guidance, Cloud project and quota checks, Earth Engine catalog search, method routing, reusable GEE/geemap scripts, and a lightweight browser map console for AOI drawing, layer inspection, and visualization handoff.",
     "developerName": "Liang",
     "category": "Science",
     "capabilities": [

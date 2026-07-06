@@ -334,6 +334,39 @@ def sanitize_recent_layers(value: object) -> list[dict[str, object]]:
     return layers[:50]
 
 
+def sanitize_recent_tasks(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    allowed = {
+        "id",
+        "type",
+        "analysis",
+        "title",
+        "name",
+        "status",
+        "state",
+        "destination",
+        "folder",
+        "fileNamePrefix",
+        "taskId",
+        "taskName",
+        "driveSearchUrl",
+        "createdAt",
+        "updatedAt",
+        "params",
+        "notes",
+        "warnings",
+    }
+    tasks: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        safe = {key: json_clone(item[key]) for key in allowed if key in item}
+        if safe:
+            tasks.append(safe)  # type: ignore[arg-type]
+    return tasks[:30]
+
+
 def merge_profile_with_state(state: dict[str, object]) -> dict[str, object]:
     reason = str(state.get("sessionReason") or "").lower()
     with PROFILE_LOCK:
@@ -372,6 +405,9 @@ def merge_profile_with_state(state: dict[str, object]) -> dict[str, object]:
         layers = sanitize_recent_layers(state.get("layers"))
         if layers:
             entry["recentLayers"] = layers
+        tasks = sanitize_recent_tasks(state.get("tasks"))
+        if tasks:
+            entry["tasks"] = tasks
 
         profile["updatedAt"] = now_iso()
         write_profile_unlocked(profile)
@@ -510,6 +546,14 @@ class EasyGeeHandler(QuietHandler):
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, status=500)
             return
+        if parsed.path == "/api/export/ndvi-drive":
+            try:
+                from create_map_console import build_ndvi_drive_export
+
+                self.send_json(build_ndvi_drive_export(self.read_json()))
+            except Exception as exc:
+                self.send_json({"ok": False, "error": str(exc)}, status=500)
+            return
         self.send_error(404, "Not Found")
 
 
@@ -570,11 +614,16 @@ def smoke() -> int:
                 "project": "YOUR_EE_PROJECT",
                 "favoriteDatasets": ["COPERNICUS/S2_SR_HARMONIZED"],
                 "measurements": [{"id": "m1", "start": [0, 0], "end": [0, 1], "lengthMeters": 1}],
+                "tasks": [{"id": "t1", "title": "Drive export", "status": "READY", "folder": "EasyGEE"}],
                 "sessionReason": "favorites",
             }
         )
         if profile.get("favoriteDatasets") != ["COPERNICUS/S2_SR_HARMONIZED"]:
             print("FAIL: profile favorites were not persisted")
+            return 1
+        projects = profile.get("projects") if isinstance(profile.get("projects"), dict) else {}
+        if not any(isinstance(entry, dict) and entry.get("tasks") for entry in projects.values()):
+            print("FAIL: profile tasks were not persisted")
             return 1
         payload = session_state_payload()
         if not isinstance(payload.get("profile"), dict):

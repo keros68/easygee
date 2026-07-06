@@ -1,6 +1,6 @@
 {
   "name": "EasyGEE Map Console Agent Contract",
-  "version": 1,
+  "version": 2,
   "stateEndpoint": "/api/session/state",
   "profileEndpoint": "/api/session/profile",
   "actionsEndpoint": "/api/session/actions",
@@ -8,6 +8,9 @@
   "layerEndpoint": "/api/layer",
   "analysisEndpoints": {
     "ndvi": "/api/analysis/ndvi"
+  },
+  "exportEndpoints": {
+    "ndviDrive": "/api/export/ndvi-drive"
   },
   "planner": {
     "script": "scripts/resolve_ambiguous_geo_request.py",
@@ -25,6 +28,7 @@
     "center",
     "zoom",
     "bounds",
+    "activeLayerId",
     "aoiBounds",
     "aoi",
     "hasExplicitAoi",
@@ -36,6 +40,7 @@
     "measurementSummary",
     "selectedDataset",
     "layers",
+    "tasks",
     "visualPreferences",
     "favoriteDatasets"
   ],
@@ -91,8 +96,27 @@
     "favoriteDatasets",
     "visualPreferences",
     "projects",
+    "projects.<project>.tasks",
     "language",
     "updatedAt"
+  ],
+  "taskFields": [
+    "id",
+    "type",
+    "analysis",
+    "title",
+    "status",
+    "destination",
+    "folder",
+    "fileNamePrefix",
+    "taskId",
+    "taskName",
+    "driveSearchUrl",
+    "createdAt",
+    "updatedAt",
+    "params",
+    "notes",
+    "warnings"
   ],
   "aoi": {
     "defaultType": "rectangle",
@@ -104,20 +128,37 @@
     "summaryFields": ["count", "totalMeters", "meanMeters", "minMeters", "maxMeters"]
   },
   "actions": {
-    "supported": ["addLayer", "removeLayer", "selectDataset", "setAoi", "clearAoi", "setAoiStyle", "updateLayerStyle", "clearMeasurements", "extractNdvi"],
+    "supported": ["addLayer", "removeLayer", "showLayer", "hideLayer", "selectLayer", "setLayerVisibility", "setLayerOpacity", "selectDataset", "setAoi", "clearAoi", "setAoiStyle", "updateLayerStyle", "clearMeasurements", "extractNdvi", "addTask", "exportNdviDrive"],
     "resultSync": "Actions are executed by the browser console and reflected in the next session state sync."
+  },
+  "compactState": {
+    "agentCommand": "map_console_agent.py state --compact",
+    "purpose": "Return only the state fields agents usually need for follow-up work, omitting Earth Engine tile URLs and bulky AOI/layer detail."
+  },
+  "quickLayer": {
+    "agentCommand": "map_console_agent.py quick-layer",
+    "purpose": "Use deterministic fast paths for common layer requests before falling back to dataset search or explicit recipes.",
+    "supportedFastPaths": ["sentinel2_ndvi", "modis_ndvi"]
+  },
+  "driveShortcut": {
+    "elementId": "drive-btn",
+    "purpose": "Left tool rail shortcut to Google Drive.",
+    "targetRule": "Open the latest task.driveSearchUrl when available; otherwise open Google Drive My Drive."
   },
   "rules": [
     "Agents should use this contract or scripts/map_console_agent.py instead of reading generated HTML.",
     "Selected dataset context is exposed as selectedDataset; agents should use it to resolve deictic requests such as this MODIS dataset.",
     "ImageCollection analyses should use explicit recipe objects instead of relying on the default preview reducer.",
     "Layer recipe metadata must be preserved when restyling a layer so visualization changes do not alter the analytical calculation.",
+    "Agents should use showLayer, hideLayer, selectLayer, and setLayerOpacity for existing layer state changes instead of browser DOM interaction.",
+    "For common NDVI map requests, agents should try quick-layer first and fall back to render-recipe or dataset search only when no fast path matches.",
     "Persistent profile state is the durable source for dataset favorites, AOI, and measurements across localhost ports.",
     "AOI is represented as a system layer in the layer stack and can be styled, hidden, or cleared through the same layer workflow.",
     "When explicit AOI is cleared, aoi is null but processingAoi and processingBounds fall back to the current map viewport so preview layers can still be rendered.",
     "GEE layer visualization changes should update visParams through the workbench protocol and regenerate tile URLs instead of editing generated HTML.",
     "For vague extraction requests, run the planner first and ask one multiple-choice clarification when the route is ask_user.",
     "Do not add task-specific toolbar buttons; analysis results must sync back as normal map layers.",
-    "Generated Earth Engine tile URLs are preview material and should not be copied into chat logs."
+    "Generated Earth Engine tile URLs are preview material and should not be copied into chat logs.",
+    "Drive exports should sync a task record with taskId, folder, fileNamePrefix, and export parameters; agents should not require the user to know the final Drive file URL."
   ]
 }

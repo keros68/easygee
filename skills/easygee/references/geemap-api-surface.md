@@ -127,6 +127,12 @@ underlying `FeatureCollection` or CSV for durable outputs.
 
 ## Exports
 
+For natural-language export requests, run `scripts/plan_gee_export.py` first.
+It decides whether the user is asking for a raster, table, vector, map
+communication artifact, or video; whether the destination is Drive, Cloud
+Storage, Earth Engine Asset, BigQuery, or local; and whether to use a geemap
+local helper or an explicit `ee.batch.Export.*` task.
+
 Local or notebook-scale image export:
 
 ```python
@@ -168,6 +174,12 @@ Map.to_image(filename="map.png")
 Export rules:
 
 - Prefer asynchronous EE export tasks for large rasters/tables.
+- In EasyGEE Map Console workflows, prefer explicit `ee.batch.Export.*` task
+  creation for durable exports so the workbench can persist task id, status,
+  destination, AOI, scale/CRS, and file naming.
+- Use geemap local helpers for modest notebook outputs and quick local
+  downloads; switch to batch exports when size, timeout, quota, or task
+  tracking matters.
 - Always report destination, task/description, scale, region, CRS/transform
   assumptions, and whether the export was started.
 - HTML/PNG map exports are communication artifacts, not analytical exports.

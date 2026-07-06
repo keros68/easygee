@@ -22,6 +22,7 @@ EasyGEE packages Google Earth Engine, geemap, GeoMaster method knowledge, and a 
 - Query Earth Engine quota limits and usage as agent-readable summaries.
 - Generate the lightweight EasyGEE Map Console for AOI drawing, layer overlays, basemap switching, and visual QA.
 - Bundle GeoMaster as a skill for CRS, local GIS, remote sensing, ML, STAC/COG, scientific-domain methods, and troubleshooting.
+- Bundle GEE Growth Diary as a distilled method skill from 153 GEEer成长日记 articles covering dataset choice, indices, time series, classification, water extraction, charts, and exports.
 
 ## Layout
 
@@ -35,7 +36,8 @@ easygee/
 ├── scripts/             # EasyGEE MCP server entrypoint
 ├── skills/
 │   ├── easygee/         # GEE / geemap / map-console workflows
-│   └── geomaster/       # Local GIS and remote-sensing method knowledge
+│   ├── geomaster/       # Local GIS and remote-sensing method knowledge
+│   └── gee-growth-diary/ # Distilled GEEer成长日记 method playbook
 └── adapters/            # Codex, Claude, Zcode, and Qoder notes
 ```
 
@@ -108,6 +110,9 @@ EasyGEE distills patterns from many open geospatial resources and projects. Spec
 - [Google Earth Engine documentation](https://developers.google.com/earth-engine) for authentication, initialization, quotas, exports, the client/server model, and remote-sensing workflow guidance.
 - [Earth Engine Data Catalog](https://developers.google.com/earth-engine/datasets/) and the [Earth Engine STAC Catalog](https://storage.googleapis.com/earthengine-stac/catalog/catalog.json) as the main sources for dataset discovery and dataset detail cards.
 - [GEE Community Catalog](https://gee-community-catalog.org/) and [community_datasets.csv](https://github.com/sadassimov/geemu-skill/blob/main/awesome-gee-community-datasets/community_datasets.csv) for community dataset coverage beyond the official catalog.
+- The WeChat public account [GEEer成长日记](https://mp.weixin.qq.com/mp/appmsgalbum?__biz=MzkzNjMxNDk1NQ==&action=getalbum&album_id=2182256849633247236) for Chinese GEE practice cases and task inspiration that helped EasyGEE better cover Chinese-language remote-sensing workflows.
+- The WeChat public account [野火遥感Fire Centre](https://mp.weixin.qq.com/s/pEVuV8Q4dH2BWv_zQCDmZQ) for Chinese wildfire remote-sensing, disaster monitoring, and applied case-study references.
+- [GEEMu Skill](https://github.com/sadassimov/geemu-skill) for inspiration around lightweight local knowledge search, data-layer records, boundary/compute gates, and export dry-run patterns.
 - [geemap](https://geemap.org/) / [gee-community/geemap](https://github.com/gee-community/geemap) for Python-based GEE maps, notebooks, export helpers, and dataset exploration patterns.
 - [Qiusheng Wu's Earth-Engine-Catalog](https://github.com/giswqs/Earth-Engine-Catalog) for a lightweight machine-readable Earth Engine catalog index.
 - [OpenGeoAgent / GeoAgent](https://github.com/opengeos/GeoAgent), [GeoLibre](https://github.com/opengeos/GeoLibre), [leafmap](https://leafmap.org/), and [anymap](https://github.com/opengeos/anymap) for map-first, agentic, and local-first GIS workbench ideas.

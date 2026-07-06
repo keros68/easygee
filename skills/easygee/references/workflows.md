@@ -67,6 +67,10 @@ For large time series, export the `FeatureCollection` instead of calling
 
 ## Exports
 
+When the user describes an export in natural language, first run
+`scripts/plan_gee_export.py "<request>" --json` to classify product type,
+destination, backend, format, AOI source, scale, and missing parameters.
+
 Prefer explicit names, region, scale, and `maxPixels`.
 
 ```python

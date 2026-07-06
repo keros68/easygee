@@ -11,6 +11,7 @@ I did not find a `C:\Users\Liang\.qoderwork` plugin workspace. For now, Qoder ca
 ```text
 C:\Users\Liang\plugins\easygee\skills\easygee
 C:\Users\Liang\plugins\easygee\skills\geomaster
+C:\Users\Liang\plugins\easygee\skills\gee-growth-diary
 ```
 
 If Qoder later exposes a plugin manifest format, keep this plugin as the canonical source and add a thin adapter here instead of maintaining a separate EasyGEE copy.

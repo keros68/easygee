@@ -38,9 +38,13 @@ validate them. Do not confuse a rendered map tile with a completed analysis.
 1. **Frame**: identify AOI, time range, dataset, bands, scale, output format,
    and environment (notebook, script, QGIS, app).
 2. **Discover**: record dataset ids and key band/QA fields from official
-   catalog/docs or clearly label assumptions.
+   catalog/docs or clearly label assumptions. Use
+   `references/data-layer-records.md` when dataset semantics or provenance need
+   to travel with the result.
 3. **Filter**: filter by geometry, date, collection metadata, and QA/cloud
-   fields. Keep a diagnostic collection size query small.
+   fields. Use `references/boundary-compute-patterns.md` when AOI complexity,
+   bbox filtering, exact final geometry, tiling, or task count matters. Keep a
+   diagnostic collection size query small.
 4. **Probe visually**: add a representative image/composite with explicit
    visualization params and a meaningful layer name.
 5. **Probe numerically**: sample a small point/ROI or run a small reducer.
@@ -88,8 +92,14 @@ Always specify or justify:
 - `maxPixels` for large reductions/exports,
 - reducer name and output units,
 - masking and nodata behavior.
+- boundary/compute risk when the ROI is large, complex, tiled, or expensive.
 
 ## Export Rules
+
+For natural-language export requests, run `scripts/plan_gee_export.py` before
+writing code. Treat the result as an export contract: product type,
+destination, format, AOI/region, scale/CRS, ImageCollection reducer, task
+lifecycle, and missing parameters.
 
 Prefer explicit export parameters:
 
@@ -123,6 +133,10 @@ For masked pixels, decide intentionally:
 Report task id, destination, region, scale/CRS, `maxPixels`, and whether the
 task was started or just defined.
 
+Do not export an `ImageCollection` as if it were a single raster. First reduce
+or composite it into an `ee.Image`, or map it into a `FeatureCollection` when
+the user wants a time-series/table export.
+
 ## Quota And Performance Rules
 
 - Use batch exports for long-running or expensive computations.
@@ -141,6 +155,10 @@ Before presenting code:
   deferred.
 - Dataset ids, bands, QA masks, date range, AOI, scale, and visualization params
   are explicit.
+- Data-layer semantics include source provenance, units, scale/offset, QA/mask,
+  transformations, and verification status when they affect the result.
+- Boundary/compute choices include AOI source, exact vs bbox geometry, tiling
+  safety, and task count when relevant.
 - `getInfo()` calls are small and justified.
 - Server-side functions do not contain Python-native control flow over
   server-side objects.

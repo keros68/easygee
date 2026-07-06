@@ -1,7 +1,7 @@
 {
   "name": "easygee",
   "version": "0.1.0",
-  "description": "Google Earth Engine and geemap workflow bundle with skills, commands, hooks, and a local MCP server.",
+  "description": "Google Earth Engine and geemap workflow bundle with EasyGEE, GeoMaster, and GEE Growth Diary skills, commands, hooks, and a local MCP server.",
   "author": {
     "name": "Liang"
   },
