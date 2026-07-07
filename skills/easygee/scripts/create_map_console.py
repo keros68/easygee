@@ -2411,6 +2411,114 @@ def shell_css() -> str:
     }
     .basemap-panel.open { transform: translateX(0); }
     .basemap-body { padding: 10px; display: grid; gap: 8px; min-height: 0; overflow-y: auto; }
+    .upload-panel {
+      position: fixed;
+      left: 52px;
+      top: 88px;
+      z-index: 1680;
+      width: min(430px, calc(100vw - 66px));
+      overflow: hidden;
+      background: rgba(255,255,255,0.97);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      transform: translateX(calc(-100% - 64px));
+      transition: transform 150ms ease;
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 104px);
+    }
+    .upload-panel.open { transform: translateX(0); }
+    .upload-panel .panel-head { min-height: 46px; background: rgba(255,255,255,0.98); }
+    .upload-title { font-size: 16px; font-weight: 720; color: #172033; letter-spacing: 0; }
+    .upload-body { padding: 14px 16px 16px; display: grid; gap: 12px; min-height: 0; overflow-y: auto; }
+    .upload-field-label { color: #172033; font-size: 13px; font-weight: 720; }
+    .upload-note { margin: -7px 0 0; color: #61708a; font-size: 12px; line-height: 1.35; }
+    .upload-select {
+      width: 100%;
+      height: 38px;
+      border: 2px solid #243b5a;
+      border-radius: 0;
+      background: #fff;
+      color: #243047;
+      padding: 0 12px;
+      font-size: 14px;
+    }
+    .upload-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+    .upload-file-button {
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+      border: 1px solid #8792a3;
+      background: #f7f8fb;
+      color: #172033;
+      font-size: 13px;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .upload-file-name {
+      height: 34px;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      border: 1px dashed #9aa9bf;
+      color: #172033;
+      padding: 0 10px;
+      font-size: 13px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      background: #fff;
+    }
+    .upload-submit {
+      height: 34px;
+      border: 1px solid #243b5a;
+      background: #243b5a;
+      color: #fff;
+      border-radius: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 720;
+      cursor: pointer;
+    }
+    .upload-submit svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .upload-submit[disabled] { opacity: 0.5; cursor: default; }
+    .upload-formats { color: #61708a; font-size: 12px; line-height: 1.3; }
+    .upload-status { min-height: 18px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+    .upload-status.error { color: #a32929; }
+    .upload-list { display: grid; gap: 7px; }
+    .upload-item {
+      border: 1px solid #e0e8e4;
+      border-radius: 7px;
+      background: rgba(247,250,248,0.82);
+      padding: 8px;
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .upload-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+    .upload-item-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 760; color: var(--text); }
+    .upload-item-tag { flex: 0 0 auto; border-radius: 4px; padding: 2px 5px; font-size: 10px; font-weight: 760; color: #243b5a; background: #e9eef6; }
+    .upload-item-actions { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; }
+    .upload-remove {
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      color: #a32929;
+      background: rgba(255,255,255,0.88);
+      border: 1px solid #e3cbc8;
+      box-shadow: none;
+    }
+    .upload-remove svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .upload-remove:hover { background: #fff5f3; border-color: #d9a5a0; color: #8f1d1d; }
+    .upload-item-meta { color: var(--muted); font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
     .basemap-choice {
       border: 1px solid #e0e8e4;
       border-radius: 8px;
@@ -2618,6 +2726,7 @@ def shell_css() -> str:
     .type-dot.raster { background: #2f7d55; }
     .type-dot.derived { background: #7a58a8; }
     .type-dot.categorical { background: #2f6fa3; }
+    .type-dot.vector { background: #b45309; }
     .layer-dataset { margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
     .layer-actions { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; }
     .layer-action { width: 26px; height: 26px; border-radius: 7px; background: #fff; border-color: var(--line); }
@@ -2867,6 +2976,9 @@ def shell_css() -> str:
       .data-panel.detail-open .catalog-main { padding-right: 0; }
       .dataset-detail-popover { left: 8px; right: 8px; top: 52px; bottom: 8px; width: auto; min-width: 0; }
       .basemap-panel { left: 48px; top: 64px; width: min(292px, calc(100vw - 58px)); max-height: calc(100vh - 76px); }
+      .upload-panel { left: 48px; top: 64px; width: min(322px, calc(100vw - 58px)); max-height: calc(100vh - 76px); }
+      .upload-row { grid-template-columns: 1fr; }
+      .upload-submit { justify-content: center; }
       .bottom { top: 46px; left: 48px; right: 6px; bottom: 8px; width: auto; max-height: none; overflow: hidden; transform: translateX(calc(100% + 12px)); }
       .mode-chip { left: 48px; max-width: calc(100% - 56px); }
       .simple-scale { left: 48px; }
@@ -3141,12 +3253,14 @@ def svg_icon(name: str) -> str:
         "basemap": '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1.8"/><path d="M7 19c2.4-3.4 3.4-6.2 3.1-12"/><path d="M18 7c-3.9 1.1-6.7 3.2-9.2 6.2"/><path d="M13.4 19c.3-3 1.7-5.5 4.1-7.3"/><path d="M7 13h10"/></svg>',
         "quota": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M12 14l4-5"/><path d="M5 18h14"/><path d="M8 18v2M16 18v2"/></svg>',
         "drive": '<svg class="drive-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4f8f70" d="M8.4 3.1c.3-.5.8-.8 1.4-.8h4.7l6.3 10.9h-5.7L8.4 3.1Z"/><path fill="#5d86b6" d="M20.8 13.2 17.6 19c-.3.5-.8.8-1.4.8H4.8l3.3-6.6h12.7Z"/><path fill="#c2a44f" d="M20.8 13.2h-5.7L8.4 3.1l1.4-.8h4.7l6.3 10.9Z" fill-opacity=".88"/><path fill="#3e7f66" d="M8.4 3.1 2.2 13.8c-.3.5-.3 1.1 0 1.6l2.6 4.4 6.6-11.5-3-5.2Z"/><path fill="#fff" fill-opacity=".9" d="M11.4 8.3 15 13.2H8.1l3.3-4.9Z"/></svg>',
+        "upload": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16h2.2a3.8 3.8 0 0 0 .6-7.6A6.2 6.2 0 0 0 6.7 7.1 4.4 4.4 0 0 0 7.4 16H9"/><path d="M12 20V10"/><path d="m8.5 13.5 3.5-3.5 3.5 3.5"/></svg>',
         "tasks": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12"/><path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"/></svg>',
         "home": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
         "zoom-in": '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 7v6M7 10h6M15 15l5 5"/></svg>',
         "zoom-out": '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M7 10h6M15 15l5 5"/></svg>',
         "language": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h9M8.5 5v2M11.5 5c-.8 4.7-3.5 7.3-7 8.8"/><path d="M5.5 9.5c1.2 2 3.1 3.5 5.5 4.4"/><path d="M14 20l4-9 4 9M15.2 17h5.6"/></svg>',
         "style": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.5a1.8 1.8 0 0 0 .7-3.4 1.8 1.8 0 0 1 .7-3.4H16a5 5 0 0 0 0-10H12Z"/><circle cx="7.5" cy="10" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="14" cy="7.5" r="1"/><circle cx="8.5" cy="14" r="1"/></svg>',
+        "refresh": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.4 6.4"/><path d="M3 12A9 9 0 0 1 18.4 5.6"/><path d="M21 5v6h-6"/><path d="M3 19v-6h6"/></svg>',
         "trash": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg>',
         "close": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
     }
@@ -3186,6 +3300,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
 
     <nav class="tool-rail" aria-label="Map tools">
       <button class="icon-btn" id="data-btn" title="Add layers" aria-label="Add layers" data-i18n-title="tool.data">{svg_icon("data")}</button>
+      <button class="icon-btn" id="upload-btn" title="Import file" aria-label="Import file" data-i18n-title="tool.upload">{svg_icon("upload")}</button>
       <button class="icon-btn" id="layers-btn" title="Layers" aria-label="Layers" data-i18n-title="tool.layers">{svg_icon("layers")}</button>
       <button class="icon-btn" id="inspector-btn" title="Inspector" aria-label="Inspector" data-i18n-title="tool.inspector">{svg_icon("inspect")}</button>
       <button class="icon-btn" id="draw-aoi-btn" title="Draw AOI" aria-label="Draw AOI" data-i18n-title="tool.drawAoi">{svg_icon("draw-aoi")}</button>
@@ -3200,6 +3315,32 @@ def render_html(state: dict, leaflet_src: str) -> str:
       <button class="icon-btn wide-only" id="copy-btn" title="Copy project state" aria-label="Copy project state" data-i18n-title="action.copyTitle">C</button>
       <button class="icon-btn wide-only" id="download-btn" title="Download project JSON" aria-label="Download project JSON" data-i18n-title="action.jsonTitle">D</button>
     </nav>
+
+    <aside class="upload-panel" aria-label="Import file">
+      <div class="panel-head">
+        <div class="upload-title" data-i18n="upload.title">Import File</div>
+        <button class="icon-btn panel-close" id="upload-close-btn" title="Close" aria-label="Close" data-i18n-title="tool.close">{svg_icon("close")}</button>
+      </div>
+      <div class="upload-body">
+        <div class="upload-field-label" data-i18n="upload.sourceProjection">Source Projection</div>
+        <p class="upload-note" data-i18n="upload.projectionHelp">For .shp files only. ZIP and GPKG auto-detect their projection.</p>
+        <select class="upload-select" id="upload-projection" aria-label="Source Projection">
+          <option value="EPSG:4326">WGS 84 (EPSG:4326)</option>
+          <option value="EPSG:3857">Web Mercator (EPSG:3857)</option>
+          <option value="EPSG:4490">CGCS2000 (EPSG:4490)</option>
+          <option value="EPSG:32650">WGS 84 / UTM zone 50N (EPSG:32650)</option>
+        </select>
+        <div class="upload-row">
+          <label class="upload-file-button" for="upload-file-input" data-i18n="upload.chooseFile">Choose File</label>
+          <div class="upload-file-name" id="upload-file-name" data-i18n="upload.noFile">No file selected</div>
+          <button class="upload-submit" id="upload-submit-btn" type="button" disabled>{svg_icon("upload")}<span data-i18n="upload.submit">Upload</span></button>
+        </div>
+        <input id="upload-file-input" type="file" multiple accept=".shp,.shx,.dbf,.prj,.cpg,.zip,.kml,.kmz,.gpx,.geojson,.json,.csv,.gpkg" hidden>
+        <div class="upload-formats" data-i18n="upload.formats">SHP, ZIP, KML, KMZ, GPX, GeoJSON, CSV, GPKG · Max 50 MB each</div>
+        <div class="upload-status" id="upload-status" aria-live="polite"></div>
+        <div class="upload-list" id="upload-list"></div>
+      </div>
+    </aside>
 
     <aside class="panel left data-panel">
       <div class="panel-head">
@@ -3316,11 +3457,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
     STATE.layers = Array.isArray(STATE.layers) ? STATE.layers : [];
     STATE.catalog = Array.isArray(STATE.catalog) ? STATE.catalog : [];
     STATE.tasks = Array.isArray(STATE.tasks) ? STATE.tasks : [];
+    STATE.uploads = Array.isArray(STATE.uploads) ? STATE.uploads : [];
     const logLines = [];
     const layerRegistry = new Map();
+    const layerRefreshTokens = new Map();
     const I18N = {{
       zh: {{
         "tool.data": "添加图层",
+        "tool.upload": "上传地图数据",
         "tool.layers": "图层",
         "tool.inspector": "查看器",
         "tool.drawAoi": "绘制 AOI",
@@ -3336,7 +3480,26 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "tool.zoomOut": "缩小",
         "tool.lang": "切换语言",
         "tool.close": "关闭",
+        "upload.title": "导入文件",
+        "upload.sourceProjection": "源投影",
+        "upload.projectionHelp": "仅用于 .shp 文件。ZIP 和 GPKG 会自动识别投影。",
+        "upload.chooseFile": "选择文件",
+        "upload.noFile": "未选择任何文件",
+        "upload.submit": "上传",
+        "upload.formats": "SHP, ZIP, KML, KMZ, GPX, GeoJSON, CSV, GPKG · 单个文件最大 50 MB",
+        "upload.ready": "已选择 :count 个文件",
+        "upload.saving": "正在保存上传文件",
+        "upload.saved": "已上传 :count 个文件，并加入图层",
+        "upload.savedPartial": "已上传 :total 个文件，其中 :added 个已加入图层",
+        "upload.failed": "上传失败：:message",
+        "upload.tooLarge": ":name 超过 50 MB",
+        "upload.empty": "上传记录会显示在这里，并同步给 agent。",
+        "upload.agentReady": "agent 可处理",
+        "upload.layerAdded": "已加入图层",
+        "upload.notRenderable": "未加入图层：缺少可渲染几何",
+        "upload.remove": "移除上传记录",
         "tool.styleLayer": "设置图层样式",
+        "tool.refreshLayer": "刷新图层",
         "tool.removeLayer": "移除图层",
         "tool.clearAoi": "清除 AOI",
         "panel.data": "添加图层",
@@ -3370,8 +3533,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "key.dataset": "数据集",
         "key.type": "类型",
         "key.recipe": "配方",
-        "key.opacity": "透明度",
-        "label.opacity": "透明度",
+        "key.opacity": "不透明度",
+        "label.opacity": "不透明度",
         "label.color": "颜色",
         "label.palette": "色带",
         "layers.empty": "还没有图层。点“添加图层”搜索 GEE 数据集。",
@@ -3527,6 +3690,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "basemap.imagery": "影像",
         "basemap.imageryNote": "卫星底图",
         "log.loaded": "EasyGEE 地图控制台已加载",
+        "log.uploadSaved": "上传文件已保存：:file",
         "log.datasetSelected": "已选择数据集 :dataset",
         "log.datasetAdded": "已加入数据集：:dataset",
         "log.datasetBuilding": "正在生成数据集图层：:dataset",
@@ -3538,6 +3702,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.layerOn": "已显示图层：:layer",
         "log.layerOff": "已隐藏图层：:layer",
         "log.layerRemoved": "已移除图层：:layer",
+        "log.layerRefreshed": "已刷新图层：:layer",
         "log.layerStyled": "已更新图层样式：:layer",
         "log.layerStyleFailed": "图层样式更新失败：:layer",
         "log.home": "已回到研究区",
@@ -3569,6 +3734,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }},
       en: {{
         "tool.data": "Add layers",
+        "tool.upload": "Import file",
         "tool.layers": "Layers",
         "tool.inspector": "Inspector",
         "tool.drawAoi": "Draw AOI",
@@ -3584,7 +3750,26 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "tool.zoomOut": "Zoom out",
         "tool.lang": "Switch language",
         "tool.close": "Close",
+        "upload.title": "Import File",
+        "upload.sourceProjection": "Source Projection",
+        "upload.projectionHelp": "For .shp files only. ZIP and GPKG auto-detect their projection.",
+        "upload.chooseFile": "Choose File",
+        "upload.noFile": "No file selected",
+        "upload.submit": "Upload",
+        "upload.formats": "SHP, ZIP, KML, KMZ, GPX, GeoJSON, CSV, GPKG · Max 50 MB each",
+        "upload.ready": ":count file(s) selected",
+        "upload.saving": "Saving uploaded file(s)",
+        "upload.saved": "Uploaded :count file(s) and added them to layers",
+        "upload.savedPartial": "Uploaded :total file(s); :added added to layers",
+        "upload.failed": "Upload failed: :message",
+        "upload.tooLarge": ":name exceeds 50 MB",
+        "upload.empty": "Upload records appear here and sync to agents.",
+        "upload.agentReady": "agent-readable",
+        "upload.layerAdded": "Added to layers",
+        "upload.notRenderable": "Not added to layers: no renderable geometry",
+        "upload.remove": "Remove upload record",
         "tool.styleLayer": "Style layer",
+        "tool.refreshLayer": "Refresh layer",
         "tool.removeLayer": "Remove layer",
         "tool.clearAoi": "Clear AOI",
         "panel.data": "Add Layers",
@@ -3775,6 +3960,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "basemap.imagery": "Imagery",
         "basemap.imageryNote": "Satellite view",
         "log.loaded": "EasyGEE Map Console loaded",
+        "log.uploadSaved": "Upload saved: :file",
         "log.datasetSelected": "Selected dataset :dataset",
         "log.datasetAdded": "Added dataset: :dataset",
         "log.datasetBuilding": "Generating dataset layer: :dataset",
@@ -3786,6 +3972,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.layerOn": "Layer on: :layer",
         "log.layerOff": "Layer off: :layer",
         "log.layerRemoved": "Removed layer: :layer",
+        "log.layerRefreshed": "Refreshed layer: :layer",
         "log.layerStyled": "Updated layer style: :layer",
         "log.layerStyleFailed": "Layer style update failed: :layer",
         "log.home": "Zoomed to AOI",
@@ -3837,6 +4024,15 @@ def render_html(state: dict, leaflet_src: str) -> str:
     const AOI_STORAGE_KEYS = [...new Set([`easygee-aoi:${{PROJECT_STORAGE_ID}}`, `easygee-aoi:${{LEGACY_PROJECT_STORAGE_ID}}`])];
     const MEASUREMENTS_STORAGE_KEYS = [...new Set([`easygee-measurements:${{PROJECT_STORAGE_ID}}`, `easygee-measurements:${{LEGACY_PROJECT_STORAGE_ID}}`])];
     const TASKS_STORAGE_KEYS = [...new Set([`easygee-tasks:${{PROJECT_STORAGE_ID}}`, `easygee-tasks:${{LEGACY_PROJECT_STORAGE_ID}}`])];
+    const UPLOADS_STORAGE_KEYS = [...new Set([`easygee-uploads:${{PROJECT_STORAGE_ID}}`, `easygee-uploads:${{LEGACY_PROJECT_STORAGE_ID}}`])];
+    const UPLOAD_CAPABILITIES = {{
+      endpoint: '/api/uploads',
+      maxBytes: 50 * 1024 * 1024,
+      acceptedExtensions: ['.shp', '.shx', '.dbf', '.prj', '.cpg', '.zip', '.kml', '.kmz', '.gpx', '.geojson', '.json', '.csv', '.gpkg'],
+      formats: ['SHP', 'ZIP', 'KML', 'KMZ', 'GPX', 'GeoJSON', 'CSV', 'GPKG'],
+      agentVisible: true,
+      stateKey: 'uploads',
+    }};
     const AGENT_PROTOCOL_VERSION = 2;
     const SESSION_SYNC_INTERVAL_MS = 1200;
     const SESSION_ACTION_POLL_MS = 900;
@@ -4106,6 +4302,507 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const options = stylePresetOptions(layer);
       return options.find(item => item.id === presetId) || options[0];
     }}
+    function isLocalVectorLayer(meta) {{
+      if (!meta || typeof meta !== 'object') return false;
+      if (meta.recipe?.kind === 'localVectorOverlay') return true;
+      const candidates = [
+        meta.previewUrl,
+        meta.sourceUrl,
+        meta.recipe?.previewUrl,
+        meta.recipe?.sourceUrl,
+        meta.recipe?.url,
+        meta.recipe?.path,
+        meta.summary?.geojson,
+        meta.summary?.path,
+      ];
+      return candidates.some(value => typeof value === 'string' && value.trim());
+    }}
+    function isUploadPlaceholderLayer(meta) {{
+      return meta?.recipe?.kind === 'localUploadPlaceholder' || meta?.type === 'local-upload';
+    }}
+    function appendCacheBust(url, token) {{
+      if (!url || !token) return url;
+      const separator = String(url).includes('?') ? '&' : '?';
+      return `${{url}}${{separator}}_easygeeRefresh=${{encodeURIComponent(token)}}`;
+    }}
+    function localVectorSourceUrl(meta) {{
+      const raw = [
+        meta?.previewUrl,
+        meta?.sourceUrl,
+        meta?.recipe?.previewUrl,
+        meta?.recipe?.sourceUrl,
+        meta?.recipe?.url,
+        meta?.recipe?.path,
+        meta?.summary?.geojson,
+        meta?.summary?.path,
+      ].find(value => typeof value === 'string' && value.trim());
+      if (!raw) return '';
+      const text = String(raw).trim();
+      const refreshToken = layerRefreshTokens.get(meta?.id);
+      const withRefresh = url => appendCacheBust(url, refreshToken);
+      if (/^https?:\/\//i.test(text) || text.startsWith('/')) return withRefresh(text);
+      const cleaned = text.replace(/\\\\/g, '/');
+      const file = cleaned.split('/').filter(Boolean).pop();
+      return file ? withRefresh(`./${{encodeURIComponent(file)}}`) : '';
+    }}
+    function localVectorBaseStyle(meta, feature) {{
+      const properties = feature?.properties || {{}};
+      const confidence = Number(properties.confidence);
+      const opacity = Number.isFinite(Number(meta?.opacity)) ? Number(meta.opacity) : 0.95;
+      const datasetText = `${{meta?.dataset || ''}} ${{meta?.name || ''}} ${{properties.object_class || ''}} ${{properties.road_type || ''}}`.toLowerCase();
+      const geometryType = String(feature?.geometry?.type || '').toLowerCase();
+      const isLine = geometryType.includes('line');
+      const isPoint = geometryType.includes('point');
+      const isRoad = datasetText.includes('road');
+      const isCar = datasetText.includes('car') || datasetText.includes('vehicle');
+      if (isRoad) {{
+        const stroke = confidence >= 0.9 ? '#f59e0b' : confidence >= 0.75 ? '#22c55e' : '#38bdf8';
+        return {{
+          color: stroke,
+          weight: confidence >= 0.9 ? 4 : confidence >= 0.75 ? 3.2 : 2.6,
+          opacity,
+          fill: false,
+          dashArray: confidence >= 0.75 ? null : '6 6',
+        }};
+      }}
+      if (isCar) {{
+        const stroke = confidence >= 0.85 ? '#f97316' : confidence >= 0.7 ? '#06b6d4' : '#d946ef';
+        return {{
+          color: stroke,
+          weight: 1.4,
+          opacity,
+          fill: true,
+          fillColor: stroke,
+          fillOpacity: Math.max(0.12, Math.min(0.55, opacity * 0.32)),
+        }};
+      }}
+      if (isLine) {{
+        return {{
+          color: '#16734d',
+          weight: 2.8,
+          opacity,
+          fill: false,
+        }};
+      }}
+      return {{
+        color: '#16734d',
+        weight: 2.4,
+        opacity,
+        fill: !isLine,
+        fillColor: '#16734d',
+        fillOpacity: isPoint ? Math.max(0.18, Math.min(0.55, opacity * 0.28)) : Math.max(0.1, Math.min(0.45, opacity * 0.2)),
+      }};
+    }}
+    function localVectorTooltip(feature) {{
+      const properties = feature?.properties || {{}};
+      const parts = [
+        properties.name,
+        properties.id,
+        properties.object_class,
+        properties.road_type,
+        properties.status_hint,
+      ].filter(Boolean);
+      const confidence = Number(properties.confidence);
+      if (Number.isFinite(confidence)) parts.push(`confidence ${{confidence.toFixed(2)}}`);
+      return parts.join(' | ');
+    }}
+    function refreshLocalVectorLayer(record) {{
+      const overlay = record?.tile?.__vectorOverlay;
+      if (!overlay) return;
+      overlay.eachLayer(layer => {{
+        if (typeof layer.setStyle === 'function') {{
+          layer.setStyle(localVectorBaseStyle(record.meta, layer.feature));
+        }}
+      }});
+    }}
+    function createLocalVectorLayer(meta) {{
+      const group = L.layerGroup();
+      const sourceUrl = localVectorSourceUrl(meta);
+      if (!sourceUrl) return {{ layer: group, refresh: () => {{}} }};
+      const refresh = () => refreshLocalVectorLayer({{ meta, tile: group }});
+      fetch(sourceUrl)
+        .then(response => {{
+          if (!response.ok) throw new Error(`HTTP ${{response.status}}`);
+          return response.json();
+        }})
+        .then(data => {{
+          const overlay = L.geoJSON(data, {{
+            style: feature => localVectorBaseStyle(meta, feature),
+            pointToLayer: (feature, latlng) => L.circleMarker(latlng, {{
+              ...localVectorBaseStyle(meta, feature),
+              radius: 6,
+            }}),
+            onEachFeature: (feature, layer) => {{
+              const tooltip = localVectorTooltip(feature);
+              if (tooltip && typeof layer.bindTooltip === 'function') layer.bindTooltip(tooltip, {{ sticky: true }});
+            }},
+          }});
+          group.__vectorOverlay = overlay;
+          group.addLayer(overlay);
+          refresh();
+        }})
+        .catch(error => {{
+          console.warn('EasyGEE local vector layer load failed:', meta?.name || meta?.id || 'layer', error);
+        }});
+      return {{ layer: group, refresh }};
+    }}
+    function normalizeStateLayer(meta) {{
+      if (!meta || typeof meta !== 'object') return null;
+      if (isUploadPlaceholderLayer(meta) && meta.summary?.renderable === false) return null;
+      const next = {{
+        ...meta,
+        shown: meta.shown !== false,
+        opacity: Number.isFinite(Number(meta.opacity)) ? Number(meta.opacity) : 0.82,
+      }};
+      next.styleProfile = next.styleProfile || layerStyleProfile(next);
+      if (!next.stylePreset && visualPreferences[next.styleProfile]) next.stylePreset = visualPreferences[next.styleProfile];
+      return next;
+    }}
+    function replaceStateLayers(layers) {{
+      Array.from(layerRegistry.values()).forEach(record => {{
+        if (record?.tile && map.hasLayer(record.tile)) map.removeLayer(record.tile);
+      }});
+      layerRegistry.clear();
+      STATE.layers = (Array.isArray(layers) ? layers : []).map(normalizeStateLayer).filter(Boolean);
+      STATE.layers.forEach(registerLayer);
+      if (activeLayerId && !layerModels().some(layer => layer?.id === activeLayerId)) {{
+        activeLayerId = null;
+      }}
+    }}
+    function uploadExtension(name = '') {{
+      const text = String(name || '').toLowerCase();
+      const dot = text.lastIndexOf('.');
+      return dot >= 0 ? text.slice(dot) : '';
+    }}
+    function uploadFormatForName(name = '') {{
+      const ext = uploadExtension(name);
+      if (ext === '.geojson' || ext === '.json') return 'GeoJSON';
+      if (ext === '.zip') return 'ZIP/Shapefile';
+      if (['.shp', '.shx', '.dbf', '.prj', '.cpg'].includes(ext)) return 'Shapefile';
+      if (ext === '.kml' || ext === '.kmz') return ext.slice(1).toUpperCase();
+      if (ext === '.gpx') return 'GPX';
+      if (ext === '.csv') return 'CSV';
+      if (ext === '.gpkg') return 'GPKG';
+      return 'Unknown';
+    }}
+    function uploadProcessingHints(record) {{
+      const format = String(record?.format || uploadFormatForName(record?.name)).toLowerCase();
+      if (record?.renderable || record?.previewUrl) {{
+        return {{
+          browserPreview: true,
+          agentAction: 'loaded as a local preview layer; optional QA or convert to EE FeatureCollection',
+          expectedGeometry: 'browser-renderable GeoJSON preview',
+        }};
+      }}
+      if (format.includes('geojson')) {{
+        return {{
+          browserPreview: true,
+          agentAction: 'optional QA or convert GeoJSON to EE FeatureCollection',
+          expectedGeometry: 'GeoJSON FeatureCollection or Geometry',
+        }};
+      }}
+      if (format.includes('csv')) {{
+        return {{
+          browserPreview: false,
+          agentAction: 'inspect columns, detect lon/lat or WKT, then convert to GeoJSON/EE table',
+          expectedGeometry: 'point table or WKT geometry columns',
+        }};
+      }}
+      if (format.includes('shapefile') || format.includes('zip')) {{
+        return {{
+          browserPreview: false,
+          agentAction: 'read saved shapefile bundle with geopandas/ogr, apply projection if missing, then add vector layer',
+          expectedGeometry: 'vector features',
+        }};
+      }}
+      if (format.includes('gpkg')) {{
+        return {{
+          browserPreview: false,
+          agentAction: 'inspect GeoPackage layers with geopandas/ogr and choose a layer to add',
+          expectedGeometry: 'vector or raster package layer',
+        }};
+      }}
+      if (format.includes('kml') || format.includes('kmz') || format.includes('gpx')) {{
+        return {{
+          browserPreview: false,
+          agentAction: 'convert GPS/KML features to GeoJSON before map overlay',
+          expectedGeometry: 'vector tracks, points, or polygons',
+        }};
+      }}
+      return {{
+        browserPreview: false,
+        agentAction: 'inspect saved file and choose a geospatial conversion path',
+        expectedGeometry: 'unknown',
+      }};
+    }}
+    function normalizeUploadRecord(record) {{
+      if (!record || typeof record !== 'object') return null;
+      const name = String(record.name || record.storedName || 'upload');
+      const format = record.format || uploadFormatForName(name);
+      const extension = record.extension || uploadExtension(name);
+      const shapefileSidecarOnly = ['.dbf', '.shx', '.prj', '.cpg'].includes(String(extension).toLowerCase());
+      const renderable = record.renderable === true || Boolean(record.previewUrl) || String(format || '').toLowerCase().includes('geojson');
+      const next = {{
+        id: String(record.id || `upload-${{Date.now()}}-${{Math.random().toString(16).slice(2, 8)}}`),
+        name,
+        storedName: record.storedName || name,
+        extension,
+        format,
+        size: Number(record.size || 0),
+        projection: record.projection || $('upload-projection')?.value || 'EPSG:4326',
+        savedPath: record.savedPath || null,
+        url: record.url || null,
+        componentPaths: record.componentPaths || null,
+        previewPath: record.previewPath || null,
+        previewUrl: record.previewUrl || null,
+        previewFormat: record.previewFormat || null,
+        previewFeatureCount: Number.isFinite(Number(record.previewFeatureCount)) ? Number(record.previewFeatureCount) : null,
+        previewLimited: record.previewLimited === true,
+        previewError: record.previewError || null,
+        renderable,
+        agentReadable: record.agentReadable !== false,
+        status: record.status || 'saved',
+        createdAt: record.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        layerId: renderable ? (record.layerId || null) : null,
+      }};
+      if (shapefileSidecarOnly && !next.renderable) {{
+        next.status = 'missing-shapefile-components';
+        next.previewError = next.previewError || 'Shapefile upload is incomplete. Select the .shp geometry file together with .shx and .dbf, or upload a ZIP containing all components.';
+      }}
+      next.processingHints = record.processingHints || uploadProcessingHints(next);
+      next.recommendedAgentAction = record.recommendedAgentAction || next.processingHints.agentAction;
+      return next;
+    }}
+    function persistUploads() {{
+      localStorage.setItem(UPLOADS_STORAGE_KEYS[0], JSON.stringify((STATE.uploads || []).slice(0, 50)));
+    }}
+    function restoreUploads() {{
+      for (const key of UPLOADS_STORAGE_KEYS) {{
+        try {{
+          const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+          const uploads = Array.isArray(parsed) ? parsed.map(normalizeUploadRecord).filter(Boolean) : [];
+          if (uploads.length) return uploads;
+        }} catch {{}}
+      }}
+      return [];
+    }}
+    function formatBytes(value) {{
+      const size = Number(value || 0);
+      if (!Number.isFinite(size) || size <= 0) return '0 B';
+      if (size >= 1024 * 1024) return `${{(size / 1024 / 1024).toFixed(1)}} MB`;
+      if (size >= 1024) return `${{(size / 1024).toFixed(1)}} KB`;
+      return `${{Math.round(size)}} B`;
+    }}
+    function renderUploads() {{
+      const fileInput = $('upload-file-input');
+      const fileCount = fileInput?.files?.length || 0;
+      const nameTarget = $('upload-file-name');
+      if (nameTarget) {{
+        if (!fileCount) nameTarget.textContent = t('upload.noFile');
+        else if (fileCount === 1) nameTarget.textContent = fileInput.files[0].name;
+        else nameTarget.textContent = t('upload.ready', {{ count: fileCount }});
+      }}
+      const submit = $('upload-submit-btn');
+      if (submit) submit.disabled = fileCount <= 0;
+      const list = $('upload-list');
+      if (!list) return;
+      const uploads = (Array.isArray(STATE.uploads) ? STATE.uploads : []).map(normalizeUploadRecord).filter(Boolean);
+      if (!uploads.length) {{
+        list.innerHTML = `<div class="upload-status">${{escapeHtml(t('upload.empty'))}}</div>`;
+        return;
+      }}
+      list.innerHTML = uploads.slice(0, 8).map(record => `
+        <div class="upload-item" data-upload="${{escapeHtml(record.id)}}">
+          <div class="upload-item-top">
+            <div class="upload-item-name">${{escapeHtml(record.name)}}</div>
+            <div class="upload-item-actions">
+              <span class="upload-item-tag">${{escapeHtml(record.format)}}</span>
+              <button class="upload-remove icon-btn" data-upload-remove="${{escapeHtml(record.id)}}" title="${{escapeHtml(t('upload.remove'))}}" aria-label="${{escapeHtml(t('upload.remove'))}}" type="button">{svg_icon("trash")}</button>
+            </div>
+          </div>
+          <div class="upload-item-meta">${{escapeHtml(formatBytes(record.size))}} · ${{escapeHtml(record.projection || '-')}} · ${{escapeHtml(t('upload.agentReady'))}}</div>
+          <div class="upload-item-meta">${{escapeHtml(record.savedPath || record.url || record.status || '')}}</div>
+          ${{record.layerId ? `<div class="upload-item-meta">${{escapeHtml(t('upload.layerAdded'))}}</div>` : ''}}
+          ${{!record.layerId && !record.renderable ? `<div class="upload-item-meta">${{escapeHtml(record.previewError || t('upload.notRenderable'))}}</div>` : ''}}
+        </div>
+      `).join('');
+      list.querySelectorAll('[data-upload-remove]').forEach(button => {{
+        button.addEventListener('click', event => {{
+          event.stopPropagation();
+          removeUpload(button.dataset.uploadRemove);
+        }});
+      }});
+    }}
+    function uploadedLayerId(record) {{
+      return `upload-${{record.id.replace(/[^a-z0-9_-]+/gi, '-')}}-vector`;
+    }}
+    function addUploadedLayer(record) {{
+      if (!record) return null;
+      const layerId = uploadedLayerId(record);
+      const sourceUrl = record.previewUrl || (String(record.format || '').toLowerCase().includes('geojson') ? record.url : null);
+      const baseName = record.name.replace(/\.(geojson|json|csv|kml|kmz|gpx|shp|zip|gpkg)$/i, '');
+      if (!sourceUrl) {{
+        const placeholder = {{
+          id: layerId,
+          name: baseName,
+          dataset: `local-upload:${{record.name}}`,
+          type: 'local-upload',
+          shown: true,
+          opacity: 1,
+          styleProfile: 'vector',
+          stylePreset: 'default',
+          legend: [['#64748b', 'Uploaded file']],
+          recipe: {{
+            kind: 'localUploadPlaceholder',
+            source: 'userUpload',
+            savedPath: record.savedPath,
+            componentPaths: record.componentPaths,
+            projection: record.projection,
+            format: record.format,
+            status: record.status,
+            previewError: record.previewError,
+            recommendedAgentAction: record.recommendedAgentAction,
+          }},
+          summary: {{
+            format: record.format,
+            size: record.size,
+            uploadedAt: record.createdAt,
+            savedPath: record.savedPath,
+            componentPaths: record.componentPaths,
+            previewError: record.previewError,
+            renderable: false,
+          }},
+        }};
+        addGeneratedLayer(placeholder);
+        return layerId;
+      }}
+      const layer = {{
+        id: layerId,
+        name: baseName,
+        dataset: `local-upload:${{record.name}}`,
+        type: 'local-vector',
+        shown: true,
+        opacity: 0.92,
+        sourceUrl,
+        previewUrl: sourceUrl,
+        styleProfile: 'vector',
+        stylePreset: 'default',
+        legend: [['#16734d', 'Uploaded features']],
+        recipe: {{
+          kind: 'localVectorOverlay',
+          source: 'userUpload',
+          sourceUrl,
+          previewUrl: sourceUrl,
+          savedPath: record.savedPath,
+          previewPath: record.previewPath,
+          componentPaths: record.componentPaths,
+          projection: record.projection,
+          format: record.format,
+          previewFeatureCount: record.previewFeatureCount,
+        }},
+        summary: {{
+          format: record.format,
+          size: record.size,
+          uploadedAt: record.createdAt,
+          savedPath: record.savedPath,
+          previewPath: record.previewPath,
+          previewFeatureCount: record.previewFeatureCount,
+          previewLimited: record.previewLimited,
+          renderable: true,
+        }},
+      }};
+      addGeneratedLayer(layer);
+      return layerId;
+    }}
+    function rememberUploads(records) {{
+      const existing = new Map((STATE.uploads || []).map(item => [item.id, item]));
+      records.map(normalizeUploadRecord).filter(Boolean).forEach(record => existing.set(record.id, record));
+      STATE.uploads = Array.from(existing.values()).slice(-50).reverse();
+      persistUploads();
+      renderUploads();
+    }}
+    function removeUpload(uploadId) {{
+      const id = String(uploadId || '');
+      if (!id) return false;
+      const uploads = (Array.isArray(STATE.uploads) ? STATE.uploads : []).map(normalizeUploadRecord).filter(Boolean);
+      const record = uploads.find(item => item.id === id);
+      if (!record) return false;
+      STATE.uploads = uploads.filter(item => item.id !== id);
+      persistUploads();
+      if (record.layerId) removeLayer(record.layerId);
+      renderUploads();
+      syncSessionState('upload-removed');
+      return true;
+    }}
+    async function uploadSelectedFiles() {{
+      const input = $('upload-file-input');
+      const files = Array.from(input?.files || []);
+      if (!files.length) return false;
+      const oversized = files.find(file => file.size > UPLOAD_CAPABILITIES.maxBytes);
+      const status = $('upload-status');
+      if (oversized) {{
+        status.textContent = t('upload.tooLarge', {{ name: oversized.name }});
+        status.classList.add('error');
+        return false;
+      }}
+      status.textContent = t('upload.saving');
+      status.classList.remove('error');
+      const form = new FormData();
+      files.forEach(file => form.append('files', file, file.name));
+      form.append('projection', $('upload-projection').value || 'EPSG:4326');
+      try {{
+        const response = await fetch(UPLOAD_CAPABILITIES.endpoint, {{ method: 'POST', body: form }});
+        const payload = await response.json().catch(() => ({{ ok: false, error: response.statusText || 'upload failed' }}));
+        if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP ${{response.status}}`);
+        const savedRecords = (Array.isArray(payload.uploads) ? payload.uploads : []).map(normalizeUploadRecord).filter(Boolean);
+        savedRecords.forEach(record => {{
+          if (record.renderable) {{
+            record.layerId = addUploadedLayer(record);
+            if (record.layerId) record.status = 'layer-added';
+          }} else {{
+            record.layerId = null;
+            if (!record.status || record.status === 'saved') record.status = 'saved-needs-conversion';
+          }}
+          addTask({{
+            type: 'upload',
+            name: `Upload: ${{record.name}}`,
+            status: record.layerId && record.renderable ? 'done' : 'ready',
+            destination: 'EasyGEE local uploads',
+            createdAt: record.createdAt,
+            params: {{
+              format: record.format,
+              projection: record.projection,
+              savedPath: record.savedPath,
+              previewPath: record.previewPath,
+              url: record.url,
+              previewUrl: record.previewUrl,
+              renderable: record.renderable,
+              previewError: record.previewError,
+              recommendedAgentAction: record.recommendedAgentAction,
+            }},
+            notes: [record.previewError, record.recommendedAgentAction].filter(Boolean),
+          }}, {{ reason: 'upload-task' }});
+          logMsg('log.uploadSaved', {{ file: record.name }});
+        }});
+        rememberUploads(savedRecords);
+        input.value = '';
+        const addedCount = savedRecords.filter(record => record.layerId).length;
+        status.textContent = addedCount === savedRecords.length
+          ? t('upload.saved', {{ count: savedRecords.length }})
+          : t('upload.savedPartial', {{ total: savedRecords.length, added: addedCount }});
+        status.classList.toggle('error', addedCount < savedRecords.length);
+        renderUploads();
+        syncSessionState('uploads');
+        return true;
+      }} catch (error) {{
+        const message = error && error.message ? error.message : String(error);
+        status.textContent = t('upload.failed', {{ message }});
+        status.classList.add('error');
+        syncSessionState('upload-failed');
+        return false;
+      }}
+    }}
     function palettePreviewHtml(palette = []) {{
       if (!Array.isArray(palette) || !palette.length) return '';
       return `<div class="palette-preview">${{palette.map(color => `<span style="background:${{escapeHtml(color)}}"></span>`).join('')}}</div>`;
@@ -4370,6 +5067,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const generatedTasks = Array.isArray(STATE.tasks) ? STATE.tasks.map(normalizeTask).filter(Boolean) : [];
       const restoredTasks = loadPersistedTasks();
       STATE.tasks = restoredTasks.length ? restoredTasks : generatedTasks;
+      const generatedUploads = Array.isArray(STATE.uploads) ? STATE.uploads.map(normalizeUploadRecord).filter(Boolean) : [];
+      const restoredUploads = restoreUploads();
+      STATE.uploads = restoredUploads.length ? restoredUploads : generatedUploads;
       if (restoredAoi) logMsg('log.aoiRestored');
     }}
     function profileProjectEntry(profile) {{
@@ -4440,6 +5140,33 @@ def render_html(state: dict, leaflet_src: str) -> str:
             changed = true;
           }}
         }}
+        if (Array.isArray(entry.uploads)) {{
+          const profileUploads = entry.uploads.map(normalizeUploadRecord).filter(Boolean);
+          if (profileUploads.length && JSON.stringify(profileUploads) !== JSON.stringify(STATE.uploads || [])) {{
+            STATE.uploads = profileUploads;
+            persistUploads();
+            changed = true;
+          }}
+        }}
+        if (Array.isArray(entry.layers)) {{
+          const describeLayers = layers => JSON.stringify((layers || []).map(layer => ({{
+            id: layer.id,
+            name: layer.name,
+            dataset: layer.dataset,
+            type: layer.type,
+            shown: layer.shown !== false,
+            opacity: layer.opacity,
+            styleProfile: layer.styleProfile || null,
+            stylePreset: layer.stylePreset || null,
+            recipe: layer.recipe || null,
+            summary: layer.summary || null,
+          }})));
+          const restoredLayers = entry.layers.map(normalizeStateLayer).filter(Boolean);
+          if (describeLayers(restoredLayers) !== describeLayers(STATE.layers || [])) {{
+            replaceStateLayers(restoredLayers);
+            changed = true;
+          }}
+        }}
       }}
       return changed;
     }}
@@ -4454,6 +5181,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
           renderLayers();
           renderMeasurements();
           renderTasks();
+          renderUploads();
           renderDatasets(filteredCatalog());
           resetHomeView();
           syncSessionState('profile-restored');
@@ -4501,6 +5229,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
     function syncToolState() {{
       setToolActive('data-btn', document.querySelector('.data-panel').classList.contains('open'));
+      setToolActive('upload-btn', document.querySelector('.upload-panel').classList.contains('open'));
       setToolActive('layers-btn', document.querySelector('.layers-panel').classList.contains('open'));
       setToolActive('inspector-btn', document.querySelector('.right').classList.contains('open'));
       setToolActive('draw-aoi-btn', drawAoiMode || drawPolygonMode);
@@ -4528,6 +5257,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       renderCatalogFacets();
       renderQuota();
       renderTasks();
+      renderUploads();
       renderBasemapChoices();
       updateInspector();
       if (currentModeKey && $('mode-chip').classList.contains('show')) {{
@@ -4537,6 +5267,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function layerKind(layer) {{
       if (layer.type === 'aoi') return {{ label: 'A', className: 'aoi' }};
       if (layer.type === 'measurements') return {{ label: 'M', className: 'measurements' }};
+      if (String(layer.type || '').includes('vector')) return {{ label: 'V', className: 'vector' }};
       if (layer.type.includes('categorical')) return {{ label: 'C', className: 'categorical' }};
       if (layer.type.includes('derived')) return {{ label: 'D', className: 'derived' }};
       return {{ label: 'R', className: 'raster' }};
@@ -5347,14 +6078,26 @@ def render_html(state: dict, leaflet_src: str) -> str:
     let aoiLayer = null;
 
     function registerLayer(meta) {{
-      const tile = L.tileLayer(meta.tileUrl, {{ opacity: meta.opacity, attribution: 'Google Earth Engine' }});
-      layerRegistry.set(meta.id, {{ meta, tile }});
-      if (meta.shown) tile.addTo(map);
+      const normalized = normalizeStateLayer(meta);
+      if (!normalized) return null;
+      if (isUploadPlaceholderLayer(normalized)) {{
+        const group = L.layerGroup();
+        layerRegistry.set(normalized.id, {{ meta: normalized, tile: group, refresh: () => {{}} }});
+        if (normalized.shown) group.addTo(map);
+        return group;
+      }}
+      if (isLocalVectorLayer(normalized)) {{
+        const vector = createLocalVectorLayer(normalized);
+        layerRegistry.set(normalized.id, {{ meta: normalized, tile: vector.layer, refresh: vector.refresh }});
+        if (normalized.shown) vector.layer.addTo(map);
+        return vector.layer;
+      }}
+      const tile = L.tileLayer(normalized.tileUrl, {{ opacity: normalized.opacity, attribution: 'Google Earth Engine' }});
+      layerRegistry.set(normalized.id, {{ meta: normalized, tile }});
+      if (normalized.shown) tile.addTo(map);
       return tile;
     }}
     STATE.layers.forEach(meta => {{
-      meta.styleProfile = meta.styleProfile || layerStyleProfile(meta);
-      meta.stylePreset = meta.stylePreset || visualPreferences[meta.styleProfile] || 'default';
       registerLayer(meta);
     }});
 
@@ -5365,17 +6108,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
         if (existing && map.hasLayer(existing.tile)) map.removeLayer(existing.tile);
         STATE.layers.splice(existingIndex, 1);
       }}
-      meta.shown = true;
-      meta.opacity = Number.isFinite(Number(meta.opacity)) ? Number(meta.opacity) : 0.82;
-      meta.styleProfile = meta.styleProfile || layerStyleProfile(meta);
-      if (!meta.stylePreset && visualPreferences[meta.styleProfile]) meta.stylePreset = visualPreferences[meta.styleProfile];
-      STATE.layers.unshift(meta);
-      const tile = registerLayer(meta);
+      const nextMeta = normalizeStateLayer({{ ...meta, shown: true }});
+      STATE.layers.unshift(nextMeta);
+      const tile = registerLayer(nextMeta);
       if (!map.hasLayer(tile)) tile.addTo(map);
       $('layer-count').textContent = t('pill.layers', {{ count: layerCount() }});
       renderLayers();
       renderDatasets(filteredCatalog());
-      setActiveLayer(meta.id);
+      setActiveLayer(nextMeta.id);
       syncSessionState('layer-added');
     }}
 
@@ -5704,6 +6444,51 @@ def render_html(state: dict, leaflet_src: str) -> str:
       return true;
     }}
 
+    function refreshLayer(id, options = {{}}) {{
+      if (!id) return false;
+      if (id === AOI_LAYER_ID) {{
+        if (!hasAoi()) return false;
+        const layer = aoiLayerModel();
+        renderAoiLayer();
+        renderLayers();
+        if (activeLayerId === AOI_LAYER_ID) updateInspector();
+        logMsg('log.layerRefreshed', {{ layer: layer?.name || 'AOI' }});
+        syncSessionState(options.reason || 'aoi-refreshed');
+        return true;
+      }}
+      if (id === MEASUREMENTS_LAYER_ID) {{
+        if (!hasMeasurements()) return false;
+        const layer = measurementsLayerModel();
+        renderMeasurements();
+        renderLayers();
+        if (activeLayerId === MEASUREMENTS_LAYER_ID) updateInspector();
+        logMsg('log.layerRefreshed', {{ layer: layer?.name || 'Measurements' }});
+        syncSessionState(options.reason || 'measurements-refreshed');
+        return true;
+      }}
+      const index = STATE.layers.findIndex(layer => layer.id === id);
+      if (index < 0) return false;
+      const meta = STATE.layers[index];
+      const previousRecord = layerRegistry.get(id);
+      const shouldShow = previousRecord ? map.hasLayer(previousRecord.tile) : meta.shown !== false;
+      if (previousRecord && map.hasLayer(previousRecord.tile)) map.removeLayer(previousRecord.tile);
+      layerRegistry.delete(id);
+      const token = Date.now();
+      layerRefreshTokens.set(id, token);
+      meta.shown = shouldShow;
+      const refreshMeta = meta.tileUrl
+        ? {{ ...meta, tileUrl: appendCacheBust(meta.tileUrl, token), shown: shouldShow }}
+        : {{ ...meta, shown: shouldShow }};
+      const tile = registerLayer(refreshMeta);
+      if (shouldShow && tile && !map.hasLayer(tile)) tile.addTo(map);
+      renderLayers();
+      if (activeLayerId === id) setActiveLayer(id, {{ reveal: false }});
+      else updateInspector();
+      logMsg('log.layerRefreshed', {{ layer: meta.name }});
+      syncSessionState(options.reason || 'layer-refreshed');
+      return true;
+    }}
+
     function setLayerVisibility(id, shown, options = {{}}) {{
       const nextShown = shown !== false;
       if (id === AOI_LAYER_ID) {{
@@ -5783,7 +6568,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const record = layerRegistry.get(id);
       if (!record) return false;
       record.meta.opacity = opacity;
-      record.tile.setOpacity(opacity);
+      if (typeof record.tile.setOpacity === 'function') {{
+        record.tile.setOpacity(opacity);
+      }} else if (typeof record.refresh === 'function') {{
+        record.refresh();
+      }}
       if (options.render !== false) renderLayers();
       if (activeLayerId === id) updateInspector();
       syncSessionState(options.reason || 'layer-opacity');
@@ -5813,6 +6602,22 @@ def render_html(state: dict, leaflet_src: str) -> str:
       if (!record) return false;
       const preset = stylePresetForLayer(record.meta, presetId);
       const profile = layerStyleProfile(record.meta);
+      if (isLocalVectorLayer(record.meta)) {{
+        record.meta = {{
+          ...record.meta,
+          styleProfile: profile,
+          stylePreset: preset.id,
+          legend: preset.legend || record.meta.legend,
+        }};
+        const stateIndex = STATE.layers.findIndex(layer => layer.id === id);
+        if (stateIndex >= 0) STATE.layers[stateIndex] = record.meta;
+        if (typeof record.refresh === 'function') record.refresh();
+        visualPreferences[profile] = preset.id;
+        renderLayers();
+        updateInspector();
+        syncSessionState('layer-style');
+        return true;
+      }}
       showModeKey('mode.styleBuilding', {{ layer: record.meta.name }}, true);
       try {{
         const response = await fetch('/api/layer', {{
@@ -5893,6 +6698,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
             ? `<div class="layer-style-row"><span>${{escapeHtml(t('measurements.count'))}}</span><span>${{escapeHtml(t('measurements.summary', {{ count: layer.summary.count, total: layer.summary.totalLabel }}))}}</span></div>${{palettePreviewHtml(palette)}}`
           : `<div class="layer-style-row"><span>${{escapeHtml(t('label.palette'))}}</span><select data-action="style-preset">${{presets.map(item => `<option value="${{escapeHtml(item.id)}}" ${{item.id === selectedPreset ? 'selected' : ''}}>${{escapeHtml(item.label)}}</option>`).join('')}}</select></div>${{palettePreviewHtml(palette)}}`;
         const removeTitle = isAoi ? t('tool.clearAoi') : isMeasurements ? t('tool.clearMeasurements') : t('tool.removeLayer');
+        const refreshTitle = t('tool.refreshLayer');
         const styleButton = isMeasurements ? '' : `<button class="layer-action icon-btn" data-action="style-focus" title="${{escapeHtml(t('tool.styleLayer'))}}" aria-label="${{escapeHtml(t('tool.styleLayer'))}}" type="button">{svg_icon("style")}</button>`;
         return `
         <div class="layer-item" data-layer="${{escapeHtml(layer.id)}}">
@@ -5904,6 +6710,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
             </div>
             <div class="layer-actions">
               ${{styleButton}}
+              <button class="layer-action icon-btn" data-action="refresh" title="${{escapeHtml(refreshTitle)}}" aria-label="${{escapeHtml(refreshTitle)}}" type="button">{svg_icon("refresh")}</button>
               <button class="layer-action icon-btn danger" data-action="remove" title="${{escapeHtml(removeTitle)}}" aria-label="${{escapeHtml(removeTitle)}}" type="button">{svg_icon("trash")}</button>
             </div>
           </div>
@@ -5935,6 +6742,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
         item.querySelector('[data-action="remove"]').addEventListener('click', event => {{
           event.stopPropagation();
           removeLayer(id);
+        }});
+        item.querySelector('[data-action="refresh"]').addEventListener('click', event => {{
+          event.stopPropagation();
+          refreshLayer(id);
         }});
         item.querySelector('[data-action="style-focus"]')?.addEventListener('click', event => {{
           event.stopPropagation();
@@ -6053,6 +6864,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function closeFloatingPanels() {{
       quotaFocus = false;
       document.querySelector('.data-panel').classList.remove('open');
+      document.querySelector('.upload-panel').classList.remove('open');
       document.querySelector('.layers-panel').classList.remove('open');
       document.querySelector('.right').classList.remove('open');
       document.querySelector('.bottom').classList.remove('open');
@@ -6243,6 +7055,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         {{ selector: '.right', anchor: 'right', minWidth: 260, minHeight: 220, handles: ['w', 's', 'sw'] }},
         {{ selector: '.bottom', anchor: 'right', minWidth: 300, minHeight: 260, handles: ['w', 's', 'sw'] }},
         {{ selector: '.basemap-panel', anchor: 'left', minWidth: 220, minHeight: 132, handles: ['e', 's', 'se'] }},
+        {{ selector: '.upload-panel', anchor: 'left', minWidth: 320, minHeight: 230, handles: ['e', 's', 'se'] }},
       ];
       configs.forEach(config => {{
         const panel = document.querySelector(config.selector);
@@ -6488,6 +7301,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
         selectedDataset: selectedDatasetContext(),
         favoriteDatasets: [...favoriteDatasetIds].sort(),
         visualPreferences: {{ ...visualPreferences }},
+        uploadCapabilities: {{ ...UPLOAD_CAPABILITIES }},
+        uploads: (STATE.uploads || []).map(item => normalizeUploadRecord(item)).filter(Boolean),
         quota: STATE.quota,
         tasks: STATE.tasks.map(item => ({{ ...item }})),
         layers: STATE.layers.map(layer => ({{
@@ -6568,10 +7383,19 @@ def render_html(state: dict, leaflet_src: str) -> str:
         if (action.layerId || action.id) return removeLayer(String(action.layerId || action.id));
         return false;
       }}
+      if (type === 'removeupload' || type === 'remove-upload') {{
+        if (action.uploadId || action.id) return removeUpload(String(action.uploadId || action.id));
+        return false;
+      }}
       if (type === 'selectlayer' || type === 'select-layer') {{
         const layerId = String(action.layerId || action.id || activeLayerId || '');
         if (!layerId) return false;
         return selectLayer(layerId, {{ reveal: action.reveal !== false }});
+      }}
+      if (type === 'refreshlayer' || type === 'refresh-layer' || type === 'reloadlayer' || type === 'reload-layer') {{
+        const layerId = String(action.layerId || action.id || activeLayerId || '');
+        if (!layerId) return false;
+        return refreshLayer(layerId, {{ reason: 'layer-refresh-action' }});
       }}
       if (type === 'showlayer' || type === 'show-layer' || type === 'hidelayer' || type === 'hide-layer' || type === 'setlayervisibility' || type === 'set-layer-visibility') {{
         const layerId = String(action.layerId || action.id || activeLayerId || '');
@@ -6686,6 +7510,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const shouldOpen = !panel.classList.contains('open');
       quotaFocus = false;
       document.querySelector('.data-panel').classList.remove('open');
+      document.querySelector('.upload-panel').classList.remove('open');
       document.querySelector('.layers-panel').classList.remove('open');
       document.querySelector('.right').classList.remove('open');
       document.querySelector('.bottom').classList.remove('open');
@@ -6705,6 +7530,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       if (measureMode) {{
         stopDrawAoiMode(false);
         document.querySelector('.data-panel').classList.remove('open');
+        document.querySelector('.upload-panel').classList.remove('open');
         document.querySelector('.layers-panel').classList.remove('open');
         document.querySelector('.right').classList.remove('open');
         document.querySelector('.bottom').classList.remove('open');
@@ -6759,6 +7585,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     $('download-btn').addEventListener('click', downloadProjectState);
     function togglePanel(which) {{
       const data = document.querySelector('.data-panel');
+      const upload = document.querySelector('.upload-panel');
       const layers = document.querySelector('.layers-panel');
       const right = document.querySelector('.right');
       const bottom = document.querySelector('.bottom');
@@ -6767,17 +7594,27 @@ def render_html(state: dict, leaflet_src: str) -> str:
       basemap.classList.remove('open');
       if (which === 'data') {{
         data.classList.toggle('open');
+        upload.classList.remove('open');
         layers.classList.remove('open');
         right.classList.remove('open');
         bottom.classList.remove('open');
+      }} else if (which === 'upload') {{
+        upload.classList.toggle('open');
+        data.classList.remove('open');
+        layers.classList.remove('open');
+        right.classList.remove('open');
+        bottom.classList.remove('open');
+        renderUploads();
       }} else if (which === 'layers') {{
         layers.classList.toggle('open');
         data.classList.remove('open');
+        upload.classList.remove('open');
         right.classList.remove('open');
         bottom.classList.remove('open');
       }} else if (which === 'right') {{
         right.classList.toggle('open');
         data.classList.remove('open');
+        upload.classList.remove('open');
         layers.classList.remove('open');
         bottom.classList.remove('open');
       }}
@@ -6794,6 +7631,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }}
       quotaFocus = true;
       document.querySelector('.data-panel').classList.remove('open');
+      document.querySelector('.upload-panel').classList.remove('open');
       document.querySelector('.layers-panel').classList.remove('open');
       document.querySelector('.right').classList.remove('open');
       document.querySelector('.basemap-panel').classList.remove('open');
@@ -6803,6 +7641,17 @@ def render_html(state: dict, leaflet_src: str) -> str:
       logMsg('log.quotaOpened');
     }}
     $('data-btn').addEventListener('click', () => togglePanel('data'));
+    $('upload-btn').addEventListener('click', () => togglePanel('upload'));
+    $('upload-close-btn').addEventListener('click', () => {{
+      document.querySelector('.upload-panel').classList.remove('open');
+      syncToolState();
+    }});
+    $('upload-file-input').addEventListener('change', () => {{
+      $('upload-status').textContent = '';
+      $('upload-status').classList.remove('error');
+      renderUploads();
+    }});
+    $('upload-submit-btn').addEventListener('click', uploadSelectedFiles);
     $('layers-btn').addEventListener('click', () => togglePanel('layers'));
     $('inspector-btn').addEventListener('click', () => togglePanel('right'));
     $('quota-btn').addEventListener('click', showQuotaStatus);
@@ -6831,6 +7680,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }}
       quotaFocus = false;
       document.querySelector('.data-panel').classList.remove('open');
+      document.querySelector('.upload-panel').classList.remove('open');
       document.querySelector('.layers-panel').classList.remove('open');
       document.querySelector('.right').classList.remove('open');
       document.querySelector('.bottom').classList.remove('open');
@@ -6875,6 +7725,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
       clearMeasurements: () => clearMeasurements(),
       getTasks: () => STATE.tasks.map(item => ({{ ...item }})),
       addTask: task => addTask(task),
+      getUploads: () => (STATE.uploads || []).map(item => normalizeUploadRecord(item)).filter(Boolean),
+      getUploadCapabilities: () => ({{ ...UPLOAD_CAPABILITIES }}),
+      openUploadPanel: () => togglePanel('upload'),
+      removeUpload: id => removeUpload(id),
       getDriveUrl: () => driveTargetUrl(),
       openDrive: () => openDriveTarget(),
       getSelectedDataset: () => selectedDatasetContext(),
@@ -6885,6 +7739,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       hideLayer: id => setLayerVisibility(String(id || activeLayerId || ''), false),
       setLayerVisibility: (id, shown) => setLayerVisibility(String(id || activeLayerId || ''), shown !== false),
       setLayerOpacity: (id, opacity) => setLayerOpacity(String(id || activeLayerId || ''), opacity),
+      refreshLayer: id => refreshLayer(String(id || activeLayerId || '')),
       selectLayer: id => selectLayer(String(id || activeLayerId || '')),
       syncState: reason => syncSessionState(reason || 'manual'),
       pollActions: () => pollSessionActions(),

@@ -6,6 +6,7 @@
   "actionsEndpoint": "/api/session/actions",
   "capabilitiesEndpoint": "/api/session/capabilities",
   "layerEndpoint": "/api/layer",
+  "uploadEndpoint": "/api/uploads",
   "analysisEndpoints": {
     "ndvi": "/api/analysis/ndvi"
   },
@@ -42,6 +43,8 @@
     "measurementSummary",
     "selectedDataset",
     "layers",
+    "uploadCapabilities",
+    "uploads",
     "tasks",
     "quota",
     "visualPreferences",
@@ -100,6 +103,7 @@
     "visualPreferences",
     "projects",
     "projects.<project>.tasks",
+    "projects.<project>.uploads",
     "language",
     "updatedAt"
   ],
@@ -121,6 +125,14 @@
     "notes",
     "warnings"
   ],
+  "uploads": {
+    "endpoint": "/api/uploads",
+    "formats": ["SHP", "ZIP", "KML", "KMZ", "GPX", "GeoJSON", "CSV", "GPKG"],
+    "maxBytes": 52428800,
+    "stateField": "uploads",
+    "fields": ["id", "name", "storedName", "extension", "format", "size", "projection", "savedPath", "url", "componentPaths", "previewPath", "previewUrl", "previewFormat", "previewFeatureCount", "previewLimited", "previewError", "renderable", "agentReadable", "status", "createdAt", "updatedAt", "processingHints", "recommendedAgentAction", "layerId"],
+    "behavior": "The browser uploads user-selected files to the local preview server under uploads/. Renderable uploads expose previewUrl/previewPath as GeoJSON and are added to the layer stack immediately. Non-renderable uploads, such as a standalone .dbf without .shp geometry, remain in state.uploads with savedPath/componentPaths and previewError, but are not added to the layer stack. Upload records can be removed from the workbench list; if a record has layerId, the corresponding map layer is removed too."
+  },
   "aoi": {
     "defaultType": "rectangle",
     "types": ["rectangle", "polygon"],
@@ -133,7 +145,7 @@
     "layerBehavior": "When measurements exist, the Map Console exposes them as a system layer in the layer stack. hide/show preserves saved measurements; remove clears them."
   },
   "actions": {
-    "supported": ["addLayer", "removeLayer", "showLayer", "hideLayer", "selectLayer", "setLayerVisibility", "setLayerOpacity", "selectDataset", "setAoi", "clearAoi", "setAoiStyle", "updateLayerStyle", "clearMeasurements", "extractNdvi", "addTask", "exportNdviDrive"],
+    "supported": ["addLayer", "removeLayer", "showLayer", "hideLayer", "selectLayer", "refreshLayer", "setLayerVisibility", "setLayerOpacity", "removeUpload", "selectDataset", "setAoi", "clearAoi", "setAoiStyle", "updateLayerStyle", "clearMeasurements", "extractNdvi", "addTask", "exportNdviDrive"],
     "resultSync": "Actions are executed by the browser console and reflected in the next session state sync."
   },
   "compactState": {
@@ -159,7 +171,9 @@
     "Selected dataset context is exposed as selectedDataset; agents should use it to resolve deictic requests such as this MODIS dataset.",
     "ImageCollection analyses should use explicit recipe objects instead of relying on the default preview reducer.",
     "Layer recipe metadata must be preserved when restyling a layer so visualization changes do not alter the analytical calculation.",
-    "Agents should use showLayer, hideLayer, selectLayer, and setLayerOpacity for existing layer state changes instead of browser DOM interaction.",
+    "Agents should use showLayer, hideLayer, selectLayer, refreshLayer, and setLayerOpacity for existing layer state changes instead of browser DOM interaction.",
+    "Agents should call refreshLayer before treating a visible map layer as failed or missing, because the browser can recreate the Leaflet layer and bypass stale tile/vector requests.",
+    "Agents should discover uploaded local files through state.uploads and state.uploadCapabilities, then process savedPath with local GIS tools instead of scraping file-picker DOM state.",
     "For common NDVI map requests, agents should try quick-layer first and fall back to render-recipe or dataset search only when no fast path matches.",
     "Persistent profile state is the durable source for dataset favorites, AOI, and measurements across localhost ports.",
     "AOI is represented as a system layer in the layer stack and can be styled, hidden, or cleared through the same layer workflow.",

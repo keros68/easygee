@@ -9,6 +9,7 @@ open OAuth, or read credential files.
 from __future__ import annotations
 
 import argparse
+import csv
 import functools
 import html
 import json
@@ -19,9 +20,12 @@ import tempfile
 import threading
 import time
 import urllib.parse
+import uuid
+import zipfile
 from dataclasses import asdict, dataclass
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from xml.etree import ElementTree
 
 
 @dataclass(frozen=True)
@@ -220,6 +224,437 @@ def json_clone(value: object) -> object:
     return json.loads(json.dumps(value, ensure_ascii=False))
 
 
+UPLOAD_MAX_BYTES = 50 * 1024 * 1024
+UPLOAD_ALLOWED_EXTENSIONS = {
+    ".shp",
+    ".shx",
+    ".dbf",
+    ".prj",
+    ".cpg",
+    ".zip",
+    ".kml",
+    ".kmz",
+    ".gpx",
+    ".geojson",
+    ".json",
+    ".csv",
+    ".gpkg",
+}
+UPLOAD_SHAPEFILE_EXTENSIONS = {".shp", ".shx", ".dbf", ".prj", ".cpg"}
+UPLOAD_SHAPEFILE_SIDECAR_EXTENSIONS = UPLOAD_SHAPEFILE_EXTENSIONS - {".shp"}
+UPLOAD_PREVIEW_MAX_FEATURES = 10000
+
+
+def upload_format_for_extension(extension: str) -> str:
+    ext = extension.lower()
+    if ext in {".geojson", ".json"}:
+        return "GeoJSON"
+    if ext == ".zip":
+        return "ZIP/Shapefile bundle"
+    if ext in {".shp", ".shx", ".dbf", ".prj"}:
+        return "Shapefile component"
+    if ext in {".kml", ".kmz"}:
+        return ext[1:].upper()
+    if ext == ".gpx":
+        return "GPX"
+    if ext == ".csv":
+        return "CSV"
+    if ext == ".gpkg":
+        return "GeoPackage"
+    return "Unknown"
+
+
+def sanitize_upload_name(filename: str) -> str:
+    base = Path(str(filename).replace("\\", "/")).name.strip()
+    if not base:
+        base = "upload.dat"
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._")
+    return safe or "upload.dat"
+
+
+def upload_url_for(path: Path) -> str:
+    return f"/uploads/{urllib.parse.quote(path.name)}"
+
+
+def geojson_feature_collection(features: list[dict[str, object]]) -> dict[str, object]:
+    return {"type": "FeatureCollection", "features": features[:UPLOAD_PREVIEW_MAX_FEATURES]}
+
+
+def write_geojson_preview(target: Path, features: list[dict[str, object]]) -> dict[str, object]:
+    collection = geojson_feature_collection(features)
+    target.write_text(json.dumps(collection, ensure_ascii=False), encoding="utf-8")
+    return {
+        "previewPath": str(target),
+        "previewUrl": upload_url_for(target),
+        "previewFormat": "GeoJSON",
+        "previewFeatureCount": len(collection["features"]),
+        "previewLimited": len(features) > UPLOAD_PREVIEW_MAX_FEATURES,
+        "renderable": True,
+        "status": "layer-ready",
+    }
+
+
+def csv_lon_lat_columns(fieldnames: list[str]) -> tuple[str, str] | tuple[None, None]:
+    lower = {name.strip().lower(): name for name in fieldnames}
+    lon_candidates = ("lon", "lng", "longitude", "x", "long")
+    lat_candidates = ("lat", "latitude", "y")
+    lon = next((lower[name] for name in lon_candidates if name in lower), None)
+    lat = next((lower[name] for name in lat_candidates if name in lower), None)
+    return lon, lat
+
+
+def convert_csv_to_geojson(source: Path, target: Path) -> dict[str, object]:
+    features: list[dict[str, object]] = []
+    with source.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        lon_field, lat_field = csv_lon_lat_columns(reader.fieldnames or [])
+        if not lon_field or not lat_field:
+            raise ValueError("CSV preview needs lon/lng/longitude/x and lat/latitude/y columns")
+        for row in reader:
+            try:
+                lon = float(str(row.get(lon_field, "")).strip())
+                lat = float(str(row.get(lat_field, "")).strip())
+            except ValueError:
+                continue
+            props = {key: value for key, value in row.items() if key not in {lon_field, lat_field}}
+            features.append(
+                {
+                    "type": "Feature",
+                    "properties": props,
+                    "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                }
+            )
+    if not features:
+        raise ValueError("CSV preview found no valid lon/lat rows")
+    return write_geojson_preview(target, features)
+
+
+def parse_kml_coordinates(text: str) -> list[list[float]]:
+    coords: list[list[float]] = []
+    for chunk in re.split(r"\s+", (text or "").strip()):
+        if not chunk:
+            continue
+        parts = chunk.split(",")
+        if len(parts) < 2:
+            continue
+        try:
+            coords.append([float(parts[0]), float(parts[1])])
+        except ValueError:
+            continue
+    return coords
+
+
+def find_xml_element(node: ElementTree.Element, *queries: tuple[str, dict[str, str] | None]) -> ElementTree.Element | None:
+    for query, namespace in queries:
+        found = node.find(query, namespace or {})
+        if found is not None:
+            return found
+    return None
+
+
+def kml_features_from_bytes(data: bytes) -> list[dict[str, object]]:
+    root = ElementTree.fromstring(data)
+    ns = {"kml": "http://www.opengis.net/kml/2.2"}
+    placemarks = root.findall(".//kml:Placemark", ns) or root.findall(".//Placemark")
+    features: list[dict[str, object]] = []
+    for index, placemark in enumerate(placemarks, start=1):
+        name_node = find_xml_element(placemark, ("kml:name", ns), ("name", None))
+        props = {"name": name_node.text.strip()} if name_node is not None and name_node.text else {"id": index}
+        point = find_xml_element(placemark, (".//kml:Point/kml:coordinates", ns), (".//Point/coordinates", None))
+        line = find_xml_element(placemark, (".//kml:LineString/kml:coordinates", ns), (".//LineString/coordinates", None))
+        polygon = find_xml_element(
+            placemark,
+            (".//kml:Polygon//kml:outerBoundaryIs//kml:coordinates", ns),
+            (".//Polygon//outerBoundaryIs//coordinates", None),
+        )
+        geometry: dict[str, object] | None = None
+        if point is not None and point.text:
+            coords = parse_kml_coordinates(point.text)
+            if coords:
+                geometry = {"type": "Point", "coordinates": coords[0]}
+        elif line is not None and line.text:
+            coords = parse_kml_coordinates(line.text)
+            if len(coords) >= 2:
+                geometry = {"type": "LineString", "coordinates": coords}
+        elif polygon is not None and polygon.text:
+            coords = parse_kml_coordinates(polygon.text)
+            if len(coords) >= 4:
+                geometry = {"type": "Polygon", "coordinates": [coords]}
+        if geometry:
+            features.append({"type": "Feature", "properties": props, "geometry": geometry})
+    return features
+
+
+def convert_kml_to_geojson(source: Path, target: Path) -> dict[str, object]:
+    features = kml_features_from_bytes(source.read_bytes())
+    if not features:
+        raise ValueError("KML preview found no Point, LineString, or Polygon placemarks")
+    return write_geojson_preview(target, features)
+
+
+def convert_kmz_to_geojson(source: Path, target: Path) -> dict[str, object]:
+    with zipfile.ZipFile(source) as archive:
+        names = [name for name in archive.namelist() if name.lower().endswith(".kml")]
+        if not names:
+            raise ValueError("KMZ preview found no KML file")
+        features = kml_features_from_bytes(archive.read(names[0]))
+    if not features:
+        raise ValueError("KMZ preview found no Point, LineString, or Polygon placemarks")
+    return write_geojson_preview(target, features)
+
+
+def gpx_features_from_bytes(data: bytes) -> list[dict[str, object]]:
+    root = ElementTree.fromstring(data)
+    ns = {"gpx": root.tag.split("}")[0].strip("{")} if root.tag.startswith("{") else {}
+    prefix = "gpx:" if ns else ""
+    features: list[dict[str, object]] = []
+    for index, point in enumerate(root.findall(f".//{prefix}wpt", ns), start=1):
+        try:
+            lon = float(point.attrib["lon"])
+            lat = float(point.attrib["lat"])
+        except (KeyError, ValueError):
+            continue
+        name_node = point.find(f"{prefix}name", ns)
+        props = {"name": name_node.text.strip()} if name_node is not None and name_node.text else {"id": index}
+        features.append({"type": "Feature", "properties": props, "geometry": {"type": "Point", "coordinates": [lon, lat]}})
+    for index, track in enumerate(root.findall(f".//{prefix}trk", ns), start=1):
+        coords: list[list[float]] = []
+        for point in track.findall(f".//{prefix}trkpt", ns):
+            try:
+                coords.append([float(point.attrib["lon"]), float(point.attrib["lat"])])
+            except (KeyError, ValueError):
+                continue
+        if len(coords) >= 2:
+            name_node = track.find(f"{prefix}name", ns)
+            props = {"name": name_node.text.strip()} if name_node is not None and name_node.text else {"track": index}
+            features.append({"type": "Feature", "properties": props, "geometry": {"type": "LineString", "coordinates": coords}})
+    for index, route in enumerate(root.findall(f".//{prefix}rte", ns), start=1):
+        coords = []
+        for point in route.findall(f".//{prefix}rtept", ns):
+            try:
+                coords.append([float(point.attrib["lon"]), float(point.attrib["lat"])])
+            except (KeyError, ValueError):
+                continue
+        if len(coords) >= 2:
+            name_node = route.find(f"{prefix}name", ns)
+            props = {"name": name_node.text.strip()} if name_node is not None and name_node.text else {"route": index}
+            features.append({"type": "Feature", "properties": props, "geometry": {"type": "LineString", "coordinates": coords}})
+    return features
+
+
+def convert_gpx_to_geojson(source: Path, target: Path) -> dict[str, object]:
+    features = gpx_features_from_bytes(source.read_bytes())
+    if not features:
+        raise ValueError("GPX preview found no waypoints, tracks, or routes")
+    return write_geojson_preview(target, features)
+
+
+def convert_with_geopandas(source: Path, target: Path, projection: str, extension: str) -> dict[str, object]:
+    try:
+        import geopandas as gpd
+    except Exception as exc:  # pragma: no cover - optional dependency
+        raise ValueError(f"GeoPandas is unavailable: {exc}") from exc
+    path_value = f"zip://{source.as_posix()}" if extension == ".zip" else str(source)
+    gdf = gpd.read_file(path_value)
+    if gdf.empty:
+        raise ValueError("No features found")
+    if gdf.crs is None and projection:
+        gdf = gdf.set_crs(projection, allow_override=True)
+    if gdf.crs is not None:
+        gdf = gdf.to_crs("EPSG:4326")
+    if len(gdf) > UPLOAD_PREVIEW_MAX_FEATURES:
+        gdf = gdf.head(UPLOAD_PREVIEW_MAX_FEATURES)
+        limited = True
+    else:
+        limited = False
+    gdf.to_file(target, driver="GeoJSON")
+    return {
+        "previewPath": str(target),
+        "previewUrl": upload_url_for(target),
+        "previewFormat": "GeoJSON",
+        "previewFeatureCount": int(len(gdf)),
+        "previewLimited": limited,
+        "renderable": True,
+        "status": "layer-ready",
+    }
+
+
+def enrich_upload_preview(record: dict[str, object], upload_dir: Path) -> dict[str, object]:
+    extension = str(record.get("extension") or "").lower()
+    source = Path(str(record.get("savedPath") or ""))
+    projection = str(record.get("projection") or "EPSG:4326")
+    preview_target = upload_dir / f"{record['id']}-preview.geojson"
+    try:
+        if extension in {".geojson", ".json"}:
+            record.update(
+                {
+                    "previewPath": str(source),
+                    "previewUrl": record.get("url"),
+                    "previewFormat": "GeoJSON",
+                    "renderable": True,
+                    "status": "layer-ready",
+                }
+            )
+        elif extension == ".csv":
+            record.update(convert_csv_to_geojson(source, preview_target))
+        elif extension == ".kml":
+            record.update(convert_kml_to_geojson(source, preview_target))
+        elif extension == ".kmz":
+            record.update(convert_kmz_to_geojson(source, preview_target))
+        elif extension == ".gpx":
+            record.update(convert_gpx_to_geojson(source, preview_target))
+        elif extension in {".shp", ".zip", ".gpkg"}:
+            record.update(convert_with_geopandas(source, preview_target, projection, extension))
+        else:
+            record["renderable"] = False
+    except Exception as exc:
+        record["renderable"] = False
+        record["previewError"] = str(exc)
+        record["status"] = "saved-needs-conversion"
+    return record
+
+
+def mark_missing_shapefile_components(record: dict[str, object], missing: list[str] | None = None) -> dict[str, object]:
+    required = ", ".join(missing or [".shp"])
+    record["renderable"] = False
+    record["status"] = "missing-shapefile-components"
+    record["previewError"] = (
+        f"Shapefile upload is incomplete. Select the .shp geometry file together with .shx and .dbf "
+        f"(and .prj/.cpg when available), or upload a ZIP containing all components. Missing: {required}."
+    )
+    return record
+
+
+def parse_multipart_upload(body: bytes, content_type: str) -> tuple[list[dict[str, object]], dict[str, str]]:
+    match = re.search(r'boundary=(?:"([^"]+)"|([^;]+))', content_type)
+    if not match:
+        raise ValueError("Missing multipart boundary")
+    boundary = (match.group(1) or match.group(2) or "").encode("utf-8")
+    if not boundary:
+        raise ValueError("Missing multipart boundary")
+    marker = b"--" + boundary
+    files: list[dict[str, object]] = []
+    fields: dict[str, str] = {}
+    for raw_part in body.split(marker):
+        if raw_part.startswith(b"\r\n"):
+            raw_part = raw_part[2:]
+        if not raw_part or raw_part in {b"--", b"--\r\n"}:
+            continue
+        if raw_part.endswith(b"--"):
+            raw_part = raw_part[:-2].rstrip(b"\r\n")
+        elif raw_part.endswith(b"\r\n"):
+            raw_part = raw_part[:-2]
+        if b"\r\n\r\n" not in raw_part:
+            continue
+        header_blob, data = raw_part.split(b"\r\n\r\n", 1)
+        headers = header_blob.decode("utf-8", errors="replace").split("\r\n")
+        disposition = next((line for line in headers if line.lower().startswith("content-disposition:")), "")
+        name_match = re.search(r'name="([^"]+)"', disposition)
+        filename_match = re.search(r'filename="([^"]*)"', disposition)
+        field_name = name_match.group(1) if name_match else ""
+        if filename_match is not None:
+            filename = filename_match.group(1)
+            if filename:
+                files.append({"field": field_name, "filename": filename, "data": data})
+        elif field_name:
+            fields[field_name] = data.decode("utf-8", errors="replace")
+    return files, fields
+
+
+def save_uploaded_files(root: Path, body: bytes, content_type: str) -> dict[str, object]:
+    files, fields = parse_multipart_upload(body, content_type)
+    projection = str(fields.get("projection") or "EPSG:4326").strip() or "EPSG:4326"
+    upload_dir = root / "uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    shapefile_stems = {
+        Path(str(item.get("filename") or "")).stem.lower()
+        for item in files
+        if Path(str(item.get("filename") or "")).suffix.lower() == ".shp"
+    }
+    shapefile_ids = {stem: f"upload-{int(time.time())}-{uuid.uuid4().hex[:10]}" for stem in shapefile_stems}
+    shapefile_components: dict[str, dict[str, str]] = {stem: {} for stem in shapefile_stems}
+    shapefile_originals: dict[str, str] = {}
+    saved: list[dict[str, object]] = []
+    for item in files:
+        original_name = str(item.get("filename") or "")
+        data = item.get("data")
+        if not isinstance(data, bytes):
+            continue
+        if len(data) > UPLOAD_MAX_BYTES:
+            raise ValueError(f"{original_name} exceeds 50 MB")
+        extension = Path(original_name).suffix.lower()
+        if extension not in UPLOAD_ALLOWED_EXTENSIONS:
+            raise ValueError(f"Unsupported upload format: {extension or original_name}")
+        source_path = Path(original_name)
+        source_stem = source_path.stem.lower()
+        grouped_shapefile = extension in UPLOAD_SHAPEFILE_EXTENSIONS and source_stem in shapefile_ids
+        upload_id = shapefile_ids[source_stem] if grouped_shapefile else f"upload-{int(time.time())}-{uuid.uuid4().hex[:10]}"
+        if grouped_shapefile:
+            safe_stem = sanitize_upload_name(source_path.stem)
+            stored_name = f"{upload_id}-{safe_stem}{extension}"
+        else:
+            safe_name = sanitize_upload_name(original_name)
+            stored_name = f"{upload_id}-{safe_name}"
+        target = upload_dir / stored_name
+        target.write_bytes(data)
+        if grouped_shapefile:
+            shapefile_components[source_stem][extension] = str(target)
+            if extension == ".shp":
+                shapefile_originals[source_stem] = original_name
+            continue
+        record = {
+            "id": upload_id,
+            "name": original_name,
+            "storedName": stored_name,
+            "extension": extension,
+            "format": upload_format_for_extension(extension),
+            "size": len(data),
+            "projection": projection,
+            "savedPath": str(target),
+            "url": upload_url_for(target),
+            "agentReadable": True,
+            "status": "saved",
+            "createdAt": now_iso(),
+        }
+        if extension in UPLOAD_SHAPEFILE_SIDECAR_EXTENSIONS:
+            saved.append(mark_missing_shapefile_components(record, [".shp"]))
+            continue
+        saved.append(enrich_upload_preview(record, upload_dir))
+    for stem, components in shapefile_components.items():
+        shp_path = components.get(".shp")
+        if not shp_path:
+            continue
+        target = Path(shp_path)
+        upload_id = shapefile_ids[stem]
+        record = {
+            "id": upload_id,
+            "name": shapefile_originals.get(stem) or target.name,
+            "storedName": target.name,
+            "extension": ".shp",
+            "format": upload_format_for_extension(".shp"),
+            "size": sum(Path(path).stat().st_size for path in components.values() if Path(path).exists()),
+            "projection": projection,
+            "savedPath": str(target),
+            "url": upload_url_for(target),
+            "componentPaths": components,
+            "agentReadable": True,
+            "status": "saved",
+            "createdAt": now_iso(),
+        }
+        missing = [ext for ext in (".shx", ".dbf") if ext not in components]
+        if missing:
+            saved.append(mark_missing_shapefile_components(record, missing))
+        else:
+            saved.append(enrich_upload_preview(record, upload_dir))
+    return {
+        "ok": True,
+        "uploads": saved,
+        "projection": projection,
+        "acceptedExtensions": sorted(UPLOAD_ALLOWED_EXTENSIONS),
+        "maxBytes": UPLOAD_MAX_BYTES,
+    }
+
+
 def empty_profile() -> dict[str, object]:
     return {
         "version": PROFILE_VERSION,
@@ -329,6 +764,9 @@ def sanitize_recent_layers(value: object) -> list[dict[str, object]]:
         if not isinstance(item, dict):
             continue
         safe = {key: json_clone(item[key]) for key in allowed if key in item}
+        recipe = safe.get("recipe") if isinstance(safe.get("recipe"), dict) else {}
+        if safe.get("type") == "local-upload" or recipe.get("kind") == "localUploadPlaceholder":
+            continue
         if safe:
             layers.append(safe)  # type: ignore[arg-type]
     return layers[:50]
@@ -365,6 +803,56 @@ def sanitize_recent_tasks(value: object) -> list[dict[str, object]]:
         if safe:
             tasks.append(safe)  # type: ignore[arg-type]
     return tasks[:30]
+
+
+def sanitize_recent_uploads(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    allowed = {
+        "id",
+        "name",
+        "storedName",
+        "extension",
+        "format",
+        "size",
+        "projection",
+        "savedPath",
+        "url",
+        "componentPaths",
+        "previewPath",
+        "previewUrl",
+        "previewFormat",
+        "previewFeatureCount",
+        "previewLimited",
+        "previewError",
+        "renderable",
+        "agentReadable",
+        "status",
+        "createdAt",
+        "updatedAt",
+        "processingHints",
+        "recommendedAgentAction",
+        "layerId",
+    }
+    uploads: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        safe = {key: json_clone(item[key]) for key in allowed if key in item}
+        extension = str(safe.get("extension") or "").lower()
+        if extension in UPLOAD_SHAPEFILE_SIDECAR_EXTENSIONS and not safe.get("previewUrl"):
+            safe["layerId"] = None
+            safe["renderable"] = False
+            safe["status"] = "missing-shapefile-components"
+            safe["previewError"] = (
+                "Shapefile upload is incomplete. Select the .shp geometry file together with .shx and .dbf, "
+                "or upload a ZIP containing all components."
+            )
+        elif safe.get("renderable") is False:
+            safe["layerId"] = None
+        if safe:
+            uploads.append(safe)  # type: ignore[arg-type]
+    return uploads[:50]
 
 
 def merge_profile_with_state(state: dict[str, object]) -> dict[str, object]:
@@ -409,12 +897,16 @@ def merge_profile_with_state(state: dict[str, object]) -> dict[str, object]:
             entry["measurementsShown"] = state["measurementsShown"]
         if reason not in CLEAR_MEASUREMENT_REASONS and isinstance(state.get("measurementsOpacity"), (int, float)):
             entry["measurementsOpacity"] = state["measurementsOpacity"]
-        layers = sanitize_recent_layers(state.get("layers"))
-        if layers:
+        layers_value = state.get("layers")
+        layers = sanitize_recent_layers(layers_value)
+        if isinstance(layers_value, list):
             entry["recentLayers"] = layers
         tasks = sanitize_recent_tasks(state.get("tasks"))
         if tasks:
             entry["tasks"] = tasks
+        uploads = sanitize_recent_uploads(state.get("uploads"))
+        if uploads:
+            entry["uploads"] = uploads
 
         profile["updatedAt"] = now_iso()
         write_profile_unlocked(profile)
@@ -470,6 +962,14 @@ class EasyGeeHandler(QuietHandler):
         if not isinstance(payload, dict):
             raise ValueError("Request JSON must be an object")
         return payload
+
+    def read_upload_body(self) -> bytes:
+        length = int(self.headers.get("Content-Length") or "0")
+        if length <= 0:
+            return b""
+        if length > (UPLOAD_MAX_BYTES * 6):
+            raise ValueError("Upload request is too large")
+        return self.rfile.read(length)
 
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
@@ -534,6 +1034,14 @@ class EasyGeeHandler(QuietHandler):
                 if not isinstance(action, dict):
                     raise ValueError("action must be a JSON object")
                 self.send_json(enqueue_session_action(action))
+            except Exception as exc:
+                self.send_json({"ok": False, "error": str(exc)}, status=500)
+            return
+        if parsed.path == "/api/uploads":
+            try:
+                root = Path(str(self.directory)).resolve()
+                payload = save_uploaded_files(root, self.read_upload_body(), self.headers.get("Content-Type") or "")
+                self.send_json(payload)
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, status=500)
             return
