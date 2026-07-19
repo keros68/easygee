@@ -15,7 +15,7 @@ SKILL_ROOT = PLUGIN_ROOT / "skills" / "easygee"
 SCRIPT_ROOT = SKILL_ROOT / "scripts"
 SCRATCH_ROOT = Path("D:/Scratch/easygee-plugin")
 SERVER_NAME = "easygee"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = "0.2.0"
 
 FRAME_MODE: str | None = None
 
@@ -57,15 +57,53 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "easygee_search_catalog",
-        "description": "Search likely Google Earth Engine datasets for a task or dataset query, including expanded official/community catalog candidates.",
+        "description": "Search 5,000+ official/community GEE records by exact id, name, bilingual theme, or task with provenance- and deprecation-aware ranking.",
         "inputSchema": _schema(
             {
                 "query": {"type": "string", "description": "Dataset need, task prompt, or analysis goal."},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 50, "description": "Maximum candidate count."},
-                "workflow": {"type": "boolean", "description": "Include concise workflow hints when supported."},
-                "geemap_ai": {"type": "boolean", "description": "Also try geemap's AI dataset index when installed."},
+                "mode": {"type": "string", "enum": ["auto", "exact", "theme", "task"], "description": "Optional query mode override."},
+                "source": {"type": "string", "enum": ["official", "community", "curated"], "description": "Optional provenance filter."},
+                "provider": {"type": "string", "description": "Optional provider substring filter."},
+                "category": {"type": "string", "description": "Optional category substring filter."},
+                "kind": {"type": "string", "description": "Optional image/image_collection/table type filter."},
+                "max_resolution_m": {"type": "number", "minimum": 0, "description": "Require a known resolution no coarser than this many meters."},
+                "include_deprecated": {"type": "boolean", "description": "Include deprecated products; false by default."},
             },
             ["query"],
+        ),
+    },
+    {
+        "name": "easygee_recommend_datasets",
+        "description": "Recommend a role-based GEE dataset bundle for a bilingual analysis task, such as flood hazard + terrain + rainfall + exposure.",
+        "inputSchema": _schema(
+            {
+                "task": {"type": "string", "description": "Analysis outcome or task in Chinese or English."},
+                "limit_per_role": {"type": "integer", "minimum": 1, "maximum": 5, "description": "Maximum candidates for each task role."},
+            },
+            ["task"],
+        ),
+    },
+    {
+        "name": "easygee_compare_datasets",
+        "description": "Compare provenance, type, provider, category, resolution, dates, license, and deprecation metadata for GEE dataset ids.",
+        "inputSchema": _schema(
+            {
+                "ids": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 12, "description": "Dataset ids to compare."},
+            },
+            ["ids"],
+        ),
+    },
+    {
+        "name": "easygee_verify_dataset",
+        "description": "Verify a dataset id in the merged catalog and optionally probe the live Earth Engine API without starting OAuth.",
+        "inputSchema": _schema(
+            {
+                "id": {"type": "string", "description": "Earth Engine dataset or asset id."},
+                "live": {"type": "boolean", "description": "Also call ee.data.getAsset using existing credentials."},
+                "project": {"type": "string", "description": "Optional Earth Engine project for the live check."},
+            },
+            ["id"],
         ),
     },
     {
@@ -215,12 +253,33 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return _format_run(name, _run_script("ee_auth_workflow.py", args))
 
     if name == "easygee_search_catalog":
-        args = [str(arguments["query"]), "--json", "--limit", str(int(arguments.get("limit") or 8))]
-        if arguments.get("workflow"):
-            args.append("--workflow")
-        if arguments.get("geemap_ai"):
-            args.append("--geemap-ai")
-        return _format_run(name, _run_script("search_gee_dataset.py", args))
+        args = ["search", str(arguments["query"]), "--limit", str(int(arguments.get("limit") or 8))]
+        if arguments.get("mode"):
+            args += ["--mode", str(arguments["mode"])]
+        for key, flag in (("source", "--source"), ("provider", "--provider"), ("category", "--category"), ("kind", "--kind"), ("max_resolution_m", "--max-resolution-m")):
+            if arguments.get(key) is not None:
+                args += [flag, str(arguments[key])]
+        if arguments.get("include_deprecated"):
+            args.append("--include-deprecated")
+        return _format_run(name, _run_script("dataset_catalog_engine.py", args, timeout=180))
+
+    if name == "easygee_recommend_datasets":
+        args = ["recommend", str(arguments["task"]), "--limit-per-role", str(int(arguments.get("limit_per_role") or 2))]
+        return _format_run(name, _run_script("dataset_catalog_engine.py", args, timeout=180))
+
+    if name == "easygee_compare_datasets":
+        ids = arguments.get("ids") or []
+        if not isinstance(ids, list) or len(ids) < 2:
+            raise ValueError("ids must contain at least two dataset ids")
+        return _format_run(name, _run_script("dataset_catalog_engine.py", ["compare", *[str(value) for value in ids]], timeout=180))
+
+    if name == "easygee_verify_dataset":
+        args = ["verify", str(arguments["id"])]
+        if arguments.get("live"):
+            args.append("--live")
+        if arguments.get("project"):
+            args += ["--project", str(arguments["project"])]
+        return _format_run(name, _run_script("dataset_catalog_engine.py", args, timeout=180))
 
     if name == "easygee_quota_summary":
         args = ["--json"]

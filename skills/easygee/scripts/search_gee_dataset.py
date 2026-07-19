@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """Find likely Earth Engine datasets for a geospatial task.
 
-This script is intentionally offline-first: it uses a curated, source-linked
-catalog of common GEE datasets and can optionally call geemap's AI dataset
-index when that package is installed. Treat results as candidates; verify the
-chosen dataset in the official Earth Engine Data Catalog before final coding.
+This compatibility command combines a curated workflow layer with EasyGEE's
+provenance-aware official/community catalog engine. It can optionally call
+geemap's AI dataset index when that package is installed. Treat results as
+candidates; verify the chosen dataset before final coding.
 """
 
 from __future__ import annotations
@@ -365,10 +365,10 @@ DATASETS = [
         read=("references/task-patterns.md", "references/gee-agent-playbook.md"),
     ),
     Dataset(
-        id="COPERNICUS/DEM/GLO30",
-        title="Copernicus DEM GLO-30",
+        id="COPERNICUS/DEM/GLO30_2024_1",
+        title="Copernicus DEM GLO-30 (2024_1)",
         kind="ImageCollection",
-        official_url=CATALOG_BASE + "COPERNICUS_DEM_GLO30",
+        official_url=CATALOG_BASE + "COPERNICUS_DEM_GLO30_2024_1",
         tasks=("terrain", "slope", "hydrology", "orthorectification", "flood-context"),
         keywords=("dem", "elevation", "terrain", "slope", "hillshade", "watershed", "高程", "地形", "坡度", "坡向", "阴影", "流域"),
         scale="30 m",
@@ -409,9 +409,6 @@ def score_dataset(dataset: Dataset, query: str) -> int:
 def find_datasets(query: str, limit: int) -> list[tuple[int, Dataset]]:
     ranked = sorted(((score_dataset(dataset, query), dataset) for dataset in DATASETS), key=lambda item: (-item[0], item[1].id))
     matches = [(score, dataset) for score, dataset in ranked if score > 0]
-    if not matches:
-        fallback = [dataset for dataset in DATASETS if dataset.id in {"COPERNICUS/S2_SR_HARMONIZED", "LANDSAT/LC08/C02/T1_L2 and LANDSAT/LC09/C02/T1_L2", "GOOGLE/DYNAMICWORLD/V1", "JRC/GSW1_4/GlobalSurfaceWater"}]
-        matches = [(0, dataset) for dataset in fallback]
     return matches[: max(1, limit)]
 
 
@@ -432,57 +429,22 @@ def geemap_ai_matches(query: str, limit: int) -> list[dict[str, object]]:
 
 def expanded_catalog_matches(query: str, limit: int) -> list[dict[str, object]]:
     try:
-        from create_map_console import build_catalog
+        from dataset_catalog_engine import load_catalog, search_catalog
     except Exception as exc:
         return [{"error": f"expanded catalog unavailable: {exc}"}]
     try:
-        catalog, source = build_catalog([], include_remote=True, catalog_mode="auto", catalog_fetch_seconds=12)
+        catalog, source = load_catalog(catalog_mode="auto", fetch_seconds=12)
+        payload = search_catalog(catalog, query, limit=limit)
     except Exception as exc:
         return [{"error": f"expanded catalog search failed: {exc}"}]
-    terms = [term.strip().casefold() for term in query.replace("，", " ").replace(",", " ").split() if term.strip()]
-    if not terms:
-        return []
-
-    def haystack(item: dict[str, object]) -> str:
-        return " ".join(
-            str(item.get(key) or "")
-            for key in ("id", "label", "tags", "description", "scale", "provider", "type", "category", "license", "source")
-        ).casefold()
-
-    ranked: list[tuple[int, dict[str, object]]] = []
-    for item in catalog:
-        text = haystack(item)
-        score = 0
-        for term in terms:
-            if not term:
-                continue
-            if term in str(item.get("id") or "").casefold():
-                score += 5
-            if term in str(item.get("label") or "").casefold():
-                score += 4
-            if term in text:
-                score += 1
-        if score > 0:
-            ranked.append((score, item))
-    ranked.sort(key=lambda record: (-record[0], str(record[1].get("source") or ""), str(record[1].get("label") or record[1].get("id") or "")))
-    results = []
-    for score, item in ranked[: max(1, limit)]:
-        results.append(
-            {
-                "id": item.get("id"),
-                "title": item.get("label"),
-                "kind": item.get("type"),
-                "source": item.get("source") or "official",
-                "provider": item.get("provider"),
-                "category": item.get("category"),
-                "url": item.get("url"),
-                "sample_code": item.get("sampleCode"),
-                "license": item.get("license"),
-                "score": score,
-                "verification_rule": "Official catalog entries should be verified in the Google catalog; community entries should be checked on their community docs/sample code before analysis.",
-            }
-        )
-    return results or [{"source": source, "note": "expanded catalog searched but no matching official/community entries were found"}]
+    results = payload["candidates"]
+    return results or [
+        {
+            "source": source.get("source") or "official/community catalog",
+            "note": payload.get("clarification") or "No matching official/community entries were found.",
+            "needs_clarification": True,
+        }
+    ]
 
 
 def candidate_record(score: int, dataset: Dataset) -> dict[str, object]:
