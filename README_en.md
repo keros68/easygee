@@ -17,7 +17,8 @@
 
 EasyGEE packages Google Earth Engine, geemap, GeoMaster method knowledge, and a local browser map console into one reusable agent plugin. It is not trying to clone the classic GEE Code Editor. It helps agents turn natural-language requests into dataset discovery, auth guidance, quota checks, map previews, and hybrid cloud/local geospatial workflows.
 
-- Search and explain datasets from the official GEE catalog and the GEE Community Catalog from Chinese or English task prompts.
+- Search 5,000+ official and community GEE records by dataset id, name, theme, or bilingual task, with provenance, deprecation, and match evidence in the ranking.
+- Turn an outcome into role-based data bundles—for example flood event, historical baseline, terrain, rainfall, and population/building exposure—and compare or verify candidates before coding.
 - Standardize Earth Engine / geemap authorization without exposing OAuth tokens, verification codes, credential files, or service account keys.
 - Query Earth Engine quota limits and usage as agent-readable summaries.
 - Generate the lightweight EasyGEE Map Console for AOI drawing, layer overlays, basemap switching, and visual QA.
@@ -87,6 +88,12 @@ Authorize geemap for example-ee-project-123456.
 Open the EasyGEE map around Beijing Chaoyang Park so I can draw an AOI.
 
 I want summer 2024 NDVI for Beijing Chaoyang Park. Pick a suitable GEE dataset and explain why.
+
+Search 5,000+ records for DEMs, keep current official products, and compare the top three.
+
+I need a mountain flood-risk assessment but have not chosen data. Recommend a bundle by hazard, terrain, rainfall, and exposure roles.
+
+Compare COPERNICUS/DEM/GLO30_2024_1 with USGS/SRTMGL1_003 and verify the final id before writing code.
 
 Add Sentinel-2 true color and NDVI layers to the map so I can inspect clouds and vegetation in the browser.
 

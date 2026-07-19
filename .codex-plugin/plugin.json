@@ -1,7 +1,7 @@
 {
   "name": "easygee",
-  "version": "0.1.0",
-  "description": "Google Earth Engine, geemap, GeoMaster, and GEE Growth Diary workflows with catalog search, auth guidance, quota checks, and a lightweight local map console.",
+  "version": "0.2.0",
+  "description": "Google Earth Engine, geemap, GeoMaster, and GEE Growth Diary workflows with bilingual 5,000+ dataset discovery, auth guidance, quota checks, and a local map console.",
   "author": {
     "name": "Liang"
   },
@@ -20,8 +20,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "EasyGEE",
-    "shortDescription": "Use GEE, geemap, quotas, catalog search, and browser maps from Codex.",
-    "longDescription": "EasyGEE packages a Google Earth Engine and geemap workflow layer for agents, plus bundled GeoMaster and GEE Growth Diary skill snapshots for local GIS, CRS, remote sensing, ML, STAC/COG, scientific-domain methods, and distilled Chinese GEE cookbook patterns. It provides credential-safe authentication guidance, Cloud project and quota checks, Earth Engine catalog search, method routing, reusable GEE/geemap scripts, and a lightweight browser map console for AOI drawing, layer inspection, and visualization handoff.",
+    "shortDescription": "Discover GEE data, plan workflows, check quotas, and build browser maps.",
+    "longDescription": "EasyGEE packages a Google Earth Engine and geemap workflow layer for agents, plus bundled GeoMaster and GEE Growth Diary skill snapshots. Its bilingual discovery engine searches more than 5,000 official and community catalog records by id, theme, or task; ranks provenance and deprecation; recommends role-based dataset bundles; compares products; and verifies asset ids. It also provides credential-safe authentication guidance, Cloud quota checks, reusable GEE/geemap scripts, and a lightweight browser map console.",
     "developerName": "Liang",
     "category": "Science",
     "capabilities": [
@@ -34,7 +34,7 @@
     "termsOfServiceURL": "https://github.com/Rimagination/easygee",
     "defaultPrompt": [
       "帮我授权 geemap 到 Earth Engine 项目",
-      "搜索 GEE 数据集并添加到地图",
+      "从 5000 多个 GEE 数据集中推荐适合当前任务的数据组合",
       "打开 EasyGEE 地图控制台"
     ],
     "brandColor": "#0F766E",

@@ -1,6 +1,6 @@
 ---
 name: easygee
-description: Build, debug, and run Google Earth Engine Python and geemap workflows. Use when working with one-sentence geemap authorization, geemap authorization/authentication/login, Earth Engine authentication, quota display, Cloud project initialization, Cloud Console quota URLs, geemap notebooks, browser map previews, in-app Browser visualization handoffs, persistent lightweight localhost map pages, Earth Engine Python scripts, GEE dataset discovery, bilingual Chinese/English dataset selection, geospatial data export, Sentinel/Landsat/MODIS/VIIRS/SAR/population image collections, interactive maps, JavaScript-to-Python GEE migration, local GIS data integration with Earth Engine, or OpenGeo/opengeos patterns such as GeoAgent, OpenGeoAgent QGIS workflows, GeoLibre, leafmap, anymap, GEE agents, and catalog-driven geospatial assistants. Prefer this skill for GEE/geemap setup, reusable notebooks, batch exports, map-first AI workflows, and troubleshooting auth/quota/project errors.
+description: Build, debug, and run Google Earth Engine Python and geemap workflows. Use for Earth Engine/geemap authorization, authentication, Cloud project setup, quotas, notebooks, browser map previews, Python scripts, 5,000+ official/community GEE dataset discovery, bilingual dataset selection by id/theme/task, dataset recommendation/comparison/verification, geospatial export, Sentinel/Landsat/MODIS/VIIRS/SAR/population collections, interactive maps, JavaScript-to-Python migration, local GIS integration, or OpenGeo/opengeos patterns such as GeoAgent, GeoLibre, leafmap, anymap, GEE agents, and catalog-driven assistants. Prefer this skill for reproducible GEE/geemap setup, notebooks, batch exports, map-first AI workflows, and auth/quota/project troubleshooting.
 ---
 
 # EasyGEE
@@ -98,6 +98,10 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 - Read `references/data-layer-records.md` when dataset choice, official-vs-
   community provenance, band semantics, scale factors, QA masks, class labels,
   transformations, or output suitability must be made explicit.
+- Read `references/dataset-discovery.md` when searching the 5,000+ record
+  official/community catalog by id, theme, or task; recommending a multi-role
+  dataset bundle; comparing candidates; handling no-match clarification; or
+  verifying a final asset before coding.
 - Read `references/boundary-compute-patterns.md` when AOI source, geometry
   complexity, filter bounds, final export region, reducer scale, tiling,
   workload tags, or task-count risk affects the workflow.
@@ -211,10 +215,14 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   <localhost-url> "<task>" --pretty` so AOI and visible-layer state are included
   without rereading generated HTML.
 - Use `scripts/search_gee_dataset.py "<task>" --workflow` before selecting
-  datasets for exploratory or Chinese/English task requests; treat the
-  high-confidence workflow results and expanded official/community catalog
-  results as candidates. Verify official entries in the Google catalog and
-  verify community entries on their community docs/sample code before analysis.
+  datasets when compatibility with the curated workflow cards is useful.
+- Use `scripts/dataset_catalog_engine.py search "<id, theme, or task>"` as the
+  primary broad-catalog retrieval path. Use its `recommend`, `compare`,
+  `verify`, and `stats` subcommands for task-role bundles, product trade-offs,
+  final asset gates, and source coverage. Empty results must trigger
+  clarification, not a generic Sentinel/Landsat fallback. Verify official
+  entries in the Google catalog and community entries on their source page and
+  sample code before analysis.
 - Use `scripts/scaffold_geemap_workflow.py` to generate a clean notebook or
   headless script skeleton with explicit project, AOI, dataset, probes, and
   non-started export task code.

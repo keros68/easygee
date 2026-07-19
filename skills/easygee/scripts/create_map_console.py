@@ -7848,7 +7848,7 @@ def main() -> int:
     parser.add_argument("--quota-minutes", type=int, default=60, help="Lookback window for quota usage metrics")
     parser.add_argument(
         "--catalog-mode",
-        choices=("auto", "official", "giswqs", "curated"),
+        choices=("auto", "official", "community", "all", "giswqs", "curated"),
         default="auto",
         help="Dataset catalog source: auto merges official STAC and community CSV; also supports official, community, all, giswqs, or curated",
     )

@@ -17,7 +17,8 @@
 
 EasyGEE 把 Google Earth Engine、geemap、GeoMaster 方法知识和本地浏览器地图工作台打包成一个可复用插件。它的目标不是复刻 GEE 网页控制台，而是让 Agent 用一句自然语言完成数据查找、授权引导、配额检查、地图预览和本地/云端地理空间分析编排。
 
-- 查找并解释 GEE 官方目录和 GEE Community Catalog 数据集，支持中英文任务描述。
+- 在 5,000 多个 GEE 官方与社区目录记录中，按数据集 ID、名称、主题或中英文任务检索；排序会考虑来源、弃用状态和匹配证据。
+- 把完整任务拆成数据角色组合，例如洪水风险的灾情、长期基线、地形、降雨和人口/建筑暴露，并支持候选比较与最终资产核验。
 - 标准化 Earth Engine / geemap 授权流程，不暴露 OAuth token、验证码、凭据文件或 service account key。
 - 查询 Earth Engine 项目配额和用量，并把结果转成 Agent 可读的摘要。
 - 生成轻量 EasyGEE Map Console，用于 AOI 绘制、图层叠加、底图切换和视觉检查。
@@ -87,6 +88,12 @@ python C:\Users\Liang\.codex\skills\.system\plugin-creator\scripts\validate_plug
 打开 EasyGEE 地图，我想先看看北京朝阳公园附近，然后手动画一个 AOI
 
 我想做北京朝阳公园 2024 年夏季 NDVI，帮我选择合适的 GEE 数据集并解释为什么
+
+在 5000 多个数据集中查找 DEM，只看未弃用的官方产品，并比较前三个
+
+我要评估山区洪水风险；我还没选数据，请按灾情、地形、降雨和暴露角色推荐一组数据
+
+比较 COPERNICUS/DEM/GLO30_2024_1 和 USGS/SRTMGL1_003，并在写代码前核验最终 ID
 
 把 Sentinel-2 真彩色和 NDVI 叠加到地图上，我想在浏览器里检查云和植被情况
 
