@@ -129,6 +129,15 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 - Read `references/landsat-cloud-mask-methods.md` when choosing or explaining
   Landsat cloud masks, CFMask/QA_PIXEL, SimpleLandsatCloudScore, validation
   evidence, or the boundary between masking and cloud-gap reconstruction.
+- Read `references/cross-sensor-harmonization.md` when combining Landsat 8/9
+  and Sentinel-2, selecting NASA HLS, mapping common bands, or testing residual
+  cross-sensor bias.
+- Read `references/temporal-compositing.md` when using collection reducers,
+  `mosaic()`, `qualityMosaic()`, monthly/seasonal composites, phenology, or
+  observation-count/source-date diagnostics.
+- Read `references/sentinel1-sar-methods.md` when using Sentinel-1 GRD,
+  comparing pre/post backscatter, matching orbit geometry, handling dB versus
+  linear power, speckle, incidence angle, or terrain effects.
 - Read `references/task-patterns.md` when the user asks for an outcome such as
   NDVI, water/flood extent, land-cover classification, change detection, zonal
   statistics, time series, terrain derivatives, or a communication map.
@@ -258,7 +267,7 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 - Use `scripts/audit_skill_coverage.py` after editing this skill to check that
   core references, scripts, source markers, planners, routers, and reviewer
   findings still work offline.
-- Use `scripts/run_evaluation_prompts.py` to regression-test the eight
+- Use `scripts/run_evaluation_prompts.py` to regression-test the eleven
   evaluation prompts across task planning, geemap routing, and dataset search.
 
 ## Operating Rules
@@ -425,11 +434,19 @@ ee.Initialize(project=PROJECT)
 
 m = geemap.Map()
 roi = ee.Geometry.Point([120.16, 30.25]).buffer(10_000)
-image = (
+s2 = (
     ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
     .filterBounds(roi)
     .filterDate("2024-01-01", "2024-12-31")
     .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 20))
+    .linkCollection(
+        ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"),
+        ["cs_cdf"],
+    )
+    .map(lambda image: image.updateMask(image.select("cs_cdf").gte(0.60)))
+)
+image = (
+    s2
     .median()
 )
 m.centerObject(roi, 10)
@@ -447,11 +464,19 @@ PROJECT = "my-earthengine-project"
 def main():
     ee.Initialize(project=PROJECT)
     roi = ee.Geometry.Rectangle([119.8, 30.0, 120.5, 30.5])
-    ndvi = (
+    s2 = (
         ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
         .filterBounds(roi)
         .filterDate("2024-01-01", "2024-12-31")
         .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 20))
+        .linkCollection(
+            ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"),
+            ["cs_cdf"],
+        )
+        .map(lambda image: image.updateMask(image.select("cs_cdf").gte(0.60)))
+    )
+    ndvi = (
+        s2
         .median()
         .normalizedDifference(["B8", "B4"])
         .rename("NDVI")
@@ -483,10 +508,10 @@ Before reporting a GEE/geemap task as done:
 8. For GeoAI tasks, report the AI task type, selected chapter, data contract,
    model/inference choice, spatial evaluation design, output CRS/schema, and
    any unrun or unverifiable step.
-8. For browser previews, report the localhost URL, whether it was opened in the
+9. For browser previews, report the localhost URL, whether it was opened in the
    in-app Browser, and whether map tiles/layers visibly rendered.
-9. When method routing affected the workflow, report `gee_first`,
+10. When method routing affected the workflow, report `gee_first`,
    `local_first`, `hybrid`, `catalog_first`, or `browser_first`, the backends
    used, GeoMaster references consulted or deferred, and the artifact handoff.
-10. Mention any unrun pieces caused by missing credentials, quota, permissions,
+11. Mention any unrun pieces caused by missing credentials, quota, permissions,
    or user authentication.

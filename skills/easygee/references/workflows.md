@@ -31,14 +31,26 @@ Keep transformations server-side:
 def add_ndvi(img):
     return img.addBands(img.normalizedDifference(["B8", "B4"]).rename("NDVI"))
 
-collection = (
+s2 = (
     ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
     .filterBounds(roi)
     .filterDate("2024-01-01", "2024-12-31")
     .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 20))
+    .linkCollection(
+        ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"),
+        ["cs_cdf"],
+    )
+)
+
+collection = (
+    s2
+    .map(lambda img: img.updateMask(img.select("cs_cdf").gte(0.60)))
     .map(add_ndvi)
 )
 ```
+
+The scene-level cloud percentage only narrows the candidate collection. Keep
+the linked pixel-level QA mask before compositing or statistics.
 
 Avoid Python loops that call `getInfo()` on each image. Use reducers and
 `FeatureCollection` outputs.

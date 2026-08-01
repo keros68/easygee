@@ -23,6 +23,13 @@ DEFAULT_GLOBS = (
     "../gee-growth-diary/references/*.md",
 )
 
+CORE_METHOD_REFERENCES = {
+    "references/landsat-cloud-mask-methods.md",
+    "references/cross-sensor-harmonization.md",
+    "references/temporal-compositing.md",
+    "references/sentinel1-sar-methods.md",
+}
+
 STOPWORDS = {
     "the",
     "and",
@@ -102,6 +109,15 @@ def score_chunk(path: str, title: str, chunk: str, terms: list[str], query: str)
         score += text_l.count(term)
     if query.lower() in text_l:
         score += 8.0
+    # Curated EasyGEE references are the operational knowledge layer. The
+    # growth diary remains searchable as secondary teaching material, but it
+    # should not outrank a matching curated method card merely by repetition.
+    if path_l.startswith("references/"):
+        score += 12.0
+    if path_l in CORE_METHOD_REFERENCES:
+        score += 10.0
+    if path_l.startswith("../gee-growth-diary/"):
+        score *= 0.20
     return score
 
 

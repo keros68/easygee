@@ -85,6 +85,23 @@ CASES = [
         choose_ids=("catalog-search",),
         dataset_ids=("COPERNICUS/S1_GRD", "WorldPop/GP/100m/pop"),
     ),
+    EvalCase(
+        id="hls-cross-sensor-series",
+        prompt="Build a harmonized Landsat 8/9 and Sentinel-2 reflectance time series with HLS, common bands, Fmask, sensor labels, and valid-observation counts.",
+        plan_ids=("cross-sensor-harmonization", "time-series"),
+        dataset_ids=("NASA/HLS/HLSL30/v002", "NASA/HLS/HLSS30/v002"),
+    ),
+    EvalCase(
+        id="sentinel1-geometry-aware-flood",
+        prompt="Build a Sentinel-1 SAR flood comparison using the same relative orbit and pass, explain dB versus linear ratios, speckle, incidence angle, and terrain shadow.",
+        plan_ids=("sar-analysis", "water-flood"),
+        dataset_ids=("COPERNICUS/S1_GRD",),
+    ),
+    EvalCase(
+        id="temporal-composite-semantics",
+        prompt="Compare monthly median composites, mosaic, and qualityMosaic in a time series; preserve source dates, valid observation counts, and empty intervals.",
+        plan_ids=("temporal-composite", "time-series"),
+    ),
 ]
 
 

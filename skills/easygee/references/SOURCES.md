@@ -49,6 +49,8 @@ Reviewed date: 2026-08-01.
 | Mapping over ImageCollections | https://developers.google.com/earth-engine/guides/ic_mapping | Source for mapped-function limitations: no external mutation, printing, or native `if`/`for` inside mapped functions. |
 | Reducer overview | https://developers.google.com/earth-engine/guides/reducers_intro | Establishes reducers as the aggregation primitive over time, space, bands, arrays, lists, and other structures. |
 | ImageCollection reductions | https://developers.google.com/earth-engine/guides/reducers_image_collection | Source for pixel-wise compositing/reduction over image collections. |
+| Compositing and mosaicking | https://developers.google.com/earth-engine/guides/ic_composite_mosaic | Source for reducer composites, ordered mosaics, masks, and per-pixel quality mosaics. |
+| ImageCollection qualityMosaic API | https://developers.google.com/earth-engine/apidocs/ee-imagecollection-qualitymosaic | Source for selecting all output bands from the image with the maximum per-pixel quality score. |
 | FeatureCollection reductions | https://developers.google.com/earth-engine/guides/feature_collection_reducing | Source for `reduceColumns()` and `reduceRegions()` patterns. |
 | Grouped reductions and zonal statistics | https://developers.google.com/earth-engine/guides/reducers_grouping | Source for grouped area/class summaries and zonal-statistics patterns. |
 | Image visualization | https://developers.google.com/earth-engine/guides/image_visualization | Source for visualization parameter semantics: bands, min/max, gain, bias, gamma, palette. |
@@ -66,6 +68,8 @@ Reviewed date: 2026-08-01.
 | S2 cloudless tutorial | https://developers.google.com/earth-engine/tutorials/community/sentinel-2-s2cloudless | Public tutorial for cloud and shadow masking with S2 cloud probability. |
 | Sentinel-1 GRD catalog | https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S1_GRD | Source for SAR GRD product metadata, polarizations, update cadence, and flood/all-weather dataset selection. |
 | Sentinel-1 algorithms guide | https://developers.google.com/earth-engine/guides/sentinel1 | Source for Sentinel-1 preprocessing and backscatter interpretation in Earth Engine. |
+| HLS Landsat L30 v2 catalog | https://developers.google.com/earth-engine/datasets/catalog/NASA_HLS_HLSL30_v002 | Source for Landsat 8/9 HLS 30 m NBAR, common processing, L30 bands, and Fmask semantics. |
+| HLS Sentinel-2 S30 v2 catalog | https://developers.google.com/earth-engine/datasets/catalog/NASA_HLS_HLSS30_v002 | Source for Sentinel-2 HLS 30 m NBAR, common processing, S30 bands, and Fmask semantics. |
 | Landsat 8 C2 L2 catalog | https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LC08_C02_T1_L2 | Source for Landsat Collection 2 Level 2 scale factors and geemap/Python example. |
 | Landsat Collection 1 to Collection 2 migration | https://developers.google.com/earth-engine/landsat_c1_to_c2 | Source for the current `QA_PIXEL` mask pattern, Collection 1/2 band-name changes, and Collection 2 scaling examples. |
 | SimpleLandsatCloudScore API | https://developers.google.com/earth-engine/api_docs#eealgorithmslandsatsimplecloudscore | Source for the intended use and limitations of the simple Landsat TOA cloud-likelihood score. |

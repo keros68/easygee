@@ -112,14 +112,21 @@ Typical QA mask:
 ```python
 def mask_landsat_c2_l2(image):
     qa = image.select("QA_PIXEL")
+    fill = qa.bitwiseAnd(1 << 0).eq(0)
     dilated_cloud = qa.bitwiseAnd(1 << 1).eq(0)
     cirrus = qa.bitwiseAnd(1 << 2).eq(0)
     cloud = qa.bitwiseAnd(1 << 3).eq(0)
     shadow = qa.bitwiseAnd(1 << 4).eq(0)
     snow = qa.bitwiseAnd(1 << 5).eq(0)
-    clear = dilated_cloud.And(cirrus).And(cloud).And(shadow).And(snow)
-    return image.updateMask(clear)
+    clear = fill.And(dilated_cloud).And(cirrus).And(cloud).And(shadow).And(snow)
+    not_saturated = image.select("QA_RADSAT").eq(0)
+    return image.updateMask(clear).updateMask(not_saturated)
 ```
+
+This is EasyGEE's stricter general-analysis default: it also removes fill,
+snow, and radiometrically saturated pixels. Keep snow or saturation only when
+the target requires it and document that choice. See
+`landsat-cloud-mask-methods.md` for the method boundary and validation route.
 
 Use sensor-specific bands for indices:
 
@@ -166,6 +173,26 @@ workflow benefits from radar backscatter. Filter deliberately:
 Agent rule: a threshold such as `VV < -16 dB` is only a candidate. SAR flood
 mapping needs local visual probes and caveats for speckle, terrain shadow,
 wind-roughened water, vegetation, and urban double-bounce.
+
+Read `sentinel1-sar-methods.md` before pre/post arithmetic: the catalog is in
+dB, comparison geometry must be homogeneous, and orthorectification does not
+remove layover, foreshortening, radar shadow, or slope-dependent backscatter.
+
+## HLS Cross-Sensor Surface Reflectance
+
+Datasets: `NASA/HLS/HLSL30/v002` and `NASA/HLS/HLSS30/v002`.
+
+Use HLS when Landsat 8/9 and Sentinel-2 need a common 30 m NBAR series. Apply
+the HLS `Fmask`, map L30/S30 bands to common names, and retain sensor identity.
+Do not apply Landsat Collection 2 DN scale coefficients to HLS assets. Read
+`cross-sensor-harmonization.md` for the common-band and validation pattern.
+
+## Temporal Composites
+
+Collection reducers are pixel-wise and composites can mix source dates. Add a
+valid-observation count; for `qualityMosaic()`, also carry the selected source
+time. Read `temporal-compositing.md` before describing a composite as a
+cloud-free observation or using it for event timing.
 
 ## MODIS Land Surface Temperature
 
