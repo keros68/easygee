@@ -136,7 +136,7 @@ def run_case(case: EvalCase) -> EvalResult:
         checks["choose"] = all(expected in found for expected in case.choose_ids)
 
     if case.dataset_ids:
-        process = run_script("search_gee_dataset.py", case.prompt, "--json", "--limit", "7")
+        process = run_script("search_gee_dataset.py", case.prompt, "--json", "--limit", "7", "--no-expanded-catalog")
         found = ids_from_json_process(process, key="candidates")
         details["dataset_ids"] = found
         checks["datasets"] = all(expected in found for expected in case.dataset_ids)

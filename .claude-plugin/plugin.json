@@ -1,7 +1,7 @@
 {
   "name": "easygee",
   "version": "0.2.0",
-  "description": "Google Earth Engine and geemap workflow bundle with bilingual 5,000+ dataset discovery, EasyGEE, GeoMaster, GEE Growth Diary, and a local MCP server.",
+  "description": "Google Earth Engine and geemap workflow bundle with bilingual 5,000+ dataset discovery, EasyGEE, GeoMaster, GeoAI Encyclopedia, GEE Growth Diary, and a local MCP server.",
   "author": {
     "name": "Liang"
   },

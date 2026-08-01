@@ -5,7 +5,18 @@ skill. It exists for open-source transparency and future maintenance. It is not
 a substitute for reading upstream documentation before relying on a specific
 API, quota, or installation command.
 
-Reviewed date: 2026-07-06.
+Reviewed date: 2026-08-01.
+
+## GeoAI Method Sources
+
+| Source | URL | Why It Matters For This Skill |
+|---|---|---|
+| GeoAI Book | https://book.opengeoai.org/ | Primary method source for the bundled task-oriented remote-sensing AI chapters, including data preparation, detection, segmentation, change detection, regression, SAM, embeddings, and vision-language workflows. |
+| GeoAI Book repository | https://github.com/giswqs/GeoAI-Book | Public source repository used for chapter provenance and future synchronization of the bundled method snapshot. |
+| OpenGeoAI | https://opengeoai.org/ | Project context and public entry point for open geospatial AI tools and workflows. |
+| Segment Geospatial | https://samgeo.gishub.org/ | Public documentation for geospatial SAM-style segmentation patterns referenced by the method layer. |
+| GeoAI Book licensing | https://book.opengeoai.org/#licensing-and-copyright | Licensing and attribution reference for redistributing the method snapshot inside this plugin. |
+| Creative Commons Attribution 4.0 | https://creativecommons.org/licenses/by/4.0/ | Public license reference retained with the bundled method snapshot; verify upstream notices before redistributing future updates. |
 
 ## Google Earth Engine Official Sources
 
@@ -56,6 +67,9 @@ Reviewed date: 2026-07-06.
 | Sentinel-1 GRD catalog | https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S1_GRD | Source for SAR GRD product metadata, polarizations, update cadence, and flood/all-weather dataset selection. |
 | Sentinel-1 algorithms guide | https://developers.google.com/earth-engine/guides/sentinel1 | Source for Sentinel-1 preprocessing and backscatter interpretation in Earth Engine. |
 | Landsat 8 C2 L2 catalog | https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LC08_C02_T1_L2 | Source for Landsat Collection 2 Level 2 scale factors and geemap/Python example. |
+| Landsat Collection 1 to Collection 2 migration | https://developers.google.com/earth-engine/landsat_c1_to_c2 | Source for the current `QA_PIXEL` mask pattern, Collection 1/2 band-name changes, and Collection 2 scaling examples. |
+| SimpleLandsatCloudScore API | https://developers.google.com/earth-engine/api_docs#eealgorithmslandsatsimplecloudscore | Source for the intended use and limitations of the simple Landsat TOA cloud-likelihood score. |
+| Landsat cloud composite tutorial | https://google-earth-engine.com/Interpreting-Image-Series/Clouds-and-Image-Compositing/ | Visual teaching source for scene filtering versus `QA_PIXEL`/`QA_RADSAT` masking and the data-availability trade-off. |
 | MOD13Q1 vegetation indices catalog | https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MOD13Q1 | Source for MODIS NDVI/EVI scale and DetailedQA bitmask. |
 | MOD11A2 land surface temperature catalog | https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MOD11A2 | Source for MODIS 8-day 1 km LST, scale conversion, and QC bands. |
 | VIIRS monthly DNB catalog | https://developers.google.com/earth-engine/datasets/catalog/NOAA_VIIRS_DNB_MONTHLY_V1_VCMSLCFG | Source for monthly stray-light-corrected nighttime lights, radiance band, coverage, cadence, and proxy limitations. |
@@ -74,6 +88,15 @@ Reviewed date: 2026-07-06.
 | Earth Engine public STAC catalog | https://storage.googleapis.com/earthengine-stac/catalog/catalog.json | Machine-readable official catalog root used to ground dataset discovery and catalog source attribution. |
 | GEE Community datasets CSV | https://github.com/sadassimov/geemu-skill/blob/main/awesome-gee-community-datasets/community_datasets.csv | Machine-readable community dataset index used to expand EasyGEE Add Layers and catalog search beyond the official Earth Engine STAC catalog. |
 | GEEMu skill repository | https://github.com/sadassimov/geemu-skill | Reviewed as an upstream skill pattern for lightweight local JSONL knowledge search, data-layer records, boundary/compute gates, dry-run/export switches, and community dataset attribution. EasyGEE absorbs the patterns selectively; GEEMu's local knowledge database is not treated as an authoritative source for current API or dataset semantics. |
+
+## Landsat Cloud-Mask Method And Validation Sources
+
+| Source | URL | Why It Matters For This Skill |
+|---|---|---|
+| USGS CFMask algorithm | https://www.usgs.gov/landsat-missions/cfmask-algorithm | Primary description of CFMask's decision-tree passes, cloud-shadow projection, and known bright-target/thin-cloud limitations. |
+| USGS operational cloud-algorithm comparison | https://www.usgs.gov/publications/cloud-detection-algorithm-comparison-and-validation-operational-landsat-data-products | Validation evidence supporting CFMask as the operational default and AT-ACCA as a strong nonthermal alternative. |
+| USGS cloud-cover validation datasets | https://www.usgs.gov/landsat-missions/cloud-cover-assessment-validation-datasets | Ground-truth cloud and shadow masks for formal omission/commission or precision/recall evaluation. |
+| HISTARFM gap-filled Landsat tutorial | https://developers.google.com/earth-engine/tutorials/community/histarfm-cloud-and-gap-free-landsat | Source for the separate cloud-gap reconstruction/data-fusion route using Landsat and MODIS. |
 
 ## geemap / Qiusheng Wu Sources
 

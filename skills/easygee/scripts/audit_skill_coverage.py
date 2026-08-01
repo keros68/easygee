@@ -23,6 +23,7 @@ REQUIRED_REFERENCES = [
     "interaction-router.md",
     "geomaster-integration.md",
     "geomaster-knowledge-index.json",
+    "geoai-encyclopedia.md",
     "browser-preview.md",
     "gee-agent-playbook.md",
     "geemap-agent-recipes.md",
@@ -69,6 +70,24 @@ REQUIRED_SCRIPTS = [
     "audit_skill_coverage.py",
 ]
 
+REQUIRED_GEOAI_FILES = [
+    "SKILL.md",
+    "patterns.md",
+    "glossary.md",
+    "cheatsheet.md",
+    "chapters/ch03-geospatial-data-essentials.md",
+    "chapters/ch06-preparing-training-data.md",
+    "chapters/ch08-object-detection.md",
+    "chapters/ch09-semantic-segmentation.md",
+    "chapters/ch10-instance-segmentation.md",
+    "chapters/ch12-change-detection.md",
+    "chapters/ch13-pixel-regression.md",
+    "chapters/ch14-sam-geospatial.md",
+    "chapters/ch15-vision-language-models.md",
+    "chapters/ch16-satellite-embeddings.md",
+    "references/source-map.md",
+]
+
 SOURCE_MARKERS = [
     "developers.google.com/earth-engine/guides/auth",
     "developers.google.com/earth-engine/guides/access",
@@ -103,6 +122,11 @@ SOURCE_MARKERS = [
     "github.com/opengeos/GeoAgent",
     "github.com/opengeos/GeoLibre",
     "mp.weixin.qq.com/s/pEVuV8Q4dH2BWv_zQCDmZQ",
+    "book.opengeoai.org",
+    "github.com/giswqs/GeoAI-Book",
+    "opengeoai.org",
+    "samgeo.gishub.org",
+    "creativecommons.org/licenses/by/4.0",
 ]
 
 
@@ -154,6 +178,11 @@ def audit(skill_dir: Path) -> list[Check]:
         add(checks, path.exists(), f"script:{name}", "exists" if path.exists() else str(path))
         if name != "audit_skill_coverage.py":
             add(checks, f"scripts/{name}" in skill_text, f"script-linked:{name}", "mentioned in SKILL.md")
+
+    geoai_root = skill_dir / "references" / "geoai-with-python"
+    for relative in REQUIRED_GEOAI_FILES:
+        path = geoai_root / relative
+        add(checks, path.exists(), f"geoai-bundle:{relative}", "exists" if path.exists() else str(path))
 
     for marker in SOURCE_MARKERS:
         add(checks, marker in sources_text, f"source:{marker}", "recorded in SOURCES.md")
@@ -490,6 +519,13 @@ def audit(skill_dir: Path) -> list[Check]:
             {"gee-agent-playbook.md", "geomaster:machine-learning.md", "geomaster:big-data.md"},
         ),
         (
+            "method-router-geoai",
+            "Use GEE Sentinel-2 for semantic segmentation and train locally",
+            "hybrid",
+            "earth_engine_plus_local",
+            {"geoai-encyclopedia.md", "geoai-with-python/SKILL.md", "geoai-with-python/chapters/ch09-semantic-segmentation.md"},
+        ),
+        (
             "method-router-catalog",
             "帮我找适合洪水监测的 GEE 数据集",
             "catalog_first",
@@ -620,7 +656,7 @@ def audit(skill_dir: Path) -> list[Check]:
     search_smoke = run_python(skill_dir / "scripts" / "search_gee_dataset.py", "--smoke", cwd=skill_dir)
     add(checks, search_smoke.returncode == 0, "search-dataset-smoke", search_smoke.stdout.strip() or search_smoke.stderr.strip())
 
-    search = run_python(skill_dir / "scripts" / "search_gee_dataset.py", "洪水淹没范围和人口暴露", "--json", cwd=skill_dir)
+    search = run_python(skill_dir / "scripts" / "search_gee_dataset.py", "洪水淹没范围和人口暴露", "--json", "--no-expanded-catalog", cwd=skill_dir)
     add(checks, search.returncode == 0, "search-dataset-runs:zh", search.stderr.strip() or "ran")
     try:
         search_payload = json.loads(search.stdout)

@@ -23,6 +23,7 @@ EasyGEE packages Google Earth Engine, geemap, GeoMaster method knowledge, and a 
 - Query Earth Engine quota limits and usage as agent-readable summaries.
 - Generate the lightweight EasyGEE Map Console for AOI drawing, layer overlays, basemap switching, and visual QA.
 - Bundle GeoMaster as a skill for CRS, local GIS, remote sensing, ML, STAC/COG, scientific-domain methods, and troubleshooting.
+- Bundle the GeoAI Encyclopedia as EasyGEE's task-method layer for image recognition, object detection, semantic/instance segmentation, change detection, pixel regression, SAM, satellite embeddings, vision-language models, and QGIS GeoAI. The router loads only the relevant chapter and keeps GEE/export orchestration separate from local model execution.
 - Bundle GEE Growth Diary as a distilled method skill from 153 GEEer成长日记 articles covering dataset choice, indices, time series, classification, water extraction, charts, and exports.
 
 ## Layout

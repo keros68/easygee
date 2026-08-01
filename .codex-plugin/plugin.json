@@ -1,7 +1,7 @@
 {
   "name": "easygee",
   "version": "0.2.0",
-  "description": "Google Earth Engine, geemap, GeoMaster, and GEE Growth Diary workflows with bilingual 5,000+ dataset discovery, auth guidance, quota checks, and a local map console.",
+  "description": "Google Earth Engine, geemap, GeoMaster, GeoAI Encyclopedia, and GEE Growth Diary workflows with bilingual 5,000+ dataset discovery, auth guidance, quota checks, and a local map console.",
   "author": {
     "name": "Liang"
   },
@@ -21,7 +21,7 @@
   "interface": {
     "displayName": "EasyGEE",
     "shortDescription": "Discover GEE data, plan workflows, check quotas, and build browser maps.",
-    "longDescription": "EasyGEE packages a Google Earth Engine and geemap workflow layer for agents, plus bundled GeoMaster and GEE Growth Diary skill snapshots. Its bilingual discovery engine searches more than 5,000 official and community catalog records by id, theme, or task; ranks provenance and deprecation; recommends role-based dataset bundles; compares products; and verifies asset ids. It also provides credential-safe authentication guidance, Cloud quota checks, reusable GEE/geemap scripts, and a lightweight browser map console.",
+    "longDescription": "EasyGEE packages a Google Earth Engine and geemap workflow layer for agents, plus bundled GeoMaster, GeoAI Encyclopedia, and GEE Growth Diary skill snapshots. Its bilingual discovery engine searches more than 5,000 official and community catalog records by id, theme, or task; ranks provenance and deprecation; recommends role-based dataset bundles; compares products; and verifies asset ids. The GeoAI method layer routes remote-sensing tasks such as detection, segmentation, change detection, regression, SAM, embeddings, vision-language models, and QGIS GeoAI to the smallest relevant chapter while keeping GEE/export orchestration explicit. It also provides credential-safe authentication guidance, Cloud quota checks, reusable GEE/geemap scripts, and a lightweight browser map console.",
     "developerName": "Liang",
     "category": "Science",
     "capabilities": [

@@ -1,4 +1,4 @@
 interface:
   display_name: "EasyGEE"
-  short_description: "One-step auth, quotas, maps, dataset discovery, QA"
-  default_prompt: "Use $easygee to run one-sentence geemap authorization, authenticate Earth Engine, inspect quotas, preview maps in a browser, discover datasets, plan, build, and review a reproducible Google Earth Engine/geemap workflow."
+  short_description: "GEE, GeoAI methods, datasets, maps, quotas, and QA"
+  default_prompt: "Use $easygee to authorize geemap, authenticate Earth Engine, inspect quotas, discover datasets, choose and execute remote-sensing AI methods, preview maps in a browser, and review a reproducible GEE/geemap workflow with explicit GEE-to-local handoffs."

@@ -23,6 +23,7 @@ EasyGEE 把 Google Earth Engine、geemap、GeoMaster 方法知识和本地浏览
 - 查询 Earth Engine 项目配额和用量，并把结果转成 Agent 可读的摘要。
 - 生成轻量 EasyGEE Map Console，用于 AOI 绘制、图层叠加、底图切换和视觉检查。
 - 内置 GeoMaster skill，覆盖 CRS、本地 GIS、遥感、机器学习、STAC/COG、科学领域方法和排错经验。
+- 内置 GeoAI Encyclopedia 作为遥感 AI 方法层，覆盖图像识别、目标检测、语义/实例分割、变化检测、像素回归、SAM、卫星嵌入、视觉语言模型和 QGIS GeoAI；按任务只加载相关章节，并明确 GEE 到本地模型的交接契约。
 - 内置 GEE Growth Diary skill，将 GEEer成长日记 153 篇 GEE 文章蒸馏为数据集选择、指数、时序、分类、水体、图表和导出方法库。
 
 ## 结构
@@ -37,6 +38,7 @@ easygee/
 ├── scripts/             # EasyGEE MCP server 启动入口
 ├── skills/
 │   ├── easygee/         # GEE / geemap / 地图控制台工作流
+│   │   └── references/geoai-with-python/ # 内置 GeoAI Encyclopedia 章节与方法模式
 │   ├── geomaster/       # 本地 GIS 与遥感方法知识
 │   └── gee-growth-diary/ # GEEer成长日记蒸馏方法库
 └── adapters/            # Codex、Claude、Zcode、Qoder 适配说明
@@ -125,5 +127,7 @@ EasyGEE 参考并蒸馏了许多开放资料和项目经验。特别感谢：
 - [OpenGeoAgent / GeoAgent](https://github.com/opengeos/GeoAgent)、[GeoLibre](https://github.com/opengeos/GeoLibre)、[leafmap](https://leafmap.org/) 与 [anymap](https://github.com/opengeos/anymap)：启发了 EasyGEE 的地图优先、Agent 驱动和本地优先 GIS 工作台设计。
 - [Insight Maps](https://map.insightmaps.app/)：参考了其紧凑地图工具栏、图层目录和专业 Web GIS 交互风格。
 - [netease-youdao/LobsterAI](https://github.com/netease-youdao/LobsterAI)：README 首屏结构、徽章和语言切换排版的参考。
+- [GeoAI Book](https://book.opengeoai.org/) 与 [GeoAI-Book](https://github.com/giswqs/GeoAI-Book)：EasyGEE 内置 GeoAI Encyclopedia 的任务方法、训练/推理和空间评估来源。
+- [Segment Geospatial](https://samgeo.gishub.org/)：GeoAI Encyclopedia 中地理空间 SAM 分割模式的重要参考。
 
 更完整的来源与归因记录见 [skills/easygee/references/SOURCES.md](./skills/easygee/references/SOURCES.md)。

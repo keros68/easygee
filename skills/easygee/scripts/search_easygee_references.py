@@ -18,6 +18,7 @@ if hasattr(sys.stdout, "reconfigure"):
 DEFAULT_GLOBS = (
     "references/*.md",
     "references/*.json",
+    "references/geoai-with-python/**/*.md",
     "../gee-growth-diary/SKILL.md",
     "../gee-growth-diary/references/*.md",
 )
