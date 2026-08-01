@@ -1,6 +1,6 @@
 {
   "name": "easygee",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Google Earth Engine, geemap, GeoMaster, GeoAI Encyclopedia, and GEE Growth Diary workflows with bilingual 5,000+ dataset discovery, auth guidance, quota checks, and a local map console.",
   "author": {
     "name": "Liang"
