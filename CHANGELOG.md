@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 - 2026-08-01
+
+### Changed
+
+- Updated Chinese and English README acknowledgements with the official HLS,
+  USGS CFMask, Sentinel-1, and Earth Engine compositing sources used by the
+  remote-sensing method layer.
+- Collapsed the project-layout tree inside an expandable README section and
+  documented the new remote-sensing references and scripts.
+
 ## 0.3.0 - 2026-08-01
 
 ### Added
