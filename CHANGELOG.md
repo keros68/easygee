@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.3.1 - 2026-08-01
+
+### Changed
+
+- Updated Chinese and English README acknowledgements with the official HLS,
+  USGS CFMask, Sentinel-1, and Earth Engine compositing sources used by the
+  remote-sensing method layer.
+- Collapsed the project-layout tree inside an expandable README section and
+  documented the new remote-sensing references and scripts.
+
+## 0.3.0 - 2026-08-01
+
+### Added
+
+- Compact remote-sensing method references for Landsat cloud masking, HLS
+  cross-sensor harmonization, temporal compositing, and Sentinel-1 SAR.
+- Visual and numeric teaching cases comparing Sentinel-2 cloud masks and
+  Landsat/Sentinel-2 observations.
+- Task-planner and dataset-catalog routes for HLS, SAR geometry, and temporal
+  composite semantics.
+- Eleven offline evaluation prompts covering the expanded Earth Engine and
+  geemap workflows.
+
+### Changed
+
+- Sentinel-2 minimal examples now apply Cloud Score+ pixel-level masking after
+  scene-level filtering.
+- Landsat Collection 2 defaults now mask fill, cloud/shadow/snow, and saturated
+  pixels with `QA_PIXEL` and `QA_RADSAT`.
+- Local reference search now prioritizes curated EasyGEE method cards over
+  secondary teaching material.
+
+### Validation
+
+- EasyGEE coverage audit: 363/363 checks passed.
+- Evaluation prompts: 11/11 passed.
+- Project tests: 5 passed.
+
 ## 0.2.0 - 2026-07-19
 
 ### Added

@@ -23,9 +23,14 @@ EasyGEE 把 Google Earth Engine、geemap、GeoMaster 方法知识和本地浏览
 - 查询 Earth Engine 项目配额和用量，并把结果转成 Agent 可读的摘要。
 - 生成轻量 EasyGEE Map Console，用于 AOI 绘制、图层叠加、底图切换和视觉检查。
 - 内置 GeoMaster skill，覆盖 CRS、本地 GIS、遥感、机器学习、STAC/COG、科学领域方法和排错经验。
+- 内置 GeoAI Encyclopedia 作为遥感 AI 方法层，覆盖图像识别、目标检测、语义/实例分割、变化检测、像素回归、SAM、卫星嵌入、视觉语言模型和 QGIS GeoAI；按任务只加载相关章节，并明确 GEE 到本地模型的交接契约。
 - 内置 GEE Growth Diary skill，将 GEEer成长日记 153 篇 GEE 文章蒸馏为数据集选择、指数、时序、分类、水体、图表和导出方法库。
+- 内置遥感方法卡与可视化案例，覆盖 Landsat 去云、Sentinel-2 去云、HLS 跨传感器一致化、时间合成、Sentinel-1 SAR 以及 Landsat/Sentinel-2 对比。
 
 ## 结构
+
+<details>
+<summary>点击展开项目结构</summary>
 
 ```text
 easygee/
@@ -36,11 +41,15 @@ easygee/
 ├── hooks/               # Hook 配置与轻量脚本
 ├── scripts/             # EasyGEE MCP server 启动入口
 ├── skills/
-│   ├── easygee/         # GEE / geemap / 地图控制台工作流
+│   ├── easygee/         # GEE / geemap / 地图控制台与遥感方法工作流
+│   │   ├── references/  # QA、HLS、SAR、时间合成和 GeoAI 方法资料
+│   │   └── scripts/     # 数据检索、任务路由、案例和离线评测
 │   ├── geomaster/       # 本地 GIS 与遥感方法知识
 │   └── gee-growth-diary/ # GEEer成长日记蒸馏方法库
 └── adapters/            # Codex、Claude、Zcode、Qoder 适配说明
 ```
+
+</details>
 
 ## 使用
 
@@ -125,5 +134,11 @@ EasyGEE 参考并蒸馏了许多开放资料和项目经验。特别感谢：
 - [OpenGeoAgent / GeoAgent](https://github.com/opengeos/GeoAgent)、[GeoLibre](https://github.com/opengeos/GeoLibre)、[leafmap](https://leafmap.org/) 与 [anymap](https://github.com/opengeos/anymap)：启发了 EasyGEE 的地图优先、Agent 驱动和本地优先 GIS 工作台设计。
 - [Insight Maps](https://map.insightmaps.app/)：参考了其紧凑地图工具栏、图层目录和专业 Web GIS 交互风格。
 - [netease-youdao/LobsterAI](https://github.com/netease-youdao/LobsterAI)：README 首屏结构、徽章和语言切换排版的参考。
+- [GeoAI Book](https://book.opengeoai.org/) 与 [GeoAI-Book](https://github.com/giswqs/GeoAI-Book)：EasyGEE 内置 GeoAI Encyclopedia 的任务方法、训练/推理和空间评估来源。
+- [Segment Geospatial](https://samgeo.gishub.org/)：GeoAI Encyclopedia 中地理空间 SAM 分割模式的重要参考。
+- [NASA HLS L30](https://developers.google.com/earth-engine/datasets/catalog/NASA_HLS_HLSL30_v002) 与 [HLS S30](https://developers.google.com/earth-engine/datasets/catalog/NASA_HLS_HLSS30_v002)：Landsat/Sentinel-2 30 m NBAR、一致化处理、公共波段和 Fmask 语义的官方来源。
+- [USGS CFMask](https://www.usgs.gov/landsat-missions/cfmask-algorithm) 与 [Landsat 云算法验证研究](https://www.usgs.gov/publications/cloud-detection-algorithm-comparison-and-validation-operational-landsat-data-products)：Landsat QA_PIXEL、CFMask 方法边界和验证依据。
+- [Sentinel-1 Algorithms](https://developers.google.com/earth-engine/guides/sentinel1)：SAR GRD 预处理、极化/轨道筛选、dB 后向散射和地形限制的官方来源。
+- [Earth Engine Compositing and Mosaicking](https://developers.google.com/earth-engine/guides/ic_composite_mosaic) 与 [`qualityMosaic()` API](https://developers.google.com/earth-engine/apidocs/ee-imagecollection-qualitymosaic)：时间合成、镶嵌、质量像元和像元来源语义的官方来源。
 
 更完整的来源与归因记录见 [skills/easygee/references/SOURCES.md](./skills/easygee/references/SOURCES.md)。

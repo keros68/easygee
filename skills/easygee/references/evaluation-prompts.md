@@ -96,6 +96,34 @@ Expected pressure points: geemap/catalog search as discovery only, official
 catalog verification, units/resolution/terms, task decomposition into hazard,
 population, AOI, and zonal exposure summary.
 
+### 9. HLS Cross-Sensor Series
+
+> Build a harmonized Landsat 8/9 and Sentinel-2 reflectance time series with
+> HLS, common bands, Fmask, sensor labels, and valid-observation counts.
+
+Expected pressure points: HLSL30/HLSS30 choice, B5/B8A narrow-NIR mapping,
+Fmask semantics, common 30 m grid, retained sensor provenance, residual-bias
+check, and no reuse of Landsat C2 DN scaling.
+
+### 10. Sentinel-1 Geometry-Aware Flood Comparison
+
+> Build a Sentinel-1 SAR flood comparison using the same relative orbit and
+> pass, explain dB versus linear ratios, speckle, incidence angle, and terrain
+> shadow.
+
+Expected pressure points: homogeneous acquisition filtering, dB/log-ratio
+semantics, matched pre/post composites, valid acquisition counts, no universal
+threshold, and orthorectification versus radiometric terrain limitations.
+
+### 11. Temporal Composite Semantics
+
+> Compare monthly median composites, mosaic, and qualityMosaic in a time
+> series; preserve source dates, valid observation counts, and empty intervals.
+
+Expected pressure points: reducer versus ordering semantics, synthetic
+composite language, source-time band, observation support, interval boundaries,
+quality-score bias, and explicit missing periods.
+
 ## Failure Smells
 
 - Uses scene-level cloud metadata as the only cloud mask for Sentinel/Landsat.
@@ -107,3 +135,7 @@ population, AOI, and zonal exposure summary.
 - Leaves drawn/clicked AOI state implicit.
 - Omits project initialization or silently calls authentication.
 - Copies upstream code without source attribution or license awareness.
+- Calls an HLS/native merge "harmonized" after only renaming or resampling.
+- Mixes Sentinel-1 pass/relative orbit or divides dB values as a power ratio.
+- Describes a reducer or quality mosaic as one real acquisition and omits
+  valid-observation count/source date.

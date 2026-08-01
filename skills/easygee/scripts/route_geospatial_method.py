@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import asdict, dataclass
 
 
@@ -40,6 +41,34 @@ ML_KEYWORDS = (
     "machine learning", "deep learning", "random forest", "classification",
     "classify", "train", "model", "cnn", "torch", "xgboost", "机器学习",
     "深度学习", "随机森林", "分类", "训练", "模型",
+)
+
+GEOAI_KEYWORDS = (
+    "geoai", "remote sensing ai", "remote-sensing ai", "image recognition", "object detection",
+    "semantic segmentation", "instance segmentation", "segmentation",
+    "change detection", "pixel regression", "image translation",
+    "segment anything", "vision-language", "vision language model",
+    "satellite embedding", "satellite embeddings", "foundation model",
+    "qgis geoai", "qgis ai", "qgis plugin", "deep learning",
+    "\u76ee\u6807\u68c0\u6d4b", "\u8bed\u4e49\u5206\u5272", "\u5b9e\u4f8b\u5206\u5272",
+    "\u53d8\u5316\u68c0\u6d4b", "\u50cf\u7d20\u56de\u5f52", "\u56fe\u50cf\u7ffb\u8bd1",
+    "\u5206\u5272", "\u89c6\u89c9\u8bed\u8a00", "\u536b\u661f\u5d4c\u5165",
+    "\u57fa\u7840\u6a21\u578b", "\u9065\u611fai", "\u9065\u611f ai",
+)
+
+GEOAI_CHAPTER_RULES = (
+    (("image recognition", "classification", "classify", "\u56fe\u50cf\u8bc6\u522b", "\u5206\u7c7b"), "geoai-with-python/chapters/ch07-image-recognition.md"),
+    (("object detection", "\u76ee\u6807\u68c0\u6d4b"), "geoai-with-python/chapters/ch08-object-detection.md"),
+    (("semantic segmentation", "\u8bed\u4e49\u5206\u5272"), "geoai-with-python/chapters/ch09-semantic-segmentation.md"),
+    (("instance segmentation", "\u5b9e\u4f8b\u5206\u5272"), "geoai-with-python/chapters/ch10-instance-segmentation.md"),
+    (("segmentation", "\u5206\u5272"), "geoai-with-python/chapters/ch09-semantic-segmentation.md"),
+    (("change detection", "\u53d8\u5316\u68c0\u6d4b"), "geoai-with-python/chapters/ch12-change-detection.md"),
+    (("pixel regression", "\u50cf\u7d20\u56de\u5f52"), "geoai-with-python/chapters/ch13-pixel-regression.md"),
+    (("image translation", "\u56fe\u50cf\u7ffb\u8bd1"), "geoai-with-python/chapters/ch11-image-translation.md"),
+    (("sam", "segment anything"), "geoai-with-python/chapters/ch14-sam-geospatial.md"),
+    (("vision-language", "vision language model", "\u89c6\u89c9\u8bed\u8a00"), "geoai-with-python/chapters/ch15-vision-language-models.md"),
+    (("satellite embedding", "satellite embeddings", "\u536b\u661f\u5d4c\u5165"), "geoai-with-python/chapters/ch16-satellite-embeddings.md"),
+    (("qgis geoai", "qgis ai", "qgis plugin"), "geoai-with-python/chapters/ch17-qgis-plugin-setup.md"),
 )
 
 BROWSER_KEYWORDS = (
@@ -80,6 +109,14 @@ def add_many(items: list[str], values: list[str] | tuple[str, ...]) -> None:
         add_unique(items, value)
 
 
+def geoai_chapters(text: str) -> list[str]:
+    selected: list[str] = []
+    for keywords, chapter in GEOAI_CHAPTER_RULES:
+        if any((re.search(r"(?<!\w)sam(?!\w)", text) if keyword == "sam" else keyword in text) for keyword in keywords):
+            add_unique(selected, chapter)
+    return selected
+
+
 def route(prompt: str) -> MethodRoute:
     text = prompt.strip().lower()
     gee_hits = hits(text, GEE_KEYWORDS)
@@ -87,6 +124,9 @@ def route(prompt: str) -> MethodRoute:
     local_hits = hits(text, LOCAL_KEYWORDS)
     local_operation_hits = hits(text, LOCAL_OPERATION_KEYWORDS)
     ml_hits = hits(text, ML_KEYWORDS)
+    geoai_hits = hits(text, GEOAI_KEYWORDS)
+    if re.search(r"(?<!\w)sam(?!\w)", text):
+        add_unique(geoai_hits, "sam")
     browser_hits = hits(text, BROWSER_KEYWORDS)
     hybrid_hits = hits(text, HYBRID_HINTS)
 
@@ -183,6 +223,13 @@ def route(prompt: str) -> MethodRoute:
         add_unique(artifacts, "model_or_training_plan")
     if local_operation_hits and method == "gee_first":
         add_unique(read, "geomaster:coordinate-systems.md")
+    needs_geoai = bool(geoai_hits) or (bool(ml_hits) and has_gee)
+    if needs_geoai:
+        add_unique(read, "geoai-encyclopedia.md")
+        add_unique(read, "geoai-with-python/SKILL.md")
+        add_many(read, geoai_chapters(text))
+        add_unique(artifacts, "geoai_method_or_model")
+        add_unique(next_actions, "Read geoai-encyclopedia.md and the smallest task chapter before choosing a custom model.")
 
     return MethodRoute(
         method=method,
@@ -216,6 +263,7 @@ def print_text(result: MethodRoute) -> None:
 
 def smoke() -> None:
     cases = [
+        ("Use GEE Sentinel-2 for semantic segmentation and train locally", "hybrid", "earth_engine_plus_local", {"geoai-encyclopedia.md", "geoai-with-python/SKILL.md", "geoai-with-python/chapters/ch09-semantic-segmentation.md"}),
         ("用 GEE 算北京朝阳公园 NDVI 并导出表格", "gee_first", "earth_engine", {"gee-agent-playbook.md", "dataset-qa-patterns.md", "task-patterns.md"}),
         ("本地 GeoTIFF 计算 NDVI 并保存 COG", "local_first", "local_python", {"geomaster:core-libraries.md", "geomaster:remote-sensing.md", "geomaster:big-data.md"}),
         ("GEE 获取 Sentinel-2，导出 COG 后用本地模型分类", "hybrid", "earth_engine_plus_local", {"gee-agent-playbook.md", "geomaster:machine-learning.md", "geomaster:big-data.md"}),

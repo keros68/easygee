@@ -14,6 +14,12 @@ smallest useful GeoMaster reference and keep EasyGEE responsible for
 authentication, quota, catalog, export, browser handoff, and Earth Engine code
 review.
 
+For task-oriented remote-sensing AI, EasyGEE also bundles the GeoAI
+Encyclopedia at `geoai-encyclopedia.md` and its `geoai-with-python` method
+chapters. Use that layer for task selection, training/inference, spatial
+evaluation, and georeferenced AI outputs; keep GeoMaster as the broader GIS
+and local data-method backend.
+
 ## Routing Order
 
 1. Run or apply `scripts/route_easygee_interaction.py` to decide whether the
@@ -24,7 +30,10 @@ review.
 3. Load only the referenced GeoMaster sections required by the route. Prefer
    the bundled plugin skill at `skills/geomaster` when available; otherwise use
    the user's global `geomaster` skill.
-4. Execute the workflow and report the backend split: GEE, local, hybrid,
+4. When the route identifies a remote-sensing AI task, read
+   `geoai-encyclopedia.md` and only the smallest matching chapter under
+   `geoai-with-python/`.
+5. Execute the workflow and report the backend split: GEE, local, hybrid,
    catalog, or browser.
 
 ## Backend Decisions
@@ -36,6 +45,7 @@ review.
 | `hybrid` | GEE data access plus local COG/STAC/ML/advanced stats or exact file-based GIS | Earth Engine plus local tools | Make handoff explicit: region, scale, projection, bands, masks, file paths |
 | `catalog_first` | User asks which dataset/source to use | GEE catalog plus GeoMaster data sources | Rank candidates and verify cadence, scale, bands, masks, licensing |
 | `browser_first` | User needs AOI drawing, layer inspection, annotation, or visual QA | EasyGEE Map Console | Treat map state as visual context, not analytical proof |
+| GeoAI method layer | User asks for detection, segmentation, change detection, regression, SAM, embeddings, or VLM | GEE plus local model tooling | Preserve data contract, spatial splits, evaluation scope, CRS, nodata, and model provenance |
 
 ## GeoMaster Knowledge Index
 
@@ -72,6 +82,9 @@ reference to read.
   statistics, or reproducible file-based delivery.
 - Prefer `catalog_first` when the user is not yet asking for analysis but for
   "which dataset/source should I use?"
+- Add the GeoAI method layer when the task includes a remote-sensing AI model;
+  use GEE for data access/exports, GeoMaster for GIS correctness, and the
+  smallest GeoAI chapter for training, inference, and spatial evaluation.
 - Prefer `browser_first` only for drawing, visual checking, comments, or map
   state tasks. Browser use does not replace numerical validation.
 

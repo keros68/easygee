@@ -1,6 +1,6 @@
 ---
 name: easygee
-description: Build, debug, and run Google Earth Engine Python and geemap workflows. Use for Earth Engine/geemap authorization, authentication, Cloud project setup, quotas, notebooks, browser map previews, Python scripts, 5,000+ official/community GEE dataset discovery, bilingual dataset selection by id/theme/task, dataset recommendation/comparison/verification, geospatial export, Sentinel/Landsat/MODIS/VIIRS/SAR/population collections, interactive maps, JavaScript-to-Python migration, local GIS integration, or OpenGeo/opengeos patterns such as GeoAgent, GeoLibre, leafmap, anymap, GEE agents, and catalog-driven assistants. Prefer this skill for reproducible GEE/geemap setup, notebooks, batch exports, map-first AI workflows, and auth/quota/project troubleshooting.
+description: Build, debug, and run Google Earth Engine Python and geemap workflows. Use for Earth Engine/geemap authorization, authentication, Cloud project setup, quotas, notebooks, browser map previews, Python scripts, 5,000+ official/community GEE dataset discovery, bilingual dataset selection by id/theme/task, dataset recommendation/comparison/verification, geospatial export, Sentinel/Landsat/MODIS/VIIRS/SAR/population collections, interactive maps, JavaScript-to-Python migration, local GIS integration, remote-sensing AI methods such as detection, segmentation, change detection, pixel regression, SAM, embeddings, vision-language models, QGIS GeoAI, or OpenGeo/opengeos patterns such as GeoAgent, GeoLibre, leafmap, anymap, GEE agents, and catalog-driven assistants. Prefer this skill for reproducible GEE/geemap setup, notebooks, batch exports, map-first AI workflows, GeoAI method execution, and auth/quota/project troubleshooting.
 ---
 
 # EasyGEE
@@ -32,6 +32,11 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
      STAC, ML, advanced statistics, or exact file-based GIS.
    - **catalog_first**: search/verify datasets before analysis.
    - **browser_first**: draw AOI or inspect map state before computation.
+   - For remote-sensing AI tasks, also read
+     `references/geoai-encyclopedia.md` and route to the smallest bundled
+     chapter under `references/geoai-with-python/`. Keep EasyGEE responsible
+     for GEE/export orchestration and GeoMaster responsible for general GIS
+     correctness.
 3. Identify the target mode:
    - **Notebook exploration**: use `geemap` for interactive maps, inspectors,
      layer styling, quick plots, and HTML/PNG map export.
@@ -61,6 +66,12 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 8. If the user mentions OpenGeoAgent, GeoLibre, OpenGeo/opengeos projects,
    QGIS AI assistants, catalog browsers, map agents, or "distilling" Qiusheng
    Wu's geospatial workflow style, read `references/opengeos-patterns.md`.
+9. If the user asks to execute a remote-sensing AI method, read
+   `references/geoai-encyclopedia.md` first, then load only the relevant
+   `references/geoai-with-python/chapters/` file(s). Use its data contract,
+   training/inference loop, spatial evaluation, and georeferenced-output rules
+   as the method layer; do not treat a model name or score as a completed
+   analysis.
 
 ## Resource Map
 
@@ -78,6 +89,9 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   STAC/COG, ML, point clouds, networks, or scientific-domain guidance.
 - Read `references/geomaster-knowledge-index.json` as the compact lookup table
   for GeoMaster reference routing before opening heavy GeoMaster files.
+- Read `references/geoai-encyclopedia.md` for task-oriented remote-sensing AI
+  routing. Its bundled `references/geoai-with-python/` directory preserves the
+  method skill's chapters, patterns, glossary, cheatsheet, and source map.
 - Read `references/browser-preview.md` when the user asks for an interactive
   map preview, persistent browser visualization, in-app Browser handoff, or
   local lightweight map page.
@@ -108,6 +122,22 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 - Read `references/dataset-qa-patterns.md` when choosing datasets, applying
   cloud/shadow masks, handling scale factors, reviewing Sentinel/Landsat/MODIS
   workflows, or deciding scale/projection/export parameters.
+- Read `references/cloud-mask-comparison-case.md` when designing a teaching
+  example that compares Sentinel-2 cloud masks visually and numerically.
+- Read `references/landsat-sentinel-comparison-case.md` when comparing Landsat
+  and Sentinel-2 observations, QA masks, native resolution, or NDVI outputs.
+- Read `references/landsat-cloud-mask-methods.md` when choosing or explaining
+  Landsat cloud masks, CFMask/QA_PIXEL, SimpleLandsatCloudScore, validation
+  evidence, or the boundary between masking and cloud-gap reconstruction.
+- Read `references/cross-sensor-harmonization.md` when combining Landsat 8/9
+  and Sentinel-2, selecting NASA HLS, mapping common bands, or testing residual
+  cross-sensor bias.
+- Read `references/temporal-compositing.md` when using collection reducers,
+  `mosaic()`, `qualityMosaic()`, monthly/seasonal composites, phenology, or
+  observation-count/source-date diagnostics.
+- Read `references/sentinel1-sar-methods.md` when using Sentinel-1 GRD,
+  comparing pre/post backscatter, matching orbit geometry, handling dB versus
+  linear power, speckle, incidence angle, or terrain effects.
 - Read `references/task-patterns.md` when the user asks for an outcome such as
   NDVI, water/flood extent, land-cover classification, change detection, zonal
   statistics, time series, terrain derivatives, or a communication map.
@@ -237,7 +267,7 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 - Use `scripts/audit_skill_coverage.py` after editing this skill to check that
   core references, scripts, source markers, planners, routers, and reviewer
   findings still work offline.
-- Use `scripts/run_evaluation_prompts.py` to regression-test the eight
+- Use `scripts/run_evaluation_prompts.py` to regression-test the eleven
   evaluation prompts across task planning, geemap routing, and dataset search.
 
 ## Operating Rules
@@ -294,6 +324,11 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   For local files, CRS-heavy work, COG/STAC, ML, point clouds, networks, or
   scientific-domain methods, run `route_geospatial_method.py` and load only the
   GeoMaster references named in its `read` list.
+- Use the GeoAI Encyclopedia as the task-method backend for remote-sensing AI.
+  Read `references/geoai-encyclopedia.md`, choose the smallest relevant
+  chapter, and preserve its data, spatial-split, evaluation, and
+  georeferenced-output contracts. Do not bulk-load the bundled chapters or
+  claim training/inference ran without a checked artifact.
 - For hybrid workflows, make the GEE-to-local handoff explicit: AOI, bands,
   scale, projection, masks, nodata, export status, local file path, and which
   backend owns each step.
@@ -399,11 +434,19 @@ ee.Initialize(project=PROJECT)
 
 m = geemap.Map()
 roi = ee.Geometry.Point([120.16, 30.25]).buffer(10_000)
-image = (
+s2 = (
     ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
     .filterBounds(roi)
     .filterDate("2024-01-01", "2024-12-31")
     .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 20))
+    .linkCollection(
+        ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"),
+        ["cs_cdf"],
+    )
+    .map(lambda image: image.updateMask(image.select("cs_cdf").gte(0.60)))
+)
+image = (
+    s2
     .median()
 )
 m.centerObject(roi, 10)
@@ -421,11 +464,19 @@ PROJECT = "my-earthengine-project"
 def main():
     ee.Initialize(project=PROJECT)
     roi = ee.Geometry.Rectangle([119.8, 30.0, 120.5, 30.5])
-    ndvi = (
+    s2 = (
         ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
         .filterBounds(roi)
         .filterDate("2024-01-01", "2024-12-31")
         .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 20))
+        .linkCollection(
+            ee.ImageCollection("GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED"),
+            ["cs_cdf"],
+        )
+        .map(lambda image: image.updateMask(image.select("cs_cdf").gte(0.60)))
+    )
+    ndvi = (
+        s2
         .median()
         .normalizedDifference(["B8", "B4"])
         .rename("NDVI")
@@ -454,10 +505,13 @@ Before reporting a GEE/geemap task as done:
 7. When interaction routing affected the workflow, report the route mode,
    browser policy, produced artifacts, and whether the browser was opened,
    updated, or intentionally deferred.
-8. For browser previews, report the localhost URL, whether it was opened in the
+8. For GeoAI tasks, report the AI task type, selected chapter, data contract,
+   model/inference choice, spatial evaluation design, output CRS/schema, and
+   any unrun or unverifiable step.
+9. For browser previews, report the localhost URL, whether it was opened in the
    in-app Browser, and whether map tiles/layers visibly rendered.
-9. When method routing affected the workflow, report `gee_first`,
+10. When method routing affected the workflow, report `gee_first`,
    `local_first`, `hybrid`, `catalog_first`, or `browser_first`, the backends
    used, GeoMaster references consulted or deferred, and the artifact handoff.
-10. Mention any unrun pieces caused by missing credentials, quota, permissions,
+11. Mention any unrun pieces caused by missing credentials, quota, permissions,
    or user authentication.

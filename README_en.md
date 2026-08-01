@@ -23,9 +23,14 @@ EasyGEE packages Google Earth Engine, geemap, GeoMaster method knowledge, and a 
 - Query Earth Engine quota limits and usage as agent-readable summaries.
 - Generate the lightweight EasyGEE Map Console for AOI drawing, layer overlays, basemap switching, and visual QA.
 - Bundle GeoMaster as a skill for CRS, local GIS, remote sensing, ML, STAC/COG, scientific-domain methods, and troubleshooting.
+- Bundle the GeoAI Encyclopedia as EasyGEE's task-method layer for image recognition, object detection, semantic/instance segmentation, change detection, pixel regression, SAM, satellite embeddings, vision-language models, and QGIS GeoAI. The router loads only the relevant chapter and keeps GEE/export orchestration separate from local model execution.
 - Bundle GEE Growth Diary as a distilled method skill from 153 GEEer成长日记 articles covering dataset choice, indices, time series, classification, water extraction, charts, and exports.
+- Bundle remote-sensing method cards and visual teaching cases for Landsat cloud masking, Sentinel-2 cloud masking, HLS cross-sensor harmonization, temporal compositing, Sentinel-1 SAR, and Landsat/Sentinel-2 comparison.
 
 ## Layout
+
+<details>
+<summary>Expand the project layout</summary>
 
 ```text
 easygee/
@@ -36,11 +41,15 @@ easygee/
 ├── hooks/               # Hook config and lightweight scripts
 ├── scripts/             # EasyGEE MCP server entrypoint
 ├── skills/
-│   ├── easygee/         # GEE / geemap / map-console workflows
+│   ├── easygee/         # GEE / geemap / map-console and remote-sensing workflows
+│   │   ├── references/  # QA, HLS, SAR, temporal-compositing, and GeoAI references
+│   │   └── scripts/     # catalog search, task routing, cases, and offline evaluation
 │   ├── geomaster/       # Local GIS and remote-sensing method knowledge
 │   └── gee-growth-diary/ # Distilled GEEer成长日记 method playbook
 └── adapters/            # Codex, Claude, Zcode, and Qoder notes
 ```
+
+</details>
 
 ## Usage
 
@@ -125,5 +134,9 @@ EasyGEE distills patterns from many open geospatial resources and projects. Spec
 - [OpenGeoAgent / GeoAgent](https://github.com/opengeos/GeoAgent), [GeoLibre](https://github.com/opengeos/GeoLibre), [leafmap](https://leafmap.org/), and [anymap](https://github.com/opengeos/anymap) for map-first, agentic, and local-first GIS workbench ideas.
 - [Insight Maps](https://map.insightmaps.app/) for compact map tools, layer catalog interactions, and polished Web GIS UI references.
 - [netease-youdao/LobsterAI](https://github.com/netease-youdao/LobsterAI) for README hero structure, badges, and language-switch layout inspiration.
+- [NASA HLS L30](https://developers.google.com/earth-engine/datasets/catalog/NASA_HLS_HLSL30_v002) and [HLS S30](https://developers.google.com/earth-engine/datasets/catalog/NASA_HLS_HLSS30_v002) for official HLS 30 m NBAR, harmonization processing, common bands, and Fmask semantics.
+- [USGS CFMask](https://www.usgs.gov/landsat-missions/cfmask-algorithm) and the [Landsat cloud-algorithm validation study](https://www.usgs.gov/publications/cloud-detection-algorithm-comparison-and-validation-operational-landsat-data-products) for Landsat QA_PIXEL, CFMask boundaries, and validation evidence.
+- [Sentinel-1 Algorithms](https://developers.google.com/earth-engine/guides/sentinel1) for official SAR GRD preprocessing, polarization/orbit filtering, dB backscatter, and terrain limitations.
+- [Earth Engine Compositing and Mosaicking](https://developers.google.com/earth-engine/guides/ic_composite_mosaic) and the [`qualityMosaic()` API](https://developers.google.com/earth-engine/apidocs/ee-imagecollection-qualitymosaic) for temporal composite, mosaic, quality-pixel, and source-pixel semantics.
 
 See [skills/easygee/references/SOURCES.md](./skills/easygee/references/SOURCES.md) for the fuller source and attribution record.

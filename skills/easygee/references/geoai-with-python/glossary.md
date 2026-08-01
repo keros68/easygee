@@ -1,0 +1,25 @@
+# Glossary
+
+- **Annotation format** — schema describing labels for learning; common choices are COCO, YOLO, Pascal VOC, and raster masks (Ch03, Ch06).
+- **Band order** — the mapping from raster band indices to physical channels such as blue, green, red, and NIR; it must match the model (Ch03, Ch04, Ch19).
+- **Change detection** — estimating differences between co-registered observations at two times (Ch12).
+- **COG** — Cloud Optimized GeoTIFF, a tiled/overviews-friendly raster layout for efficient remote access (Ch03, Ch05).
+- **CRS** — coordinate reference system; defines how pixel/vector coordinates map to Earth (Ch03).
+- **Embedding** — learned numeric representation of an image patch, pixel, or scene used for similarity or downstream prediction (Ch16).
+- **GeoAI** — application of artificial intelligence to geospatial data, with explicit spatial, temporal, and sensor context (Ch01).
+- **IoU** — intersection over union; overlap between predicted and reference regions/boxes, used in detection and segmentation evaluation (Ch08–Ch10).
+- **Instance segmentation** — predicts a separate mask/ID for each object instance, not merely a class per pixel (Ch10, Ch23).
+- **Mask** — raster whose values encode class, instance, probability, or nodata (Ch03, Ch09, Ch10).
+- **mAP** — mean average precision, a detection metric aggregated over classes and often IoU thresholds (Ch08).
+- **Nodata** — pixels without valid observation; keep them distinct from a real background class (Ch03, Ch06).
+- **Overlap** — shared pixels between adjacent inference tiles; reduces edge artifacts at the cost of time and memory (Ch06, Ch08–Ch14).
+- **Pixel regression** — continuous prediction for every pixel, such as NDVI, biomass, or canopy height (Ch13).
+- **Prompt** — text, point, box, or geometry supplied to a foundation model to specify an object or region (Ch14, Ch21).
+- **Rasterization** — conversion of vector labels to a reference raster grid (Ch03, Ch06).
+- **Semantic segmentation** — assigns one class label to each pixel (Ch09, Ch22).
+- **STAC** — SpatioTemporal Asset Catalog specification/API for discovering geospatial assets by space, time, and metadata (Ch04, Ch05).
+- **Stride** — distance between successive training tiles; smaller than tile size creates overlap (Ch06).
+- **Tiling** — splitting a large geospatial raster into manageable patches while preserving georeferencing (Ch03, Ch06).
+- **Vectorization** — conversion of raster regions/masks into georeferenced vector geometries (Ch09, Ch10, Ch14).
+- **VLM** — vision-language model that combines image understanding with text prompts or answers (Ch15, Ch20).
+- **Windowed inference** — running a model on overlapping windows and stitching outputs for large rasters (Ch08–Ch13).

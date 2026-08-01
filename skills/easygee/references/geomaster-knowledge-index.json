@@ -1,6 +1,15 @@
 {
   "source_skill": "geomaster",
   "integration_policy": "Use GeoMaster as EasyGEE's geospatial method backend. Do not bulk-copy examples into EasyGEE; route to the smallest relevant GeoMaster reference and keep EasyGEE responsible for GEE auth, quota, catalog, browser, and export orchestration.",
+  "companion_method_layers": [
+    {
+      "id": "geoai-encyclopedia",
+      "file": "geoai-encyclopedia.md",
+      "bundle": "geoai-with-python",
+      "triggers": ["GeoAI", "object detection", "semantic segmentation", "instance segmentation", "change detection", "pixel regression", "SAM", "vision-language", "satellite embeddings", "QGIS GeoAI"],
+      "policy": "Use the smallest task chapter for remote-sensing AI execution while EasyGEE owns GEE/export orchestration and GeoMaster owns general GIS correctness."
+    }
+  ],
   "backend_methods": {
     "gee_first": "Use Earth Engine/geemap for cloud-scale catalog access, compositing, reducers, visualization, and exports.",
     "local_first": "Use local GIS/remote-sensing libraries for local files, CRS-heavy operations, windowed raster IO, topology, network, point cloud, or COG/STAC processing.",

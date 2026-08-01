@@ -95,12 +95,14 @@ add a new toolbar button for each analysis.
 
 | User Intent | Prefer | Read Also | First Probe | Common Failure |
 |---|---|---|---|---|
-| Vegetation health, greenness, crop vigor, NDVI/EVI | Sentinel-2 SR, Landsat C2 L2, MOD13Q1 for long coarse series | `dataset-qa-patterns.md` | Add RGB + index layer; reduce mean over tiny AOI | Cloud/haze left unmasked, mixing 10 m and 250 m without saying so |
-| Surface water, flood extent, inundation | JRC Global Surface Water for historical occurrence; Sentinel-2/Landsat index threshold for event maps; Sentinel-1 when cloudy | `dataset-qa-patterns.md`, `geemap-agent-recipes.md` | Add water mask and inspect edge pixels | Threshold treated as universal truth; shadows/clouds confuse optical water |
+| Vegetation health, greenness, crop vigor, NDVI/EVI | Sentinel-2 SR, Landsat C2 L2, MOD13Q1 for long coarse series | `dataset-qa-patterns.md`; `cross-sensor-harmonization.md` if sensors are mixed | Add RGB + index layer; reduce mean over tiny AOI | Cloud/haze left unmasked, mixing sensors/resolutions without saying so |
+| Landsat + Sentinel-2 dense series | NASA HLS L30/S30 when 30 m common NBAR is acceptable; native products only with explicit harmonization | `cross-sensor-harmonization.md` | Plot paired stable-target differences and valid count by sensor | Rename/resample mistaken for harmonization; residual sensor/date bias ignored |
+| Surface water, flood extent, inundation | JRC Global Surface Water for historical occurrence; Sentinel-2/Landsat index threshold for event maps; Sentinel-1 when cloudy | `dataset-qa-patterns.md`, `sentinel1-sar-methods.md`, `geemap-agent-recipes.md` | Add water mask and inspect edge pixels | Threshold treated as universal truth; shadows/clouds or SAR geometry confuse water |
 | Land cover, crop/urban/forest classes | Dynamic World / ESA WorldCover for existing classes; supervised classifier for custom classes | `dataset-qa-patterns.md` | Class palette + class area table | Averaging class labels; no validation split/confusion matrix |
 | Change detection, disturbance, loss/gain | Pre/post composites, differenced index, categorical transitions, Hansen/JRC products when appropriate | `gee-agent-playbook.md` | Side-by-side maps and histogram/delta summary | Seasonal mismatch or different sensors/scales masquerade as change |
 | Zonal statistics, admin summaries, area by class | `reduceRegions`, grouped reducers, `geemap.zonal_stats`, table export | `geemap-agent-recipes.md` | Run one feature first, then full collection | Missing scale/CRS or class pixel area calculation |
-| Time series and charts | Map image collection to FeatureCollection, chart in notebook, export CSV for large series | `workflows.md`, `geemap-agent-recipes.md` | Plot 5-20 rows before export | `getInfo()` on large FeatureCollection |
+| Time series and charts | Map image collection to FeatureCollection, chart in notebook, export CSV for large series | `temporal-compositing.md`, `workflows.md`, `geemap-agent-recipes.md` | Plot 5-20 rows and missing intervals before export | `getInfo()` on large FeatureCollection; irregular/missing observations hidden |
+| Monthly/seasonal/best-pixel composite | Reducer for a synthetic interval summary; `mosaic()` for ordered priority; `qualityMosaic()` for explicit per-pixel quality | `temporal-compositing.md` | Add valid count and selected source time | Composite described as one acquisition; collection order or quality bias hidden |
 | Supervised classification | Sample predictors, train classifier, classify, validate with holdout/confusion matrix | `dataset-qa-patterns.md` | Show training points over composite | Band order mismatch; class labels not integer/consecutive |
 | Terrain, slope, aspect, hillshade | DEM native projection when possible, terrain functions, cautious resampling | `dataset-qa-patterns.md` | Inspect projection and slope range | Default composite projection or forced `reproject()` over huge area |
 | Land surface temperature, heat island | Landsat C2 L2 for 30 m LST snapshots; MOD11A2 for coarse time series | `dataset-qa-patterns.md` | LST map plus min/mean/max over small AOI | Raw thermal DN treated as Celsius; QA/cloud effects ignored |
@@ -125,7 +127,7 @@ phenology, or drought proxies.
    for long time series.
 
 Agent refusal point: do not compare vegetation values across sensors/resolutions
-without writing the harmonization caveat.
+without applying and documenting the route in `cross-sensor-harmonization.md`.
 
 ## Water And Flood Workflow
 
@@ -158,7 +160,8 @@ For supervised classification:
 1. Build a cloud-masked, scaled composite with predictors documented in order.
 2. Load or draw training data; class property must be numeric and consecutive.
 3. Use `sampleRegions()` or `sample()` with explicit scale and geometries.
-4. Split training/validation using `randomColumn()` or independent samples.
+4. Prefer spatially independent holdout blocks when samples are clustered;
+   random pixel splits can leak spatial autocorrelation.
 5. Train classifier, classify image, and report confusion matrix/accuracy
    limits.
 6. Export classification map and validation table separately.
