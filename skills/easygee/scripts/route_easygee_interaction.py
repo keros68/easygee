@@ -25,6 +25,13 @@ COMPUTE_KEYWORDS = (
     "reduce",
     "time series",
     "timeseries",
+    "extract",
+    "detect",
+    "identify",
+    "recognize",
+    "segment",
+    "outline",
+    "trace",
     "计算",
     "算",
     "统计",
@@ -40,6 +47,13 @@ COMPUTE_KEYWORDS = (
     "分区",
     "时间序列",
     "时序",
+    "提取",
+    "识别",
+    "检测",
+    "分割",
+    "勾画",
+    "勾勒",
+    "圈出",
 )
 
 MAP_KEYWORDS = (
@@ -76,15 +90,34 @@ AOI_KEYWORDS = (
     "draw",
     "aoi",
     "roi",
-    "polygon",
-    "boundary",
     "extent",
     "画",
     "绘制",
     "研究区",
     "范围",
-    "边界",
-    "多边形",
+)
+
+MULTIMODAL_VECTOR_KEYWORDS = (
+    "multimodal",
+    "vision-language",
+    "visual recognition",
+    "visual ability",
+    "多模态",
+    "视觉能力",
+    "视觉识别",
+)
+
+VECTOR_FILE_KEYWORDS = (
+    "geopackage",
+    ".gpkg",
+    "gpkg",
+    "geojson",
+    "shapefile",
+    "vector file",
+    "crs",
+    "矢量文件",
+    "矢量",
+    "带 crs",
 )
 
 TABLE_KEYWORDS = (
@@ -162,6 +195,9 @@ def route(prompt: str) -> Route:
     notebook_hits = hits(text, NOTEBOOK_KEYWORDS)
     script_hits = hits(text, SCRIPT_KEYWORDS)
     mixed_hits = hits(text, MIXED_HINTS)
+    multimodal_hits = hits(text, MULTIMODAL_VECTOR_KEYWORDS)
+    vector_file_hits = hits(text, VECTOR_FILE_KEYWORDS)
+    is_multimodal_vector = bool(multimodal_hits) and bool(vector_file_hits)
 
     artifacts: list[str] = []
     triggers: list[str] = []
@@ -186,13 +222,17 @@ def route(prompt: str) -> Route:
     if script_hits:
         add_unique(artifacts, "script")
         triggers.append("script")
+    if is_multimodal_vector:
+        for artifact in ("source_imagery", "visual_annotations", "vector_file", "qa_preview"):
+            add_unique(artifacts, artifact)
+        triggers.append("multimodal_vector")
 
-    is_mixed = bool(mixed_hits) or (bool(compute_hits) and bool(map_hits))
+    is_mixed = bool(mixed_hits) or (bool(compute_hits) and bool(map_hits)) or is_multimodal_vector
     if is_mixed:
         mode = "mixed"
         browser_policy = "compute_then_handoff_if_useful"
         add_unique(artifacts, "stat")
-        if map_hits or mixed_hits:
+        if map_hits or mixed_hits or is_multimodal_vector:
             add_unique(artifacts, "map_layer")
         next_actions = [
             "Run the smallest reliable computation first.",
@@ -255,6 +295,12 @@ def smoke() -> None:
             "mixed",
             "compute_then_handoff_if_useful",
             {"stat", "map_layer"},
+        ),
+        (
+            "从 GEE 获取达拉特光伏基地近期清晰影像，用多模态视觉提取所有可见光伏场区边界，并导出带 CRS 的 GeoPackage。中心约为 109.671°E、40.295°N。",
+            "mixed",
+            "compute_then_handoff_if_useful",
+            {"source_imagery", "visual_annotations", "vector_file", "qa_preview"},
         ),
     ]
     for prompt, mode, policy, artifacts in cases:

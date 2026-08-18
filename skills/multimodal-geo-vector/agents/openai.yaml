@@ -1,0 +1,4 @@
+interface:
+  display_name: "Multimodal Geo Vector"
+  short_description: "Export multimodal remote-sensing detections as CRS vectors"
+  default_prompt: "Use $multimodal-geo-vector to get a clear local or GEE image, extract the visible target boundaries, and export a CRS-aware GeoPackage."

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.2 - 2026-08-18
+
+### Added
+
+- A generic `multimodal-geo-vector` skill for turning local or GEE imagery
+  annotations into CRS-aware GeoPackage/GeoJSON artifacts.
+- AOI-local recent-scene selection, polygon-hole preservation, and automatic
+  raster/vector QA overlays.
+- Routing regression coverage for short photovoltaic, vehicle, tree-crown,
+  field-parcel, and vessel prompts.
+
+### Changed
+
+- Short multimodal prompts now treat center coordinates as spatial seeds and
+  GeoPackage as a local GIS deliverable without asking redundant questions.
+- GEE visual-boundary workflows prefer one traceable clear acquisition over a
+  median composite and report valid-pixel coverage.
+
 ## 0.3.1 - 2026-08-01
 
 ### Changed

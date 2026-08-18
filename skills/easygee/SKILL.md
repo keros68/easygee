@@ -72,6 +72,12 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
    training/inference loop, spatial evaluation, and georeferenced-output rules
    as the method layer; do not treat a model name or score as a completed
    analysis.
+10. If the user asks a multimodal model to detect, count, outline, or segment
+    visible targets in local or GEE imagery and export CRS-aware vectors, use
+    the sibling `multimodal-geo-vector` skill. Keep EasyGEE responsible for GEE
+    discovery, project/auth, preprocessing, and export; let that skill handle
+    annotation JSON, tiling, pixel-to-map conversion, deduplication, and
+    GeoPackage/GeoJSON handoff.
 
 ## Resource Map
 
