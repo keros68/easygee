@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -25,6 +26,7 @@ ROUTE_LABELS = {
     "gee_product": "Use an existing GEE/catalog product",
     "gee_remote_sensing": "Derive the target from remote-sensing data",
     "current_image_vision": "Recognize objects from the currently visible image",
+    "multimodal_geo_vector": "Use multimodal visual recognition and CRS-aware vectorization",
     "ask_user": "Ask a clarifying question first",
 }
 
@@ -94,6 +96,38 @@ BUILDING_WORDS = (
     "楼宇",
     "建成区",
 )
+PHOTOVOLTAIC_WORDS = (
+    "photovoltaic",
+    "solar array",
+    "solar farm",
+    "pv array",
+    "solar panel field",
+    "光伏",
+    "光伏阵列",
+    "光伏场区",
+    "光伏基地",
+    "光伏电站",
+)
+VEHICLE_WORDS = ("vehicle", "vehicles", "car", "cars", "automobile", "汽车", "车辆", "机动车")
+TREE_CROWN_WORDS = (
+    "tree crown",
+    "tree canopy",
+    "individual tree",
+    "street tree",
+    "树冠",
+    "单木",
+    "行道树",
+)
+FIELD_PARCEL_WORDS = (
+    "field parcel",
+    "field boundary",
+    "cropland parcel",
+    "farm boundary",
+    "田块",
+    "地块",
+    "农田边界",
+)
+VESSEL_WORDS = ("vessel", "vessels", "ship", "ships", "boat", "boats", "船舶", "船只", "舰船")
 CURRENT_IMAGE_WORDS = (
     "this image",
     "current image",
@@ -111,6 +145,33 @@ CURRENT_IMAGE_WORDS = (
 )
 AOI_WORDS = ("aoi", "roi", "area", "polygon", "区域", "范围", "这个区域", "多边形", "矩形")
 EXTRACT_WORDS = ("extract", "detect", "segment", "mask", "classify", "提取", "识别", "分割", "检测", "圈出")
+MULTIMODAL_WORDS = (
+    "multimodal",
+    "vision-language",
+    "visual ability",
+    "visual recognition",
+    "多模态",
+    "视觉能力",
+    "视觉识别",
+)
+VECTOR_OUTPUT_WORDS = (
+    "geopackage",
+    ".gpkg",
+    "gpkg",
+    "geojson",
+    "shapefile",
+    "vector file",
+    "crs",
+    "矢量文件",
+    "矢量",
+    "带 crs",
+)
+GEE_SOURCE_WORDS = ("google earth engine", "earth engine", "gee", "从 gee", "用 gee")
+LOCATION_SEED_WORDS = ("中心", "中心点", "坐标", "经纬度", "longitude", "latitude", "center", "coordinates")
+COORDINATE_PAIR_RE = re.compile(
+    r"(?<![\d.])[-+]?(?:(?:1[0-7]\d)|(?:[1-9]?\d))(?:\.\d+)?\s*(?:°|度)?\s*[EeWw东西]?\s*[,，、;；/]\s*"
+    r"[-+]?(?:[1-8]?\d)(?:\.\d+)?\s*(?:°|度)?\s*[NnSs南北]?"
+)
 
 
 @dataclass(frozen=True)
@@ -162,12 +223,24 @@ def load_context(path: str | None) -> dict[str, Any]:
 
 def infer_intent(prompt: str) -> dict[str, Any]:
     target = "unknown"
-    if has_any(prompt, WATER_WORDS):
+    if has_any(prompt, PHOTOVOLTAIC_WORDS):
+        target = "photovoltaic"
+    elif has_any(prompt, VEHICLE_WORDS):
+        target = "vehicle"
+    elif has_any(prompt, TREE_CROWN_WORDS):
+        target = "tree_crown"
+    elif has_any(prompt, FIELD_PARCEL_WORDS):
+        target = "field_parcel"
+    elif has_any(prompt, VESSEL_WORDS):
+        target = "vessel"
+    elif has_any(prompt, WATER_WORDS):
         target = "water"
-    if has_any(prompt, ROOF_WORDS):
+    if target == "unknown" and has_any(prompt, ROOF_WORDS):
         target = "rooftop"
     elif target == "unknown" and has_any(prompt, BUILDING_WORDS):
         target = "building"
+
+    mentions_location_seed = has_any(prompt, LOCATION_SEED_WORDS) or bool(COORDINATE_PAIR_RE.search(prompt))
 
     return {
         "target": target,
@@ -177,6 +250,10 @@ def infer_intent(prompt: str) -> dict[str, Any]:
         "mentions_flood": has_any(prompt, FLOOD_WORDS),
         "mentions_historical": has_any(prompt, HISTORICAL_WATER_WORDS),
         "mentions_current": has_any(prompt, CURRENT_WORDS),
+        "mentions_multimodal": has_any(prompt, MULTIMODAL_WORDS),
+        "mentions_vector_output": has_any(prompt, VECTOR_OUTPUT_WORDS),
+        "mentions_gee_source": has_any(prompt, GEE_SOURCE_WORDS),
+        "mentions_location_seed": mentions_location_seed,
     }
 
 
@@ -301,6 +378,36 @@ def building_routes(intent: dict[str, Any]) -> list[CandidateRoute]:
     ]
 
 
+def multimodal_vector_routes(intent: dict[str, Any]) -> list[CandidateRoute]:
+    target = intent["target"].replace("_", " ")
+    return [
+        CandidateRoute(
+            route="multimodal_geo_vector",
+            label="Multimodal visual extraction to CRS-aware vectors",
+            confidence="high" if intent["mentions_multimodal"] and intent["mentions_vector_output"] else "medium",
+            when_to_use="Use when the request is to recognize visible targets and deliver reusable geospatial boundaries rather than only a screen annotation.",
+            datasets=(
+                "a recent clear single-scene GEE image or a local georeferenced raster",
+                "source raster CRS and affine transform",
+            ),
+            outputs=(
+                f"{target} candidate polygons",
+                "CRS-aware GeoPackage/GeoJSON",
+                "QA overlay and provenance record",
+            ),
+            limitations=(
+                "Visual annotations are candidates until checked against the source pixels or reference labels.",
+                "Boundary precision is limited by source resolution, display scale, and georeferencing quality.",
+            ),
+            next_steps=(
+                "Resolve the named place or center coordinate into a target-scale AOI.",
+                "Select one recent clear scene using AOI-valid-pixel and local cloud-quality checks.",
+                "Tile the source image when needed, normalize annotations, vectorize with the raster transform, and render a QA overlay.",
+            ),
+        )
+    ]
+
+
 def generic_routes(intent: dict[str, Any]) -> list[CandidateRoute]:
     return [
         CandidateRoute(
@@ -340,6 +447,7 @@ def build_questions(intent: dict[str, Any], context: dict[str, Any]) -> list[Cla
     questions: list[ClarifyingQuestion] = []
     target = intent["target"]
     has_aoi = bool(context.get("has_aoi"))
+    is_multimodal_vector = intent["mentions_multimodal"] and intent["mentions_vector_output"]
 
     if target == "unknown":
         questions.append(
@@ -365,7 +473,7 @@ def build_questions(intent: dict[str, Any], context: dict[str, Any]) -> list[Cla
                 ),
             )
         )
-    elif target in {"rooftop", "building"}:
+    elif target in {"rooftop", "building"} and not is_multimodal_vector:
         questions.append(
             ClarifyingQuestion(
                 id="building_output",
@@ -378,7 +486,12 @@ def build_questions(intent: dict[str, Any], context: dict[str, Any]) -> list[Cla
             )
         )
 
-    if intent["mentions_aoi"] and not has_aoi:
+    needs_spatial_seed = (
+        (intent["mentions_aoi"] or (is_multimodal_vector and intent["mentions_gee_source"]))
+        and not has_aoi
+        and not intent["mentions_location_seed"]
+    )
+    if needs_spatial_seed:
         questions.append(
             ClarifyingQuestion(
                 id="aoi_missing",
@@ -397,6 +510,8 @@ def build_questions(intent: dict[str, Any], context: dict[str, Any]) -> list[Cla
 def choose_route(intent: dict[str, Any], questions: list[ClarifyingQuestion]) -> str:
     if questions:
         return "ask_user"
+    if intent["target"] != "unknown" and intent["mentions_multimodal"] and intent["mentions_vector_output"]:
+        return "multimodal_geo_vector"
     if intent["target"] == "water":
         if intent["mentions_historical"]:
             return "gee_product"
@@ -411,6 +526,8 @@ def choose_route(intent: dict[str, Any], questions: list[ClarifyingQuestion]) ->
 
 
 def candidate_routes(intent: dict[str, Any]) -> list[CandidateRoute]:
+    if intent["target"] != "unknown" and intent["mentions_multimodal"] and intent["mentions_vector_output"]:
+        return multimodal_vector_routes(intent)
     if intent["target"] == "water":
         return water_routes(intent)
     if intent["target"] in {"rooftop", "building"}:
@@ -420,6 +537,14 @@ def candidate_routes(intent: dict[str, Any]) -> list[CandidateRoute]:
 
 def read_references(intent: dict[str, Any]) -> list[str]:
     refs = ["references/task-patterns.md", "references/dataset-qa-patterns.md", "references/browser-preview.md"]
+    if intent["mentions_multimodal"] and intent["mentions_vector_output"]:
+        refs.extend(
+            [
+                "skill:multimodal-geo-vector",
+                "../multimodal-geo-vector/references/annotation-contract.md",
+                "references/export-boundaries.md",
+            ]
+        )
     if intent["target"] in {"rooftop", "building"}:
         refs.append("references/gee-agent-playbook.md")
     return refs
@@ -451,7 +576,13 @@ def build_plan(prompt: str, context: dict[str, Any] | None = None) -> dict[str, 
         "candidate_routes": [asdict(item) for item in candidate_routes(intent)],
         "clarifying_questions": [asdict(question) for question in questions],
         "clarification_policy": "Ask one multiple-choice question at a time. Put the recommended option first and continue only after the user's choice changes the route.",
-        "agent_next_action": "ask_user" if route == "ask_user" else "execute_background_workflow",
+        "agent_next_action": (
+            "ask_user"
+            if route == "ask_user"
+            else "execute_hybrid_multimodal_vector_workflow"
+            if route == "multimodal_geo_vector"
+            else "execute_background_workflow"
+        ),
         "read": read_references(intent),
         "map_console": {
             "prefer_agent_protocol": True,
@@ -489,6 +620,16 @@ def run_smoke() -> int:
         ("提取这个AOI里的长期水体", {"has_aoi": True}, "water", "gee_product", None),
         ("提取这个影像里的屋顶", {"has_active_image": True, "active_layer": "visible satellite image"}, "rooftop", "ask_user", "building_output"),
         ("extract flood water in this AOI after the storm", {"has_aoi": True}, "water", "gee_remote_sensing", None),
+        (
+            "从 GEE 获取达拉特光伏基地近期清晰影像，用多模态视觉提取所有可见光伏场区边界，并导出带 CRS 的 GeoPackage。中心约为 109.671°E、40.295°N。",
+            {},
+            "photovoltaic",
+            "multimodal_geo_vector",
+            None,
+        ),
+        ("用多模态视觉提取当前影像中的车辆并导出 GeoJSON", {"has_active_image": True}, "vehicle", "multimodal_geo_vector", None),
+        ("用多模态视觉勾画树冠，导出带 CRS 的矢量", {"has_aoi": True}, "tree_crown", "multimodal_geo_vector", None),
+        ("用多模态视觉提取田块边界并导出 GeoPackage", {"has_aoi": True}, "field_parcel", "multimodal_geo_vector", None),
     ]
     for prompt, context, target, route, question_id in cases:
         plan = build_plan(prompt, context)

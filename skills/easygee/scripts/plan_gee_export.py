@@ -28,7 +28,19 @@ DESTINATION_KEYWORDS = {
     "cloud_storage": ("cloud storage", "gcs", "bucket", "storage bucket", "存储桶", "云存储", "对象存储"),
     "asset": ("asset", "earth engine asset", "ee asset", "资产", "gee资产", "earth engine 资产"),
     "bigquery": ("bigquery", "bq", "big query"),
-    "local": ("local", "download", "save locally", "本地", "下载", "保存到本地", "落盘"),
+    "local": (
+        "local",
+        "download",
+        "save locally",
+        "geopackage",
+        "geo package",
+        ".gpkg",
+        "gpkg",
+        "本地",
+        "下载",
+        "保存到本地",
+        "落盘",
+    ),
 }
 
 DATA_KIND_KEYWORDS = {
@@ -74,6 +86,10 @@ DATA_KIND_KEYWORDS = {
         "画图",
     ),
     "vector": (
+        "geopackage",
+        "geo package",
+        ".gpkg",
+        "gpkg",
         "shp",
         "shapefile",
         "geojson",
@@ -119,6 +135,7 @@ DATA_KIND_KEYWORDS = {
 }
 
 FORMAT_KEYWORDS = {
+    "GeoPackage": ("geopackage", "geo package", ".gpkg", "gpkg"),
     "GeoTIFF": ("geotiff", "geo tiff", "tiff", "tif", "栅格"),
     "COG": ("cog", "cloud optimized geotiff", "cloud-optimized geotiff", "云优化"),
     "CSV": ("csv",),
@@ -242,6 +259,8 @@ def contains_any(text: str, keywords: tuple[str, ...]) -> bool:
 
 
 def detect_destination(text: str) -> str:
+    if contains_any(text, ("geopackage", "geo package", ".gpkg", "gpkg")):
+        return "local"
     scores = {name: hits(text, keywords) for name, keywords in DESTINATION_KEYWORDS.items()}
     if scores["local"] and re.search(r"\b(download|local)\b|下载|本地", text):
         return "local"
@@ -323,7 +342,7 @@ def materialization_hint(text: str, data_kind: str) -> str | None:
     return "Filter and composite the ImageCollection into a single ee.Image before export."
 
 
-def choose_route(data_kind: str, destination: str) -> tuple[str, str, tuple[str, ...]]:
+def choose_route(data_kind: str, destination: str, fmt: str) -> tuple[str, str, tuple[str, ...]]:
     effective_destination = "drive" if destination == "unspecified" and data_kind in {"image", "table"} else destination
     if data_kind == "map":
         return "geemap_map_communication_export", "geemap_map_export", ("Map.to_html", "Map.to_image")
@@ -343,6 +362,12 @@ def choose_route(data_kind: str, destination: str) -> tuple[str, str, tuple[str,
         return "ee_batch_table_to_drive", "ee_batch", ("ee.batch.Export.table.toDrive", "geemap.ee_export_vector_to_drive")
     if data_kind == "vector":
         if effective_destination == "local":
+            if fmt == "GeoPackage":
+                return (
+                    "local_geopackage_vector_export",
+                    "local_gis",
+                    ("geemap.ee_to_gdf", "GeoDataFrame.to_file(driver='GPKG')"),
+                )
             return "geemap_vector_local_download", "geemap_local", ("geemap.ee_export_vector", "geemap.ee_to_gdf")
         if effective_destination == "cloud_storage":
             return "ee_batch_table_to_cloud_storage", "ee_batch", ("ee.batch.Export.table.toCloudStorage",)
@@ -427,13 +452,16 @@ def build_plan(text: str) -> ExportPlan:
     region_source = detect_region(normalized)
     start_policy = detect_start_policy(normalized)
     materialization = materialization_hint(normalized, data_kind)
-    route, backend, functions = choose_route(data_kind, destination)
+    route, backend, functions = choose_route(data_kind, destination, fmt)
     missing = missing_parameters(data_kind, destination, scale_m, region_source)
     questions = clarifying_questions(data_kind, destination, materialization, missing)
 
     defaults: dict[str, object] = {"fileFormat": fmt}
     if data_kind in {"image", "table", "vector", "video"}:
         defaults["file_name_prefix"] = "derive from metric_dataset_aoi_date"
+    if fmt == "GeoPackage":
+        defaults["layer_name"] = "detected_targets"
+        defaults["crs"] = "source/native projected CRS or a suitable local UTM CRS"
     if data_kind in {"image", "table", "vector"} and destination in {"drive", "unspecified"}:
         defaults["drive_folder"] = "earthengine_exports"
     if data_kind == "image":
@@ -455,6 +483,8 @@ def build_plan(text: str) -> ExportPlan:
     ]
     if backend == "geemap_local":
         steps.append("Use local geemap download only for modest AOIs; switch to EE batch export for large rasters/tables.")
+    if backend == "local_gis":
+        steps.append("Spatialize visual annotations against the source raster transform, write GeoPackage with an explicit CRS, and render a QA overlay.")
     if backend == "ee_batch":
         steps.append("Expose task id, destination, file prefix, region, scale/CRS, maxPixels, and status in the workbench.")
 
@@ -472,6 +502,8 @@ def build_plan(text: str) -> ExportPlan:
     ]
     if backend == "geemap_local":
         cautions.append("Local downloads can timeout or tile heavily; prefer asynchronous EE exports for large work.")
+    if backend == "local_gis":
+        cautions.append("GeoPackage is a local GIS artifact; visual pixel/normalized coordinates must be tied to the exact source raster before writing it.")
     if destination == "unspecified" and data_kind in {"image", "table", "vector"}:
         cautions.append("Destination is inferred only as a default; ask if the default affects cost, privacy, or workflow.")
 
