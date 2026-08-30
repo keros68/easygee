@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.4.0 - 2026-08-30
+
+### Added
+
+- Configurable XYZ, TMS, ArcGIS, WMS, WMTS, raster PMTiles, and COG basemaps,
+  including built-in Tianditu vector, imagery, and terrain presets.
+- GeoLibre-inspired high-performance data paths: HTTP Range-backed raster
+  PMTiles, lazy MapLibre WebGL COG rendering, in-session caches, and compact
+  first-render/readiness diagnostics.
+- A GIS-style basemap-to-layer workflow with overlay stacking, opacity and
+  visibility controls, source details, default basemaps, and zoom-to-layer.
+- Durable per-user Map Console profiles for favorites, custom basemaps, map
+  view, recent reproducible layers, and per-project layer state.
+
+### Security
+
+- Tianditu keys stay session-only by default; optional device persistence uses
+  Windows DPAPI and excludes plaintext credentials from profiles and agent
+  state.
+- Custom source URLs reject embedded credentials and credential-shaped query
+  parameters, while stale browser protocol state can no longer overwrite a
+  newer persisted profile.
+
+### Fixed
+
+- Basemap selection and layer checkboxes now update the rendered map and saved
+  state consistently, including SRTM visibility and primary-basemap controls.
+- Terrain basemaps reuse the last available native zoom where providers lack
+  higher-resolution tiles instead of filling the view with unavailable tiles.
+
+### Validation
+
+- Added focused coverage for PMTiles/COG adapters, custom basemap sanitation,
+  secure Tianditu credential persistence, byte-range serving, stale-protocol
+  handling, profile restoration, basemap overlays, and zoom-to-layer.
+
 ## 0.3.2 - 2026-08-18
 
 ### Added

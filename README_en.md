@@ -21,7 +21,9 @@ EasyGEE packages Google Earth Engine, geemap, GeoMaster method knowledge, and a 
 - Turn an outcome into role-based data bundles—for example flood event, historical baseline, terrain, rainfall, and population/building exposure—and compare or verify candidates before coding.
 - Standardize Earth Engine / geemap authorization without exposing OAuth tokens, verification codes, credential files, or service account keys.
 - Query Earth Engine quota limits and usage as agent-readable summaries.
-- Generate the lightweight EasyGEE Map Console for AOI drawing, layer overlays, basemap switching, and visual QA.
+- Generate a persistent EasyGEE Map Console for AOI drawing, layer overlays, configurable basemaps, and visual QA; restore map views, favorites, custom sources, and recent layers per local user and project.
+- Connect XYZ, TMS, ArcGIS, WMS, WMTS, raster PMTiles, and COG sources, including Tianditu vector, imagery, and terrain presets; promote basemaps to normal layers for ordering, visibility, and opacity controls.
+- Accelerate PMTiles and COG access with HTTP Range requests, session caches, and a lazy MapLibre WebGL engine while keeping imagery bytes and tile logs out of agent context.
 - Bundle GeoMaster as a skill for CRS, local GIS, remote sensing, ML, STAC/COG, scientific-domain methods, and troubleshooting.
 - Bundle the GeoAI Encyclopedia as EasyGEE's task-method layer for image recognition, object detection, semantic/instance segmentation, change detection, pixel regression, SAM, satellite embeddings, vision-language models, and QGIS GeoAI. The router loads only the relevant chapter and keeps GEE/export orchestration separate from local model execution.
 - Bundle GEE Growth Diary as a distilled method skill from 153 GEEer成长日记 articles covering dataset choice, indices, time series, classification, water extraction, charts, and exports.

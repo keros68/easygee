@@ -1,10 +1,18 @@
 {
   "name": "EasyGEE Map Console Agent Contract",
-  "version": 2,
+  "version": 5,
   "stateEndpoint": "/api/session/state",
   "profileEndpoint": "/api/session/profile",
+  "credentialEndpoints": {
+    "tianditu": "/api/session/credentials/tianditu",
+    "policy": "Session-only by default. Optional device persistence uses Windows DPAPI and is available only to loopback same-origin JSON requests; plaintext credentials are excluded from profile, project export, and agent state."
+  },
   "actionsEndpoint": "/api/session/actions",
   "capabilitiesEndpoint": "/api/session/capabilities",
+  "stateSyncPolicy": {
+    "minimumProtocolVersion": 5,
+    "staleClientBehavior": "State posted by an older Map Console protocol is acknowledged and ignored so stale browser tabs cannot overwrite current Agent state or persistent basemap configuration."
+  },
   "layerEndpoint": "/api/layer",
   "uploadEndpoint": "/api/uploads",
   "analysisEndpoints": {
@@ -28,6 +36,12 @@
     "cloudPct",
     "center",
     "zoom",
+    "basemap",
+    "basemapShown",
+    "basemapOpacity",
+    "defaultBasemap",
+    "customBasemaps",
+    "performanceEngine",
     "bounds",
     "activeLayerId",
     "aoiBounds",
@@ -72,6 +86,8 @@
     "name",
     "dataset",
     "type",
+    "role",
+    "sourceId",
     "shown",
     "opacity",
     "styleProfile",
@@ -101,7 +117,16 @@
   "profileFields": [
     "favoriteDatasets",
     "visualPreferences",
+    "customBasemaps",
+    "defaultBasemap",
     "projects",
+    "projects.<project>.view.center",
+    "projects.<project>.view.zoom",
+    "projects.<project>.view.basemap",
+    "projects.<project>.view.basemapShown",
+    "projects.<project>.view.basemapOpacity",
+    "projects.<project>.activeLayerId",
+    "projects.<project>.recentLayers",
     "projects.<project>.tasks",
     "projects.<project>.uploads",
     "language",
@@ -125,6 +150,41 @@
     "notes",
     "warnings"
   ],
+  "basemaps": {
+    "customTypes": ["xyz", "tms", "arcgis", "wms", "wmts", "pmtiles", "cog"],
+    "fields": ["id", "name", "type", "url", "provider", "attribution", "sourceUrl", "subdomains", "layers", "styles", "format", "version", "tileMatrixSet", "matrixPrefix", "minZoom", "maxZoom", "maxNativeZoom", "bounds", "crs", "bandCount", "transparent"],
+    "persistence": "Custom basemaps and the default basemap are stored in the local user profile; the active basemap, its visibility, opacity, and basemap-overlay layer instances are stored per project.",
+    "credentialPolicy": "Custom URLs containing userinfo or credential-shaped query names such as key, tk, token, api_key, signature, or password are rejected by both the browser and preview server. Provider credentials use dedicated credential endpoints.",
+    "connectionTest": "The browser editor requires at least one real tile from the current view before a changed configuration can be saved. Raster PMTiles sources are preflighted by reading their archive header, rejecting vector archives, and calling getZxy across visible tile coordinates. COG sources load the MapLibre engine on demand, read metadata through HTTP Range, fit to the COG extent when needed, and wait for MapLibre source content. Agent actions run the same type-specific preflight before activation; activate=false validates metadata without requiring current-view coverage.",
+    "performanceEngine": {
+      "stateField": "performanceEngine",
+      "pmtiles": {
+        "version": "4.5.0",
+        "format": "Raster PMTiles",
+        "access": "HTTP single-byte range requests (206 Partial Content)",
+        "cache": "One successful archive object and directory cache per source URL in the browser session",
+        "renderer": "pmtiles.leafletRasterLayer"
+      },
+      "cog": {
+        "maplibreVersion": "5.6.1",
+        "protocolVersion": "0.9.2",
+        "format": "Cloud Optimized GeoTIFF",
+        "access": "HTTP Range requests with geotiff.js decoding and MapLibre WebGL composition",
+        "loading": "MapLibre, the Leaflet bridge, CSS, and the COG protocol are loaded only when a COG is tested or displayed",
+        "cache": "COG metadata and decoded tiles stay in browser memory and are keyed by URL",
+        "renderer": "MapLibre GL JS inside the Leaflet tile pane",
+        "limits": "This lightweight adapter requires CORS-enabled EPSG:3857 COGs; arbitrary-CRS deck.gl reprojection remains a later optional engine"
+      },
+      "diagnostics": {
+        "statePath": "performanceEngine.diagnostics",
+        "fields": ["status", "cache", "firstRenderMs", "readyMs", "renderedBlocks", "sourceRequests", "transferredBytes"],
+        "measurement": "Per-activation browser timing from first rendered block through visible-view completion. cache is cold or warm within the current browser session; sourceRequests and transferredBytes appear only when Resource Timing exposes the source transfer.",
+        "privacy": "Compact state keeps only aggregate numbers and never includes resource names, source URLs, byte ranges, or request logs."
+      },
+      "tokenPolicy": "Binary archives, byte ranges, decoded pixels, and tile logs remain in the browser/local data plane. Compact agent state exposes only the active engine summary and sanitized source descriptors."
+    },
+    "builtInFallback": "Esri World Topographic Map uses maxNativeZoom 13 so regions without detailed Esri coverage reuse the last globally available level instead of displaying placeholder tiles."
+  },
   "uploads": {
     "endpoint": "/api/uploads",
     "formats": ["SHP", "ZIP", "KML", "KMZ", "GPX", "GeoJSON", "CSV", "GPKG"],
@@ -145,7 +205,7 @@
     "layerBehavior": "When measurements exist, the Map Console exposes them as a system layer in the layer stack. hide/show preserves saved measurements; remove clears them."
   },
   "actions": {
-    "supported": ["addLayer", "removeLayer", "showLayer", "hideLayer", "selectLayer", "refreshLayer", "setLayerVisibility", "setLayerOpacity", "removeUpload", "selectDataset", "setAoi", "clearAoi", "setAoiStyle", "updateLayerStyle", "clearMeasurements", "extractNdvi", "addTask", "exportNdviDrive"],
+    "supported": ["addLayer", "removeLayer", "showLayer", "hideLayer", "selectLayer", "zoomToLayer", "refreshLayer", "setLayerVisibility", "setLayerOpacity", "removeUpload", "selectDataset", "setAoi", "clearAoi", "setAoiStyle", "updateLayerStyle", "clearMeasurements", "extractNdvi", "addTask", "exportNdviDrive", "setBasemap", "addBasemapOverlay", "setDefaultBasemap", "addCustomBasemap", "updateCustomBasemap", "removeCustomBasemap"],
     "resultSync": "Actions are executed by the browser console and reflected in the next session state sync."
   },
   "compactState": {
@@ -171,11 +231,12 @@
     "Selected dataset context is exposed as selectedDataset; agents should use it to resolve deictic requests such as this MODIS dataset.",
     "ImageCollection analyses should use explicit recipe objects instead of relying on the default preview reducer.",
     "Layer recipe metadata must be preserved when restyling a layer so visualization changes do not alter the analytical calculation.",
-    "Agents should use showLayer, hideLayer, selectLayer, refreshLayer, and setLayerOpacity for existing layer state changes instead of browser DOM interaction.",
+    "Agents should use showLayer, hideLayer, selectLayer, zoomToLayer, refreshLayer, and setLayerOpacity for existing layer state changes instead of browser DOM interaction.",
     "Agents should call refreshLayer before treating a visible map layer as failed or missing, because the browser can recreate the Leaflet layer and bypass stale tile/vector requests.",
     "Agents should discover uploaded local files through state.uploads and state.uploadCapabilities, then process savedPath with local GIS tools instead of scraping file-picker DOM state.",
     "For common NDVI map requests, agents should try quick-layer first and fall back to render-recipe or dataset search only when no fast path matches.",
     "Persistent profile state is the durable source for dataset favorites, AOI, and measurements across localhost ports.",
+    "Custom basemap definitions and the default basemap are global profile settings; the active basemap remains project-specific.",
     "AOI is represented as a system layer in the layer stack and can be styled, hidden, or cleared through the same layer workflow.",
     "Measurement markers are represented as a system layer in the layer stack and can be hidden, faded, or removed through the same layer workflow.",
     "For UI-only Map Console maintenance, do not regenerate a user-facing page with --no-live-quota or --no-quota-usage; patch the UI and use refresh_map_console_quota.py for quota-only refreshes. Non-sample pages require --allow-default-quota-state before create_map_console.py will write default-only quota state.",

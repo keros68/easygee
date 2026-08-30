@@ -9,9 +9,11 @@ open OAuth, or read credential files.
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
 import functools
 import html
+import ipaddress
 import json
 import os
 import re
@@ -171,12 +173,40 @@ SESSION_SYNCED_AT: float | None = None
 SESSION_ACTIONS: list[dict[str, object]] = []
 SESSION_ACTION_COUNTER = 0
 SESSION_ACTION_LIMIT = 100
-PROFILE_VERSION = 1
+PROFILE_VERSION = 3
 PROFILE_LOCK = threading.Lock()
 PROFILE_PATH: Path | None = None
+SECRET_STORE_VERSION = 1
+SECRET_LOCK = threading.Lock()
+TIANDITU_SECRET_NAME = "tianditu"
+SECRET_ENTROPY = b"EasyGEE Map Console credential v1"
 EXACT_FAVORITE_REASONS = {"favorites", "favorite-updated"}
 CLEAR_AOI_REASONS = {"aoi-cleared"}
 CLEAR_MEASUREMENT_REASONS = {"measurements-cleared"}
+CUSTOM_BASEMAP_TYPES = {"xyz", "tms", "arcgis", "wms", "wmts", "pmtiles", "cog"}
+SENSITIVE_URL_QUERY_NAMES = {
+    "access_key",
+    "access_token",
+    "accesskey",
+    "api_key",
+    "apikey",
+    "app_key",
+    "appkey",
+    "auth",
+    "authorization",
+    "client_secret",
+    "credential",
+    "key",
+    "passwd",
+    "password",
+    "private_key",
+    "secret",
+    "sig",
+    "signature",
+    "subscription_key",
+    "tk",
+    "token",
+}
 
 
 def contract_path() -> Path:
@@ -191,6 +221,33 @@ def load_agent_contract() -> dict[str, object]:
     except Exception:
         pass
     return {"name": "EasyGEE Map Console Agent Contract", "version": 1}
+
+
+def agent_protocol_version() -> int:
+    value = load_agent_contract().get("version")
+    if isinstance(value, bool):
+        return 1
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return 1
+
+
+AGENT_PROTOCOL_VERSION = agent_protocol_version()
+
+
+def session_state_protocol_version(state: dict[str, object]) -> int:
+    value = state.get("agentProtocolVersion")
+    if isinstance(value, bool):
+        return 0
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def session_state_protocol_is_current(state: dict[str, object]) -> bool:
+    return session_state_protocol_version(state) >= AGENT_PROTOCOL_VERSION
 
 
 def default_profile_path() -> Path:
@@ -214,6 +271,165 @@ def profile_path() -> Path:
     if PROFILE_PATH is None:
         PROFILE_PATH = default_profile_path()
     return PROFILE_PATH
+
+
+def secret_store_path() -> Path:
+    explicit = os.environ.get("EASYGEE_MAP_CONSOLE_SECRETS")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    path = profile_path()
+    return path.with_name("map-console-secrets.json")
+
+
+def _dpapi_crypt(data: bytes, *, protect: bool) -> bytes:
+    if os.name != "nt":
+        raise RuntimeError("Encrypted local credentials require Windows DPAPI")
+    import ctypes
+    from ctypes import wintypes
+
+    class DataBlob(ctypes.Structure):
+        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_ubyte))]
+
+    def make_blob(value: bytes) -> tuple[DataBlob, object]:
+        buffer = ctypes.create_string_buffer(value)
+        return DataBlob(len(value), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_ubyte))), buffer
+
+    input_blob, input_buffer = make_blob(data)
+    entropy_blob, entropy_buffer = make_blob(SECRET_ENTROPY)
+    output_blob = DataBlob()
+    crypt32 = ctypes.windll.crypt32
+    kernel32 = ctypes.windll.kernel32
+    crypt32.CryptProtectData.argtypes = [
+        ctypes.POINTER(DataBlob),
+        wintypes.LPCWSTR,
+        ctypes.POINTER(DataBlob),
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(DataBlob),
+    ]
+    crypt32.CryptProtectData.restype = wintypes.BOOL
+    crypt32.CryptUnprotectData.argtypes = [
+        ctypes.POINTER(DataBlob),
+        ctypes.c_void_p,
+        ctypes.POINTER(DataBlob),
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(DataBlob),
+    ]
+    crypt32.CryptUnprotectData.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel32.LocalFree.restype = ctypes.c_void_p
+    flags = 0x1  # CRYPTPROTECT_UI_FORBIDDEN
+    if protect:
+        succeeded = crypt32.CryptProtectData(
+            ctypes.byref(input_blob),
+            "EasyGEE Map Console",
+            ctypes.byref(entropy_blob),
+            None,
+            None,
+            flags,
+            ctypes.byref(output_blob),
+        )
+    else:
+        succeeded = crypt32.CryptUnprotectData(
+            ctypes.byref(input_blob),
+            None,
+            ctypes.byref(entropy_blob),
+            None,
+            None,
+            flags,
+            ctypes.byref(output_blob),
+        )
+    _ = input_buffer, entropy_buffer
+    if not succeeded:
+        raise ctypes.WinError()
+    try:
+        return ctypes.string_at(output_blob.pbData, output_blob.cbData)
+    finally:
+        kernel32.LocalFree(ctypes.cast(output_blob.pbData, ctypes.c_void_p))
+
+
+def encrypt_local_secret(value: str) -> str:
+    return base64.b64encode(_dpapi_crypt(value.encode("utf-8"), protect=True)).decode("ascii")
+
+
+def decrypt_local_secret(value: str) -> str:
+    encrypted = base64.b64decode(value.encode("ascii"), validate=True)
+    return _dpapi_crypt(encrypted, protect=False).decode("utf-8")
+
+
+def sanitize_tianditu_token(value: object) -> str:
+    token = str(value or "").strip()
+    if not token or len(token) > 256 or re.search(r"[\s&?#]", token):
+        return ""
+    return token
+
+
+def read_secret_store_unlocked() -> dict[str, object]:
+    path = secret_store_path()
+    if not path.exists():
+        return {"version": SECRET_STORE_VERSION, "secrets": {}}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"version": SECRET_STORE_VERSION, "secrets": {}}
+    secrets = payload.get("secrets") if isinstance(payload, dict) else None
+    return {
+        "version": SECRET_STORE_VERSION,
+        "secrets": secrets if isinstance(secrets, dict) else {},
+    }
+
+
+def write_secret_store_unlocked(store: dict[str, object]) -> None:
+    path = secret_store_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.tmp")
+    temporary.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def load_tianditu_secret() -> str:
+    if os.name != "nt":
+        return ""
+    with SECRET_LOCK:
+        store = read_secret_store_unlocked()
+        secrets = store.get("secrets") if isinstance(store.get("secrets"), dict) else {}
+        encrypted = secrets.get(TIANDITU_SECRET_NAME)
+        if not isinstance(encrypted, str) or not encrypted:
+            return ""
+        try:
+            return sanitize_tianditu_token(decrypt_local_secret(encrypted))
+        except Exception:
+            return ""
+
+
+def save_tianditu_secret(value: object) -> bool:
+    if os.name != "nt":
+        raise RuntimeError("Encrypted local credentials require Windows DPAPI")
+    token = sanitize_tianditu_token(value)
+    if not token:
+        raise ValueError("Invalid Tianditu key")
+    with SECRET_LOCK:
+        store = read_secret_store_unlocked()
+        secrets = store.get("secrets") if isinstance(store.get("secrets"), dict) else {}
+        secrets[TIANDITU_SECRET_NAME] = encrypt_local_secret(token)
+        store["version"] = SECRET_STORE_VERSION
+        store["secrets"] = secrets
+        write_secret_store_unlocked(store)
+    return True
+
+
+def delete_tianditu_secret() -> None:
+    with SECRET_LOCK:
+        store = read_secret_store_unlocked()
+        secrets = store.get("secrets") if isinstance(store.get("secrets"), dict) else {}
+        if TIANDITU_SECRET_NAME not in secrets:
+            return
+        secrets.pop(TIANDITU_SECRET_NAME, None)
+        store["secrets"] = secrets
+        write_secret_store_unlocked(store)
 
 
 def now_iso() -> str:
@@ -660,6 +876,8 @@ def empty_profile() -> dict[str, object]:
         "version": PROFILE_VERSION,
         "favoriteDatasets": [],
         "visualPreferences": {},
+        "customBasemaps": [],
+        "defaultBasemap": "OSM",
         "projects": {},
         "updatedAt": None,
     }
@@ -678,16 +896,163 @@ def normalize_string_list(value: object) -> list[str]:
     return sorted(result)
 
 
+def sensitive_url_parameter_name(value: object) -> bool:
+    name = str(value or "").strip().lower().replace("-", "_")
+    return name in SENSITIVE_URL_QUERY_NAMES or name.endswith(
+        ("_credential", "_key", "_password", "_secret", "_signature", "_token")
+    )
+
+
+def url_contains_credentials(value: object) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    try:
+        parsed = urllib.parse.urlparse(text)
+        if parsed.username is not None or parsed.password is not None:
+            return True
+        for component in (parsed.query, parsed.fragment):
+            for raw_name, _ in urllib.parse.parse_qsl(component.replace(";", "&"), keep_blank_values=True):
+                name = raw_name
+                for _ in range(2):
+                    name = urllib.parse.unquote_plus(name)
+                name = name.strip().lower().replace("-", "_")
+                if sensitive_url_parameter_name(name):
+                    return True
+    except (TypeError, ValueError):
+        return True
+    return False
+
+
+def strip_profile_secrets(value: object) -> object:
+    if isinstance(value, list):
+        return [strip_profile_secrets(item) for item in value]
+    if not isinstance(value, dict):
+        return json_clone(value)
+    safe: dict[str, object] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key)
+        canonical = re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower().replace("-", "_")
+        if sensitive_url_parameter_name(canonical) or canonical in {"tianditu_key", "tianditu_token"}:
+            continue
+        if canonical.endswith("url") and isinstance(raw_value, str) and url_contains_credentials(raw_value):
+            continue
+        safe[key] = strip_profile_secrets(raw_value)
+    return safe
+
+
+def sanitize_custom_basemaps(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    def zoom_value(raw: object, fallback: int) -> int:
+        try:
+            return int(float(raw))
+        except (TypeError, ValueError):
+            return fallback
+
+    result: list[dict[str, object]] = []
+    seen: set[str] = set()
+    text_limits = {
+        "name": 120,
+        "url": 4096,
+        "provider": 240,
+        "attribution": 1000,
+        "sourceUrl": 4096,
+        "note": 240,
+        "subdomains": 120,
+        "layers": 500,
+        "styles": 500,
+        "format": 80,
+        "version": 20,
+        "tileMatrixSet": 160,
+        "matrixPrefix": 160,
+        "crs": 80,
+    }
+    for index, item in enumerate(value[:100]):
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("type") or "xyz").strip().lower()
+        if kind not in CUSTOM_BASEMAP_TYPES:
+            continue
+        name = str(item.get("name") or "").strip()[: text_limits["name"]]
+        url = str(item.get("url") or "").strip()[: text_limits["url"]]
+        try:
+            parsed = urllib.parse.urlparse(url)
+        except ValueError:
+            continue
+        if not name or parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc or url_contains_credentials(url):
+            continue
+        raw_id = str(item.get("id") or f"custom-{index + 1}").strip().lower()
+        identifier = re.sub(r"-+", "-", re.sub(r"[^a-z0-9_-]+", "-", raw_id)).strip("-")[:80]
+        if not identifier.startswith("custom-"):
+            identifier = f"custom-{identifier or index + 1}"
+        if identifier in seen:
+            suffix = 2
+            candidate = f"{identifier[:70]}-{suffix}"
+            while candidate in seen:
+                suffix += 1
+                candidate = f"{identifier[:70]}-{suffix}"
+            identifier = candidate
+        seen.add(identifier)
+        safe: dict[str, object] = {"id": identifier, "name": name, "type": kind, "url": url}
+        for key, limit in text_limits.items():
+            if key in {"name", "url"}:
+                continue
+            text = str(item.get(key) or "").strip()[:limit]
+            if text:
+                if key == "sourceUrl":
+                    try:
+                        source = urllib.parse.urlparse(text)
+                    except ValueError:
+                        continue
+                    if source.scheme.lower() not in {"http", "https"} or not source.netloc or url_contains_credentials(text):
+                        continue
+                safe[key] = text
+        min_zoom = max(0, min(24, zoom_value(item.get("minZoom"), 0)))
+        max_zoom = max(min_zoom, min(24, zoom_value(item.get("maxZoom"), 19)))
+        native_zoom = max(min_zoom, min(max_zoom, zoom_value(item.get("maxNativeZoom"), max_zoom)))
+        safe.update(
+            {
+                "minZoom": min_zoom,
+                "maxZoom": max_zoom,
+                "maxNativeZoom": native_zoom,
+                "transparent": item.get("transparent") is not False,
+            }
+        )
+        if kind == "cog":
+            bounds = item.get("bounds")
+            if isinstance(bounds, list) and len(bounds) == 4:
+                try:
+                    west, south, east, north = (float(part) for part in bounds)
+                except (TypeError, ValueError):
+                    pass
+                else:
+                    if -180 <= west < east <= 180 and -90 <= south < north <= 90:
+                        safe["bounds"] = [west, south, east, north]
+            safe["crs"] = str(item.get("crs") or "EPSG:3857").strip()[: text_limits["crs"]]
+            try:
+                safe["bandCount"] = max(0, min(1024, int(float(item.get("bandCount") or 0))))
+            except (TypeError, ValueError):
+                safe["bandCount"] = 0
+        result.append(safe)
+    return result
+
+
 def normalize_profile(payload: object) -> dict[str, object]:
     profile = empty_profile()
     if isinstance(payload, dict):
-        profile.update(payload)
+        for key in ("favoriteDatasets", "visualPreferences", "customBasemaps", "defaultBasemap", "projects", "updatedAt", "language"):
+            if key in payload:
+                profile[key] = payload[key]
     profile["version"] = PROFILE_VERSION
     profile["favoriteDatasets"] = normalize_string_list(profile.get("favoriteDatasets"))
     if not isinstance(profile.get("visualPreferences"), dict):
         profile["visualPreferences"] = {}
+    profile["customBasemaps"] = sanitize_custom_basemaps(profile.get("customBasemaps"))
+    default_basemap = re.sub(r"[^a-z0-9_-]+", "-", str(profile.get("defaultBasemap") or "OSM"), flags=re.IGNORECASE).strip("-")[:80]
+    profile["defaultBasemap"] = default_basemap or "OSM"
     projects = profile.get("projects")
-    profile["projects"] = projects if isinstance(projects, dict) else {}
+    profile["projects"] = strip_profile_secrets(projects) if isinstance(projects, dict) else {}
     return profile
 
 
@@ -696,7 +1061,11 @@ def read_profile_unlocked() -> dict[str, object]:
     if not path.exists():
         return empty_profile()
     try:
-        return normalize_profile(json.loads(path.read_text(encoding="utf-8")))
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        normalized = normalize_profile(raw)
+        if normalized != raw:
+            write_profile_unlocked(normalized)
+        return normalized
     except Exception:
         return empty_profile()
 
@@ -704,7 +1073,9 @@ def read_profile_unlocked() -> dict[str, object]:
 def write_profile_unlocked(profile: dict[str, object]) -> None:
     path = profile_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(normalize_profile(profile), ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary = path.with_name(f"{path.name}.tmp")
+    temporary.write_text(json.dumps(normalize_profile(profile), ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(temporary, path)
 
 
 def load_profile() -> dict[str, object]:
@@ -749,6 +1120,8 @@ def sanitize_recent_layers(value: object) -> list[dict[str, object]]:
         "name",
         "dataset",
         "type",
+        "role",
+        "sourceId",
         "shown",
         "opacity",
         "summary",
@@ -764,6 +1137,10 @@ def sanitize_recent_layers(value: object) -> list[dict[str, object]]:
         if not isinstance(item, dict):
             continue
         safe = {key: json_clone(item[key]) for key in allowed if key in item}
+        if "sourceId" in safe:
+            safe["sourceId"] = str(safe["sourceId"] or "").strip()[:80]
+        if safe.get("role") not in {"base", "overlay"}:
+            safe.pop("role", None)
         recipe = safe.get("recipe") if isinstance(safe.get("recipe"), dict) else {}
         if safe.get("type") == "local-upload" or recipe.get("kind") == "localUploadPlaceholder":
             continue
@@ -871,13 +1248,30 @@ def merge_profile_with_state(state: dict[str, object]) -> dict[str, object]:
         visual_preferences = state.get("visualPreferences")
         if isinstance(visual_preferences, dict):
             profile["visualPreferences"] = json_clone(visual_preferences)
+        if isinstance(state.get("customBasemaps"), list):
+            profile["customBasemaps"] = sanitize_custom_basemaps(state.get("customBasemaps"))
+        default_basemap = state.get("defaultBasemap")
+        if isinstance(default_basemap, str) and default_basemap.strip():
+            safe_default = re.sub(r"[^a-z0-9_-]+", "-", default_basemap, flags=re.IGNORECASE).strip("-")[:80]
+            if safe_default:
+                profile["defaultBasemap"] = safe_default
 
         entry = state_project_entry(profile, state)
         center = state.get("center")
         zoom = state.get("zoom")
         basemap = state.get("basemap")
         if isinstance(center, list) and len(center) == 2 and isinstance(zoom, (int, float)):
-            entry["view"] = {"center": json_clone(center), "zoom": zoom, "basemap": basemap}
+            view: dict[str, object] = {"center": json_clone(center), "zoom": zoom, "basemap": basemap}
+            if isinstance(state.get("basemapShown"), bool):
+                view["basemapShown"] = state["basemapShown"]
+            if isinstance(state.get("basemapOpacity"), (int, float)):
+                view["basemapOpacity"] = max(0.0, min(1.0, float(state["basemapOpacity"])))
+            entry["view"] = view
+        active_layer_id = str(state.get("activeLayerId") or "").strip()[:160]
+        if active_layer_id:
+            entry["activeLayerId"] = active_layer_id
+        elif "activeLayerId" in state:
+            entry.pop("activeLayerId", None)
         if isinstance(state.get("aoi"), dict):
             entry["aoi"] = json_clone(state["aoi"])
         elif "aoi" in state and reason in CLEAR_AOI_REASONS:
@@ -901,12 +1295,12 @@ def merge_profile_with_state(state: dict[str, object]) -> dict[str, object]:
         layers = sanitize_recent_layers(layers_value)
         if isinstance(layers_value, list):
             entry["recentLayers"] = layers
-        tasks = sanitize_recent_tasks(state.get("tasks"))
-        if tasks:
-            entry["tasks"] = tasks
-        uploads = sanitize_recent_uploads(state.get("uploads"))
-        if uploads:
-            entry["uploads"] = uploads
+        tasks_value = state.get("tasks")
+        if isinstance(tasks_value, list):
+            entry["tasks"] = sanitize_recent_tasks(tasks_value)
+        uploads_value = state.get("uploads")
+        if isinstance(uploads_value, list):
+            entry["uploads"] = sanitize_recent_uploads(uploads_value)
 
         profile["updatedAt"] = now_iso()
         write_profile_unlocked(profile)
@@ -963,6 +1357,36 @@ class EasyGeeHandler(QuietHandler):
             raise ValueError("Request JSON must be an object")
         return payload
 
+    def trusted_local_credential_request(self) -> bool:
+        try:
+            if not ipaddress.ip_address(str(self.client_address[0])).is_loopback:
+                return False
+        except ValueError:
+            return False
+        host_header = str(self.headers.get("Host") or "").strip()
+        try:
+            host = urllib.parse.urlsplit(f"//{host_header}").hostname or ""
+            host_is_loopback = host.lower() == "localhost" or ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            return False
+        if not host_is_loopback:
+            return False
+        origin = str(self.headers.get("Origin") or "").strip()
+        if not origin:
+            return True
+        try:
+            parsed_origin = urllib.parse.urlsplit(origin)
+        except ValueError:
+            return False
+        return parsed_origin.scheme in {"http", "https"} and parsed_origin.netloc.lower() == host_header.lower()
+
+    def require_json_content_type(self) -> bool:
+        content_type = str(self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+        if content_type == "application/json":
+            return True
+        self.send_json({"ok": False, "error": "Content-Type must be application/json"}, status=415)
+        return False
+
     def read_upload_body(self) -> bytes:
         length = int(self.headers.get("Content-Length") or "0")
         if length <= 0:
@@ -970,6 +1394,79 @@ class EasyGeeHandler(QuietHandler):
         if length > (UPLOAD_MAX_BYTES * 6):
             raise ValueError("Upload request is too large")
         return self.rfile.read(length)
+
+    def resolved_static_path(self) -> tuple[Path, bool]:
+        translated = Path(self.translate_path(self.path)).resolve()
+        root = Path(self.directory or os.getcwd()).resolve()
+        try:
+            translated.relative_to(root)
+        except ValueError:
+            return translated, False
+        return translated, True
+
+    def serve_byte_range(self, *, head_only: bool = False) -> bool:
+        range_header = str(self.headers.get("Range") or "").strip()
+        if not range_header:
+            return False
+        translated, is_safe = self.resolved_static_path()
+        if not is_safe:
+            self.send_error(404)
+            return True
+        if not translated.is_file():
+            return False
+        size = translated.stat().st_size
+        if not range_header.lower().startswith("bytes=") or "," in range_header:
+            self.send_response(416)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Range", f"bytes */{size}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return True
+        try:
+            start_text, end_text = range_header[6:].strip().split("-", 1)
+            if start_text:
+                start = int(start_text)
+                end = int(end_text) if end_text else size - 1
+            else:
+                suffix = int(end_text)
+                if suffix <= 0:
+                    raise ValueError
+                start = max(0, size - suffix)
+                end = size - 1
+            if start < 0 or start >= size or end < start:
+                raise ValueError
+            end = min(end, size - 1)
+        except (TypeError, ValueError):
+            self.send_response(416)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Range", f"bytes */{size}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return True
+        length = end - start + 1
+        stat = translated.stat()
+        self.send_response(206)
+        self.send_header("Content-Type", self.guess_type(str(translated)))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Content-Length", str(length))
+        self.send_header("Last-Modified", self.date_time_string(stat.st_mtime))
+        self.end_headers()
+        if head_only:
+            return True
+        try:
+            with translated.open("rb") as stream:
+                stream.seek(start)
+                remaining = length
+                while remaining:
+                    chunk = stream.read(min(64 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        return True
 
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
@@ -979,6 +1476,13 @@ class EasyGeeHandler(QuietHandler):
         if parsed.path == "/api/session/profile":
             profile = load_profile()
             self.send_json({"ok": True, "profile": profile, "profileUpdatedAt": profile.get("updatedAt")})
+            return
+        if parsed.path == "/api/session/credentials/tianditu":
+            if not self.trusted_local_credential_request():
+                self.send_json({"ok": False, "error": "Local same-origin request required"}, status=403)
+                return
+            token = load_tianditu_secret()
+            self.send_json({"ok": True, "supported": os.name == "nt", "remembered": bool(token), "token": token})
             return
         if parsed.path == "/api/session/state":
             self.send_json(session_state_payload())
@@ -1006,18 +1510,70 @@ class EasyGeeHandler(QuietHandler):
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, status=500)
             return
+        _, is_safe = self.resolved_static_path()
+        if not is_safe:
+            self.send_error(404)
+            return
+        if self.serve_byte_range():
+            return
         super().do_GET()
+
+    def do_HEAD(self) -> None:
+        _, is_safe = self.resolved_static_path()
+        if not is_safe:
+            self.send_error(404)
+            return
+        if self.serve_byte_range(head_only=True):
+            return
+        super().do_HEAD()
 
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/session/credentials/tianditu":
+            if not self.trusted_local_credential_request():
+                self.send_json({"ok": False, "error": "Local same-origin request required"}, status=403)
+                return
+            if not self.require_json_content_type():
+                return
+            try:
+                payload = self.read_json()
+                remember = payload.get("remember") is True
+                if remember:
+                    save_tianditu_secret(payload.get("token"))
+                else:
+                    delete_tianditu_secret()
+                self.send_json({"ok": True, "supported": os.name == "nt", "remembered": remember})
+            except ValueError as exc:
+                self.send_json({"ok": False, "error": str(exc)}, status=400)
+            except Exception:
+                self.send_json({"ok": False, "error": "Encrypted credential storage is unavailable"}, status=500)
+            return
         if parsed.path == "/api/session/state":
             try:
                 payload = self.read_json()
                 state = payload.get("state") if isinstance(payload.get("state"), dict) else payload
                 if not isinstance(state, dict):
                     raise ValueError("state must be a JSON object")
+                if not session_state_protocol_is_current(state):
+                    current = session_state_payload()
+                    self.send_json(
+                        {
+                            "ok": True,
+                            "ignored": True,
+                            "reason": "stale-agent-protocol",
+                            "expectedAgentProtocolVersion": AGENT_PROTOCOL_VERSION,
+                            "receivedAgentProtocolVersion": session_state_protocol_version(state),
+                            "syncedAt": current.get("syncedAt"),
+                            "profileUpdatedAt": current.get("profileUpdatedAt"),
+                        }
+                    )
+                    return
                 global SESSION_STATE, SESSION_SYNCED_AT
-                state_copy = json.loads(json.dumps(state, ensure_ascii=False))
+                state_copy = strip_profile_secrets(json.loads(json.dumps(state, ensure_ascii=False)))
+                if not isinstance(state_copy, dict):
+                    state_copy = {}
+                if isinstance(state_copy.get("customBasemaps"), list):
+                    state_copy["customBasemaps"] = sanitize_custom_basemaps(state_copy["customBasemaps"])
                 with SESSION_LOCK:
                     SESSION_STATE = state_copy
                     SESSION_SYNCED_AT = time.time()
@@ -1128,6 +1684,19 @@ def smoke() -> int:
                 "title": "Smoke Map",
                 "project": "YOUR_EE_PROJECT",
                 "favoriteDatasets": ["COPERNICUS/S2_SR_HARMONIZED"],
+                "customBasemaps": [
+                    {
+                        "id": "custom-smoke",
+                        "name": "Smoke XYZ",
+                        "type": "xyz",
+                        "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                        "maxZoom": 19,
+                    }
+                ],
+                "defaultBasemap": "custom-smoke",
+                "center": [39.9, 116.4],
+                "zoom": 10,
+                "basemap": "custom-smoke",
                 "measurements": [{"id": "m1", "start": [0, 0], "end": [0, 1], "lengthMeters": 1}],
                 "tasks": [{"id": "t1", "title": "Drive export", "status": "READY", "folder": "EasyGEE"}],
                 "sessionReason": "favorites",
@@ -1136,9 +1705,15 @@ def smoke() -> int:
         if profile.get("favoriteDatasets") != ["COPERNICUS/S2_SR_HARMONIZED"]:
             print("FAIL: profile favorites were not persisted")
             return 1
+        if profile.get("defaultBasemap") != "custom-smoke" or not profile.get("customBasemaps"):
+            print("FAIL: custom basemaps were not persisted")
+            return 1
         projects = profile.get("projects") if isinstance(profile.get("projects"), dict) else {}
         if not any(isinstance(entry, dict) and entry.get("tasks") for entry in projects.values()):
             print("FAIL: profile tasks were not persisted")
+            return 1
+        if not any(isinstance(entry, dict) and entry.get("view", {}).get("basemap") == "custom-smoke" for entry in projects.values()):
+            print("FAIL: active basemap was not persisted per project")
             return 1
         payload = session_state_payload()
         if not isinstance(payload.get("profile"), dict):

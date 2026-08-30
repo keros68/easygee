@@ -21,7 +21,9 @@ EasyGEE 把 Google Earth Engine、geemap、GeoMaster 方法知识和本地浏览
 - 把完整任务拆成数据角色组合，例如洪水风险的灾情、长期基线、地形、降雨和人口/建筑暴露，并支持候选比较与最终资产核验。
 - 标准化 Earth Engine / geemap 授权流程，不暴露 OAuth token、验证码、凭据文件或 service account key。
 - 查询 Earth Engine 项目配额和用量，并把结果转成 Agent 可读的摘要。
-- 生成轻量 EasyGEE Map Console，用于 AOI 绘制、图层叠加、底图切换和视觉检查。
+- 生成可持久化的 EasyGEE Map Console，用于 AOI 绘制、图层叠加、底图配置和视觉检查；地图视图、收藏、自定义底图与近期图层按本机用户和项目恢复。
+- 支持 XYZ、TMS、ArcGIS、WMS、WMTS、栅格 PMTiles 与 COG 数据源，并内置天地图矢量、影像和地形预设；底图可叠加到图层后调整顺序、可见性和不透明度。
+- 使用 HTTP Range、会话缓存和按需加载的 MapLibre WebGL 引擎加速 PMTiles/COG，并只向 Agent 同步精简性能摘要，影像字节与瓦片日志留在本地数据平面。
 - 内置 GeoMaster skill，覆盖 CRS、本地 GIS、遥感、机器学习、STAC/COG、科学领域方法和排错经验。
 - 内置 GeoAI Encyclopedia 作为遥感 AI 方法层，覆盖图像识别、目标检测、语义/实例分割、变化检测、像素回归、SAM、卫星嵌入、视觉语言模型和 QGIS GeoAI；按任务只加载相关章节，并明确 GEE 到本地模型的交接契约。
 - 内置 GEE Growth Diary skill，将 GEEer成长日记 153 篇 GEE 文章蒸馏为数据集选择、指数、时序、分类、水体、图表和导出方法库。

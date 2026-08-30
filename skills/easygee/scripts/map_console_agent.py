@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 import time
@@ -131,6 +132,8 @@ def compact_layer(layer: Any) -> dict[str, Any] | None:
         "name": layer.get("name"),
         "dataset": layer.get("dataset"),
         "type": layer.get("type"),
+        "role": layer.get("role"),
+        "sourceId": layer.get("sourceId"),
         "shown": layer.get("shown"),
         "opacity": layer.get("opacity"),
         "styleProfile": layer.get("styleProfile"),
@@ -206,10 +209,60 @@ def compact_quota(quota: Any) -> dict[str, Any] | None:
     return compact or None
 
 
+def compact_performance_engine(engine: Any) -> dict[str, Any] | None:
+    if not isinstance(engine, dict):
+        return None
+    compact: dict[str, Any] = {}
+    exact_values = {
+        "id": {"leaflet-tiles", "leaflet-pmtiles", "maplibre-cog"},
+        "access": {"XYZ tiles", "HTTP Range"},
+        "status": {"idle", "loading", "ready", "error", "unavailable"},
+    }
+    for key, allowed in exact_values.items():
+        value = engine.get(key)
+        if isinstance(value, str) and value in allowed:
+            compact[key] = value
+    renderer = engine.get("renderer")
+    if isinstance(renderer, str) and re.fullmatch(r"(?:Leaflet|MapLibre [0-9.]+)", renderer):
+        compact["renderer"] = renderer
+    protocol = engine.get("protocol")
+    if isinstance(protocol, str) and re.fullmatch(r"(?:[A-Z0-9_-]{1,24}|(?:COG|PMTiles) [0-9.]+)", protocol):
+        compact["protocol"] = protocol
+    crs = engine.get("crs")
+    if isinstance(crs, str) and re.fullmatch(r"EPSG:[0-9]{3,6}", crs):
+        compact["crs"] = crs
+    if isinstance(engine.get("lazy"), bool):
+        compact["lazy"] = engine["lazy"]
+    diagnostics = engine.get("diagnostics")
+    if isinstance(diagnostics, dict):
+        safe_diagnostics: dict[str, Any] = {}
+        diagnostic_values = {
+            "status": {"loading", "ready", "error"},
+            "cache": {"cold", "warm", "unknown"},
+        }
+        for key, allowed in diagnostic_values.items():
+            value = diagnostics.get(key)
+            if isinstance(value, str) and value in allowed:
+                safe_diagnostics[key] = value
+        for key in ("firstRenderMs", "readyMs", "renderedBlocks", "sourceRequests", "transferredBytes"):
+            value = diagnostics.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0:
+                safe_diagnostics[key] = round(value)
+        if safe_diagnostics:
+            compact["diagnostics"] = safe_diagnostics
+    return compact or None
+
+
 def compact_state_response(payload: dict[str, Any]) -> dict[str, Any]:
     state = payload.get("state") if isinstance(payload.get("state"), dict) else {}
     layers = [item for item in (compact_layer(layer) for layer in state.get("layers", [])) if item]
     tasks = [item for item in (compact_task(task) for task in state.get("tasks", [])) if item]
+    custom_basemaps = state.get("customBasemaps") if isinstance(state.get("customBasemaps"), list) else []
+    safe_basemaps = [
+        {key: item.get(key) for key in ("id", "name", "type", "provider") if item.get(key) not in (None, "")}
+        for item in custom_basemaps
+        if isinstance(item, dict)
+    ]
     compact_state = {
         "agentProtocolVersion": state.get("agentProtocolVersion"),
         "title": state.get("title"),
@@ -218,6 +271,12 @@ def compact_state_response(payload: dict[str, Any]) -> dict[str, Any]:
         "center": state.get("center"),
         "zoom": state.get("zoom"),
         "basemap": state.get("basemap"),
+        "defaultBasemap": state.get("defaultBasemap"),
+        "basemapShown": state.get("basemapShown"),
+        "basemapOpacity": state.get("basemapOpacity"),
+        "customBasemapCount": len(custom_basemaps),
+        "customBasemaps": safe_basemaps,
+        "performanceEngine": compact_performance_engine(state.get("performanceEngine")),
         "activeLayerId": state.get("activeLayerId"),
         "bounds": state.get("bounds"),
         "aoiBounds": state.get("aoiBounds"),
@@ -857,7 +916,7 @@ def command_smoke(args: argparse.Namespace) -> int:
     s2_fast = infer_quick_layer("2024 年夏季 10m NDVI", {"selectedDataset": {}})
     supported_actions = set(contract.get("actions", {}).get("supported", []))
     checks = {
-        "contractVersion": contract.get("version") == 2,
+        "contractVersion": contract.get("version") == 5,
         "stateEndpoint": contract.get("stateEndpoint") == "/api/session/state",
         "profileEndpoint": contract.get("profileEndpoint") == "/api/session/profile",
         "actionsEndpoint": contract.get("actionsEndpoint") == "/api/session/actions",
@@ -866,11 +925,15 @@ def command_smoke(args: argparse.Namespace) -> int:
         "ndviDriveExportEndpoint": contract.get("exportEndpoints", {}).get("ndviDrive") == "/api/export/ndvi-drive",
         "selectedDataset": "selectedDataset" in contract.get("stateFields", []),
         "tasksState": "tasks" in contract.get("stateFields", []),
+        "basemapState": {"basemap", "defaultBasemap", "customBasemaps"}.issubset(set(contract.get("stateFields", []))),
+        "performanceEngineState": "performanceEngine" in contract.get("stateFields", []),
+        "cogBasemap": "cog" in contract.get("basemaps", {}).get("customTypes", []),
         "recipeState": "recipe" in contract.get("layerFields", []),
         "styleActions": {"removeLayer", "updateLayerStyle", "setAoiStyle"}.issubset(supported_actions),
         "layerControlActions": {"showLayer", "hideLayer", "selectLayer", "setLayerVisibility", "setLayerOpacity"}.issubset(supported_actions),
         "recipeActions": {"selectDataset", "addLayer"}.issubset(supported_actions),
         "taskActions": {"addTask", "exportNdviDrive"}.issubset(supported_actions),
+        "basemapActions": {"setBasemap", "setDefaultBasemap", "addCustomBasemap", "updateCustomBasemap", "removeCustomBasemap"}.issubset(supported_actions),
         "driveShortcut": contract.get("driveShortcut", {}).get("elementId") == "drive-btn",
         "modisFastPath": isinstance(modis_fast, dict)
         and modis_fast.get("datasetId") == "MODIS/061/MOD13Q1"
