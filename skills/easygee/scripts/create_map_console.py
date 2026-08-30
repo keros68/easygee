@@ -38,6 +38,24 @@ DEFAULT_EMPTY_ZOOM = 2
 UNLIMITED_QUOTA_THRESHOLD = 9_000_000_000_000_000_000
 LEAFLET_CDN = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
 LEAFLET_LOCAL = "leaflet-1.9.4.js"
+PMTILES_VERSION = "4.5.0"
+PMTILES_CDN = f"https://unpkg.com/pmtiles@{PMTILES_VERSION}/dist/pmtiles.js"
+PMTILES_LOCAL = f"pmtiles-{PMTILES_VERSION}.js"
+MAPLIBRE_VERSION = "5.6.1"
+MAPLIBRE_JS_CDN = f"https://unpkg.com/maplibre-gl@{MAPLIBRE_VERSION}/dist/maplibre-gl.js"
+MAPLIBRE_CSS_CDN = f"https://unpkg.com/maplibre-gl@{MAPLIBRE_VERSION}/dist/maplibre-gl.css"
+MAPLIBRE_JS_LOCAL = f"maplibre-gl-{MAPLIBRE_VERSION}.js"
+MAPLIBRE_CSS_LOCAL = f"maplibre-gl-{MAPLIBRE_VERSION}.css"
+MAPLIBRE_LEAFLET_VERSION = "0.1.4"
+MAPLIBRE_LEAFLET_CDN = (
+    f"https://unpkg.com/@maplibre/maplibre-gl-leaflet@{MAPLIBRE_LEAFLET_VERSION}/dist/leaflet-maplibre-gl.js"
+)
+MAPLIBRE_LEAFLET_LOCAL = f"maplibre-gl-leaflet-{MAPLIBRE_LEAFLET_VERSION}.js"
+COG_PROTOCOL_VERSION = "0.9.2"
+COG_PROTOCOL_CDN = (
+    f"https://unpkg.com/@geomatico/maplibre-cog-protocol@{COG_PROTOCOL_VERSION}/dist/index.js"
+)
+COG_PROTOCOL_LOCAL = f"maplibre-cog-protocol-{COG_PROTOCOL_VERSION}.js"
 GEE_CATALOG_INDEX_URL = "https://raw.githubusercontent.com/giswqs/Earth-Engine-Catalog/master/gee_catalog.json"
 GEE_STAC_ROOT_URL = "https://storage.googleapis.com/earthengine-stac/catalog/catalog.json"
 GEE_COMMUNITY_DATASETS_CSV_URL = "https://raw.githubusercontent.com/sadassimov/geemu-skill/main/awesome-gee-community-datasets/community_datasets.csv"
@@ -2179,7 +2197,7 @@ def shell_css() -> str:
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; overflow: hidden; }
     body { font-family: Inter, "Segoe UI", Arial, sans-serif; color: var(--text); background: var(--bg); letter-spacing: 0; }
-    button, input { font: inherit; letter-spacing: 0; }
+    button, input, select, textarea { font: inherit; letter-spacing: 0; }
     .app {
       height: 100vh;
       display: block;
@@ -2268,6 +2286,172 @@ def shell_css() -> str:
       width: 0;
       opacity: 0;
       pointer-events: none;
+    }
+    .logo-layer.collapsed:hover,
+    .logo-layer.collapsed:focus-visible,
+    .logo-layer.collapsed.source-open {
+      width: min(280px, calc(100vw - 52px));
+      max-width: min(280px, calc(100vw - 52px));
+      justify-content: flex-start;
+      gap: 8px;
+      padding: 3px 9px 3px 3px;
+      background: rgba(251, 253, 252, 0.94);
+      border-color: rgba(194, 213, 202, 0.96);
+      box-shadow: 0 7px 22px rgba(16, 24, 40, 0.14);
+      backdrop-filter: blur(12px);
+    }
+    .logo-layer.collapsed:hover .logo-layer-copy,
+    .logo-layer.collapsed:focus-visible .logo-layer-copy,
+    .logo-layer.collapsed.source-open .logo-layer-copy {
+      width: 228px;
+      opacity: 1;
+    }
+    .mark::after {
+      content: "i";
+      position: absolute;
+      right: 2px;
+      bottom: 2px;
+      z-index: 5;
+      width: 12px;
+      height: 12px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,0.9);
+      border-radius: 50%;
+      background: rgba(20, 54, 42, 0.92);
+      color: #fff;
+      font-size: 8px;
+      font-weight: 820;
+      line-height: 1;
+      box-shadow: 0 1px 4px rgba(16,24,40,0.28);
+    }
+    .basemap-source-card {
+      position: fixed;
+      left: var(--logo-left);
+      top: 52px;
+      z-index: 1708;
+      width: min(344px, calc(100vw - 16px));
+      overflow: hidden;
+      border: 1px solid rgba(194, 213, 202, 0.96);
+      border-radius: 13px;
+      background: rgba(250, 253, 251, 0.97);
+      box-shadow: 0 18px 48px rgba(16, 24, 40, 0.20);
+      backdrop-filter: blur(16px);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-7px) scale(0.985);
+      transform-origin: 18px 0;
+      transition: opacity 140ms ease, transform 160ms ease;
+    }
+    .basemap-source-card.open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+    .basemap-source-card::before {
+      content: "";
+      position: absolute;
+      left: 16px;
+      top: 0;
+      width: 38px;
+      height: 3px;
+      border-radius: 0 0 3px 3px;
+      background: var(--accent);
+    }
+    .basemap-source-head {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 10px 0 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .basemap-source-kicker {
+      color: #3d5148;
+      font-size: 11px;
+      font-weight: 820;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .basemap-source-hero {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      padding: 13px 14px 11px;
+    }
+    .basemap-source-visual.basemap-thumb {
+      width: 92px;
+      height: 66px;
+      border-radius: 10px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45), 0 5px 15px rgba(16,24,40,0.14);
+    }
+    .basemap-source-name {
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 820;
+      line-height: 1.18;
+    }
+    .basemap-source-service {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .basemap-source-grid {
+      margin: 0 14px;
+      padding: 9px 0;
+      display: grid;
+      gap: 7px;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .basemap-source-row {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      gap: 9px;
+      align-items: start;
+    }
+    .basemap-source-row dt {
+      margin: 0;
+      color: #718078;
+      font-size: 10px;
+      line-height: 1.35;
+    }
+    .basemap-source-row dd {
+      margin: 0;
+      color: #25322d;
+      font-size: 10px;
+      font-weight: 680;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .basemap-source-link {
+      min-height: 38px;
+      margin: 7px 9px 9px;
+      padding: 0 9px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border-radius: 8px;
+      color: #145e42;
+      font-size: 11px;
+      font-weight: 780;
+      text-decoration: none;
+    }
+    .basemap-source-link:hover,
+    .basemap-source-link:focus-visible { background: var(--accent-soft); }
+    .basemap-source-link svg {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     h1 {
       position: absolute;
@@ -2394,7 +2578,7 @@ def shell_css() -> str:
       left: 52px;
       top: 72px;
       z-index: 1606;
-      width: min(300px, calc(100vw - 66px));
+      width: min(356px, calc(100vw - 66px));
       overflow: hidden;
       background: rgba(255,255,255,0.95);
       border: 1px solid var(--line);
@@ -2410,7 +2594,7 @@ def shell_css() -> str:
       flex-direction: column;
     }
     .basemap-panel.open { transform: translateX(0); }
-    .basemap-body { padding: 10px; display: grid; gap: 8px; min-height: 0; overflow-y: auto; }
+    .basemap-body { padding: 10px; display: grid; grid-auto-rows: max-content; gap: 9px; min-height: 0; overflow-y: auto; }
     .upload-panel {
       position: fixed;
       left: 52px;
@@ -2519,65 +2703,167 @@ def shell_css() -> str:
     .upload-remove svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
     .upload-remove:hover { background: #fff5f3; border-color: #d9a5a0; color: #8f1d1d; }
     .upload-item-meta { color: var(--muted); font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
+    .basemap-toolbar { display: flex; align-items: center; gap: 8px; }
+    .basemap-add {
+      min-height: 32px; flex: 1; border: 1px solid rgba(22,115,77,0.32); border-radius: 7px;
+      background: linear-gradient(180deg, #f8fffb, #eef8f2); color: var(--accent); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 11px; font-weight: 760;
+    }
+    .basemap-add:hover { border-color: rgba(22,115,77,0.58); background: #e8f5ee; }
+    .basemap-add svg, .basemap-entry-action svg, .basemap-form-button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .basemap-custom-count { flex: 0 0 auto; color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .basemap-provider-auth {
+      min-height: 38px; border: 1px solid #cfe0d7; border-radius: 8px; background: rgba(248,251,249,0.96); overflow: hidden;
+    }
+    .basemap-provider-auth-toggle {
+      width: 100%; min-height: 38px; padding: 0 10px; border: 0; background: transparent;
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      color: #30473b; cursor: pointer; font-size: 10px; font-weight: 760; text-align: left;
+    }
+    .basemap-provider-auth-toggle:hover { background: #edf7f1; }
+    .basemap-provider-auth-title { min-width: 0; display: inline-flex; align-items: center; gap: 7px; }
+    .basemap-provider-auth-mark { min-width: 24px; height: 20px; padding: 0 5px; border-radius: 5px; display: inline-grid; place-items: center; background: var(--accent); color: #fff; font-size: 8px; letter-spacing: 0.06em; }
+    .basemap-provider-auth-toggle::after { content: "+"; color: var(--accent); font-size: 16px; font-weight: 500; }
+    .basemap-provider-auth.open .basemap-provider-auth-toggle::after { content: "−"; }
+    .basemap-provider-auth-state { margin-left: auto; color: var(--muted); font-size: 9px; font-weight: 650; }
+    .basemap-provider-auth.configured .basemap-provider-auth-state { color: var(--accent); }
+    .basemap-provider-auth-body[hidden] { display: none !important; }
+    .basemap-provider-auth-body { padding: 0 10px 10px; display: grid; gap: 7px; }
+    .basemap-provider-auth-summary[hidden], .basemap-provider-auth-editor[hidden] { display: none !important; }
+    .basemap-provider-auth-summary { display: flex; align-items: center; justify-content: space-between; gap: 9px; }
+    .basemap-provider-auth-summary-copy { min-width: 0; display: inline-flex; align-items: center; gap: 7px; color: #52635b; font-size: 9px; line-height: 1.4; }
+    .basemap-provider-auth-summary-copy::before { content: ""; width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(22,115,77,0.12); }
+    .basemap-provider-auth-actions { display: inline-flex; align-items: center; gap: 5px; }
+    .basemap-provider-auth-editor { display: grid; gap: 7px; }
+    .basemap-provider-auth-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
+    .basemap-provider-auth-remember { display: inline-flex; align-items: center; gap: 6px; color: #52635b; font-size: 9px; cursor: pointer; }
+    .basemap-provider-auth-remember input { width: 13px; height: 13px; margin: 0; accent-color: var(--accent); }
+    .basemap-provider-auth-remember:has(input:disabled) { cursor: default; opacity: 0.55; }
+    .basemap-provider-auth-help { color: var(--muted); font-size: 9px; line-height: 1.45; }
+    .basemap-provider-auth-help a { color: var(--accent); font-weight: 700; text-decoration: none; }
+    .basemap-provider-auth-help a:hover { text-decoration: underline; }
+    .basemap-editor {
+      border: 1px solid #d5e2db; border-radius: 9px; padding: 10px; display: grid; gap: 9px;
+      background: linear-gradient(145deg, rgba(245,250,247,0.98), rgba(255,255,255,0.98));
+      box-shadow: inset 3px 0 0 rgba(22,115,77,0.42), 0 4px 14px rgba(16,24,40,0.06);
+    }
+    .basemap-editor[hidden], .basemap-type-field[hidden] { display: none !important; }
+    .basemap-editor-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .basemap-editor-title { font-size: 12px; font-weight: 780; color: #263a31; }
+    .basemap-editor-kind { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .basemap-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .basemap-field { display: grid; gap: 4px; min-width: 0; color: #52635b; font-size: 10px; font-weight: 650; }
+    .basemap-field.wide { grid-column: 1 / -1; }
+    .basemap-input, .basemap-select {
+      width: 100%; min-width: 0; height: 31px; border: 1px solid #ccd9d2; border-radius: 6px;
+      padding: 0 8px; background: rgba(255,255,255,0.96); color: var(--text); font-size: 11px; outline: none;
+    }
+    .basemap-input:focus, .basemap-select:focus { border-color: rgba(22,115,77,0.64); box-shadow: 0 0 0 2px rgba(22,115,77,0.10); }
+    .basemap-input.code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 10px; }
+    .basemap-editor details { grid-column: 1 / -1; border-top: 1px solid #dce6e0; padding-top: 7px; }
+    .basemap-editor summary { cursor: pointer; color: #53645c; font-size: 10px; font-weight: 720; }
+    .basemap-advanced-grid { margin-top: 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .basemap-default-toggle { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; color: #42564c; font-size: 10px; cursor: pointer; }
+    .basemap-default-toggle input { accent-color: var(--accent); }
+    .basemap-form-status { min-height: 16px; color: var(--muted); font-size: 10px; line-height: 1.35; }
+    .basemap-form-status.success { color: #12633f; }
+    .basemap-form-status.error { color: #9e2929; }
+    .basemap-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; }
+    .basemap-form-button {
+      min-height: 29px; border: 1px solid #ccd9d2; border-radius: 6px; padding: 0 9px; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #fff; color: #34483e; font-size: 10px; font-weight: 730;
+    }
+    .basemap-form-button:hover { border-color: #9bb4a7; background: #f6faf8; }
+    .basemap-form-button.primary { border-color: #16734d; background: #16734d; color: #fff; }
+    .basemap-form-button.primary:hover { background: #105f3e; }
+    .basemap-form-button[disabled] { cursor: default; opacity: 0.46; }
+    .basemap-list { display: grid; gap: 8px; }
+    .basemap-entry {
+      position: relative; overflow: hidden; border: 1px solid #e0e8e4; border-radius: 8px;
+      background: rgba(255,255,255,0.9); transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+    }
+    .basemap-entry:hover { transform: translateY(-1px); }
+    .basemap-entry:hover, .basemap-entry.active { border-color: rgba(22,115,77,0.5); background: var(--accent-soft); }
     .basemap-choice {
-      border: 1px solid #e0e8e4;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.9);
+      width: 100%; border: 0; border-radius: 8px; background: transparent;
       padding: 8px;
       display: grid;
-      grid-template-columns: 44px minmax(0, 1fr);
-      gap: 9px;
+      grid-template-columns: 56px minmax(0, 1fr);
+      gap: 10px;
       align-items: center;
       cursor: pointer;
       color: var(--text);
       text-align: left;
+      transition: background 140ms ease;
     }
-    .basemap-choice:hover, .basemap-choice.active { border-color: rgba(22, 115, 77, 0.5); background: var(--accent-soft); }
+    .basemap-choice:hover { background: rgba(255,255,255,0.34); }
+    .basemap-entry-default {
+      position: absolute; top: 7px; right: 7px; z-index: 4; width: 23px; height: 23px; padding: 0;
+      border: 1px solid transparent; border-radius: 6px; background: rgba(255,255,255,0.7); color: #7b897f;
+      display: grid; place-items: center; cursor: pointer;
+    }
+    .basemap-entry-default:hover { border-color: #d0dbd5; background: #fff; color: #8b650a; }
+    .basemap-entry-default.active { color: #9a6200; background: #fff7df; border-color: #e8cc82; }
+    .basemap-entry-default.active svg { fill: currentColor; }
+    .basemap-entry-default svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .basemap-entry .basemap-copy { padding-right: 24px; }
+    .basemap-entry-footer { min-height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 5px 7px; border-top: 1px solid rgba(205,219,211,0.86); }
+    .basemap-overlay-add { min-width: 0; min-height: 25px; padding: 0 7px; border: 1px solid transparent; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; color: var(--accent); background: transparent; cursor: pointer; font-size: 10px; font-weight: 760; }
+    .basemap-overlay-add:hover { border-color: rgba(22,115,77,0.3); background: rgba(238,248,242,0.92); }
+    .basemap-overlay-add[disabled] { color: #7b897f; cursor: default; opacity: 0.72; }
+    .basemap-overlay-add svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .basemap-custom-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+    .basemap-entry-action { width: 25px; height: 25px; padding: 0; border: 1px solid transparent; border-radius: 6px; display: grid; place-items: center; color: #5c6b63; background: transparent; cursor: pointer; }
+    .basemap-entry-action:hover { border-color: #d0dbd5; background: rgba(255,255,255,0.82); color: #174d36; }
+    .basemap-entry-action.danger:hover { color: #a32929; border-color: #e3cbc8; background: #fff6f5; }
+    .basemap-entry-action[disabled] { opacity: 0.28; cursor: default; }
+    .basemap-type-chip { display: inline-flex; margin-top: 4px; padding: 2px 5px; border-radius: 999px; background: rgba(22,115,77,0.09); color: #35604c; font-size: 8px; font-weight: 760; letter-spacing: 0.06em; text-transform: uppercase; }
     .basemap-thumb {
-      width: 44px;
-      height: 34px;
-      border-radius: 6px;
-      border: 1px solid rgba(16,24,40,0.12);
+      width: 56px;
+      height: 42px;
+      border-radius: 9px;
+      border: 1px solid rgba(27,44,37,0.14);
       overflow: hidden;
-      background: #e9f0ec;
+      background: #edf2ee;
       position: relative;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.44), 0 2px 6px rgba(16,24,40,0.08);
     }
-    .basemap-thumb.osm {
-      background:
-        linear-gradient(35deg, transparent 45%, rgba(215,92,86,0.75) 46%, rgba(215,92,86,0.75) 52%, transparent 53%),
-        linear-gradient(120deg, transparent 55%, rgba(229,164,77,0.65) 56%, rgba(229,164,77,0.65) 62%, transparent 63%),
-        linear-gradient(0deg, #a7d8ad 0 42%, #f5f3e8 43% 100%);
+    .basemap-thumb svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      transform: scale(1.01);
+      transition: transform 180ms ease;
     }
-    .basemap-thumb.light {
-      background:
-        linear-gradient(36deg, transparent 47%, rgba(143,166,151,0.55) 48%, rgba(143,166,151,0.55) 52%, transparent 53%),
-        linear-gradient(116deg, transparent 55%, rgba(194,203,197,0.7) 56%, rgba(194,203,197,0.7) 61%, transparent 62%),
-        linear-gradient(0deg, #f8faf7, #edf3ef);
+    .basemap-choice:hover .basemap-thumb svg { transform: scale(1.055); }
+    .basemap-thumb::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      border-radius: inherit;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.22);
     }
-    .basemap-thumb.dark {
-      background:
-        linear-gradient(35deg, transparent 46%, rgba(89,219,180,0.65) 47%, rgba(89,219,180,0.65) 51%, transparent 52%),
-        linear-gradient(112deg, transparent 55%, rgba(138,155,255,0.5) 56%, rgba(138,155,255,0.5) 60%, transparent 61%),
-        linear-gradient(0deg, #121a1d, #27333a);
-    }
-    .basemap-thumb.voyager {
-      background:
-        linear-gradient(35deg, transparent 45%, rgba(237,126,74,0.68) 46%, rgba(237,126,74,0.68) 51%, transparent 52%),
-        linear-gradient(118deg, transparent 55%, rgba(90,155,196,0.62) 56%, rgba(90,155,196,0.62) 61%, transparent 62%),
-        linear-gradient(0deg, #b6d7b8 0 38%, #f4ead2 39% 100%);
-    }
-    .basemap-thumb.topo {
-      background:
-        radial-gradient(ellipse at 14px 18px, transparent 0 8px, rgba(122,94,58,0.5) 9px 10px, transparent 11px),
-        radial-gradient(ellipse at 31px 13px, transparent 0 9px, rgba(122,94,58,0.42) 10px 11px, transparent 12px),
-        linear-gradient(135deg, #d8e6ba, #f1e7c5 52%, #c9d7af);
-    }
-    .basemap-thumb.imagery {
-      background:
-        radial-gradient(circle at 24px 14px, rgba(35,99,64,0.92) 0 12px, transparent 13px),
-        radial-gradient(circle at 8px 24px, rgba(68,118,68,0.85) 0 13px, transparent 14px),
-        linear-gradient(135deg, #284d39, #6f8f6a 48%, #9b835e);
-    }
+    .basemap-thumb.osm { background: #eef0dd; }
+    .basemap-thumb.light { background: #f3f5f2; }
+    .basemap-thumb.dark { background: #182525; }
+    .basemap-thumb.voyager { background: #efe4cb; }
+    .basemap-thumb.topo { background: #e9e5c8; }
+    .basemap-thumb.imagery { background: #294638; }
+    .basemap-thumb.clarity { background: #89916c; }
+    .basemap-thumb.tianditu-vector { background: #edf2de; }
+    .basemap-thumb.tianditu-imagery { background: #315342; }
+    .basemap-thumb.tianditu-terrain { background: #ded8b7; }
+    .basemap-thumb.custom-xyz { background: #dcece3; }
+    .basemap-thumb.custom-tms { background: #e9e2cf; }
+    .basemap-thumb.custom-arcgis { background: #dbe7ef; }
+    .basemap-thumb.custom-wms { background: #dce8dc; }
+    .basemap-thumb.custom-wmts { background: #e6e0ee; }
+    .basemap-thumb.custom-pmtiles { background: #193342; }
+    .basemap-thumb.custom-cog { background: #153b3f; }
     .basemap-copy { min-width: 0; }
     .basemap-name { font-size: 12px; font-weight: 760; line-height: 1.2; }
     .basemap-note { margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2701,6 +2987,10 @@ def shell_css() -> str:
     .dataset-toolbar .tag { flex: 0 0 auto; }
     .dataset-hint { color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .layer-list, .dataset-list, .kv, .log-list, .task-list { display: grid; gap: 8px; }
+    .layer-stack-group { display: grid; gap: 8px; }
+    .layer-stack-group + .layer-stack-group { margin-top: 13px; padding-top: 11px; border-top: 1px solid #dfe8e3; }
+    .layer-group-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: #40554a; font-size: 11px; font-weight: 780; letter-spacing: 0.02em; }
+    .layer-group-heading span { color: var(--muted); font-size: 9px; font-weight: 620; letter-spacing: 0; }
     .layer-item, .dataset-item, .stat-row, .task-row {
       border: 1px solid var(--line); background: #fff; border-radius: 6px;
     }
@@ -2715,14 +3005,20 @@ def shell_css() -> str:
     .task-link { color: var(--accent); text-decoration: none; font-size: 11px; font-weight: 700; }
     .task-link:hover { text-decoration: underline; }
     .layer-item { padding: 9px; min-width: 0; }
+    .layer-item.active { border-color: var(--accent); background: var(--accent-soft); }
+    .layer-item.primary-basemap { border-color: #c9d9d0; background: linear-gradient(145deg, #f7faf8, #eef5f1); box-shadow: inset 3px 0 0 rgba(22,115,77,0.52); }
+    .layer-item.basemap-overlay { box-shadow: inset 3px 0 0 rgba(49,92,116,0.45); }
+    .layer-item.primary-basemap.active, .layer-item.basemap-overlay.active { border-color: var(--accent); background: var(--accent-soft); }
     .layer-top { display: flex; align-items: flex-start; gap: 8px; }
     .layer-top input { margin-top: 3px; }
-    .layer-copy { min-width: 0; }
+    .layer-copy { min-width: 0; flex: 1 1 auto; }
     .layer-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .layer-name { font-size: 13px; font-weight: 700; line-height: 1.25; }
     .type-dot { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; color: #fff; font-size: 10px; font-weight: 800; flex: 0 0 auto; }
     .type-dot.aoi { background: #c2410c; }
     .type-dot.measurements { background: #0f766e; }
+    .type-dot.basemap { background: #315c74; }
+    .type-dot.basemap-overlay { background: #4f7182; }
     .type-dot.raster { background: #2f7d55; }
     .type-dot.derived { background: #7a58a8; }
     .type-dot.categorical { background: #2f6fa3; }
@@ -2975,7 +3271,10 @@ def shell_css() -> str:
       .dataset-list { max-height: min(394px, calc(100vh - 154px)); }
       .data-panel.detail-open .catalog-main { padding-right: 0; }
       .dataset-detail-popover { left: 8px; right: 8px; top: 52px; bottom: 8px; width: auto; min-width: 0; }
-      .basemap-panel { left: 48px; top: 64px; width: min(292px, calc(100vw - 58px)); max-height: calc(100vh - 76px); }
+      .basemap-panel { left: 48px; top: 64px; width: min(350px, calc(100vw - 58px)); max-height: calc(100vh - 76px); }
+      .basemap-editor-grid { grid-template-columns: 1fr; }
+      .basemap-field.wide { grid-column: 1; }
+      .basemap-advanced-grid { grid-template-columns: 1fr 1fr; }
       .upload-panel { left: 48px; top: 64px; width: min(322px, calc(100vw - 58px)); max-height: calc(100vh - 76px); }
       .upload-row { grid-template-columns: 1fr; }
       .upload-submit { justify-content: center; }
@@ -2987,22 +3286,7 @@ def shell_css() -> str:
 
 
 def sample_state(project: str, title: str) -> dict:
-    layers = [
-        {
-            "id": "sample-dem",
-            "name": "SRTM elevation",
-            "dataset": "USGS/SRTMGL1_003",
-            "type": "ee-raster",
-            "shown": True,
-            "opacity": 0.58,
-            "tileUrl": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-            "legend": [
-                ["#0f3b2e", "Lower elevation"],
-                ["#c9b96d", "Mid elevation"],
-                ["#f4f1e8", "Higher elevation"],
-            ],
-        }
-    ]
+    layers: list[dict[str, object]] = []
     catalog, catalog_source = build_catalog(layers, include_remote=False)
     return {
         "title": title,
@@ -3240,11 +3524,101 @@ def ensure_leaflet_js(root: Path) -> str:
     return LEAFLET_CDN
 
 
+def valid_pmtiles_js(data: bytes) -> bool:
+    return len(data) > 10_000 and b"PMTiles" in data and b"leafletRasterLayer" in data
+
+
+def ensure_pmtiles_js(root: Path) -> str:
+    root.mkdir(parents=True, exist_ok=True)
+    target = root / PMTILES_LOCAL
+    if target.exists():
+        try:
+            if valid_pmtiles_js(target.read_bytes()):
+                return f"./{PMTILES_LOCAL}"
+        except OSError:
+            pass
+    try:
+        with urllib.request.urlopen(PMTILES_CDN, timeout=20) as response:
+            data = response.read()
+        if valid_pmtiles_js(data):
+            target.write_bytes(data)
+            return f"./{PMTILES_LOCAL}"
+    except Exception:
+        pass
+    return PMTILES_CDN
+
+
+def valid_maplibre_js(data: bytes) -> bool:
+    return len(data) > 800_000 and b"maplibregl" in data and b"addProtocol" in data
+
+
+def valid_maplibre_css(data: bytes) -> bool:
+    return len(data) > 50_000 and b".maplibregl-map" in data and b".maplibregl-canvas" in data
+
+
+def valid_maplibre_leaflet_js(data: bytes) -> bool:
+    return len(data) > 7_000 and b"maplibreGL" in data and b"getMaplibreMap" in data
+
+
+def valid_cog_protocol_js(data: bytes) -> bool:
+    return len(data) > 400_000 and b"MaplibreCOGProtocol" in data and b"getCogMetadata" in data
+
+
+def ensure_preview_asset(root: Path, local_name: str, url: str, validator: Any) -> str:
+    root.mkdir(parents=True, exist_ok=True)
+    target = root / local_name
+    if target.exists():
+        try:
+            if validator(target.read_bytes()):
+                return f"./{local_name}"
+        except OSError:
+            pass
+    try:
+        with urllib.request.urlopen(url, timeout=30) as response:
+            data = response.read()
+        if validator(data):
+            target.write_bytes(data)
+            return f"./{local_name}"
+    except Exception:
+        pass
+    return url
+
+
+def cog_engine_cdn_assets() -> dict[str, str]:
+    return {
+        "maplibreJs": MAPLIBRE_JS_CDN,
+        "maplibreCss": MAPLIBRE_CSS_CDN,
+        "leafletAdapterJs": MAPLIBRE_LEAFLET_CDN,
+        "cogProtocolJs": COG_PROTOCOL_CDN,
+    }
+
+
+def ensure_cog_engine_assets(root: Path) -> dict[str, str]:
+    return {
+        "maplibreJs": ensure_preview_asset(root, MAPLIBRE_JS_LOCAL, MAPLIBRE_JS_CDN, valid_maplibre_js),
+        "maplibreCss": ensure_preview_asset(root, MAPLIBRE_CSS_LOCAL, MAPLIBRE_CSS_CDN, valid_maplibre_css),
+        "leafletAdapterJs": ensure_preview_asset(
+            root,
+            MAPLIBRE_LEAFLET_LOCAL,
+            MAPLIBRE_LEAFLET_CDN,
+            valid_maplibre_leaflet_js,
+        ),
+        "cogProtocolJs": ensure_preview_asset(
+            root,
+            COG_PROTOCOL_LOCAL,
+            COG_PROTOCOL_CDN,
+            valid_cog_protocol_js,
+        ),
+    }
+
+
 def svg_icon(name: str) -> str:
     icons = {
         "data": '<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5"/><path d="M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>',
         "layers": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg>',
         "add": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+        "overlay-add": '<svg class="lucide lucide-copy-plus" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/><path d="M15 12v6M12 15h6"/></svg>',
+        "info": '<svg class="lucide lucide-info" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>',
         "favorite": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2 7.5 14 3 9.6l6.2-.9L12 3Z"/></svg>',
         "external": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7H5v12h12v-3"/><path d="M11 5h8v8"/><path d="m10 14 9-9"/></svg>',
         "inspect": '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>',
@@ -3256,20 +3630,31 @@ def svg_icon(name: str) -> str:
         "upload": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16h2.2a3.8 3.8 0 0 0 .6-7.6A6.2 6.2 0 0 0 6.7 7.1 4.4 4.4 0 0 0 7.4 16H9"/><path d="M12 20V10"/><path d="m8.5 13.5 3.5-3.5 3.5 3.5"/></svg>',
         "tasks": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12"/><path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"/></svg>',
         "home": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
+        "zoom-layer": '<svg class="lucide lucide-scan" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></svg>',
         "zoom-in": '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 7v6M7 10h6M15 15l5 5"/></svg>',
         "zoom-out": '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M7 10h6M15 15l5 5"/></svg>',
         "language": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h9M8.5 5v2M11.5 5c-.8 4.7-3.5 7.3-7 8.8"/><path d="M5.5 9.5c1.2 2 3.1 3.5 5.5 4.4"/><path d="M14 20l4-9 4 9M15.2 17h5.6"/></svg>',
         "style": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.5a1.8 1.8 0 0 0 .7-3.4 1.8 1.8 0 0 1 .7-3.4H16a5 5 0 0 0 0-10H12Z"/><circle cx="7.5" cy="10" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="14" cy="7.5" r="1"/><circle cx="8.5" cy="14" r="1"/></svg>',
-        "refresh": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.4 6.4"/><path d="M3 12A9 9 0 0 1 18.4 5.6"/><path d="M21 5v6h-6"/><path d="M3 19v-6h6"/></svg>',
+        "edit": '<svg class="lucide lucide-pencil" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>',
+        "up": '<svg class="lucide lucide-chevron-up" viewBox="0 0 24 24" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>',
+        "down": '<svg class="lucide lucide-chevron-down" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+        "refresh": '<svg class="lucide lucide-refresh-cw" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>',
         "trash": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg>',
         "close": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
     }
     return icons[name]
 
 
-def render_html(state: dict, leaflet_src: str) -> str:
+def render_html(
+    state: dict,
+    leaflet_src: str,
+    pmtiles_src: str = PMTILES_CDN,
+    cog_engine_assets: dict[str, str] | None = None,
+) -> str:
     safe_title = html.escape(state["title"])
     safe_leaflet_src = html.escape(leaflet_src, quote=True)
+    safe_pmtiles_src = html.escape(pmtiles_src, quote=True)
+    cog_assets_json = json.dumps(cog_engine_assets or cog_engine_cdn_assets(), ensure_ascii=True).replace("</", "<\\/")
     logo_data_uri = html.escape(easygee_logo_data_uri(), quote=True)
     state_json = json.dumps(state, ensure_ascii=True).replace("</", "<\\/")
     logo_mark = (
@@ -3283,6 +3668,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{safe_title}</title>
+  <link rel="icon" href="{logo_data_uri}">
   <style>
 {leaflet_css()}
 {shell_css()}
@@ -3292,11 +3678,35 @@ def render_html(state: dict, leaflet_src: str) -> str:
   <div class="app">
     <header class="topbar" aria-label="{safe_title} EE">
       <h1>{safe_title}</h1>
-      <button class="logo-layer collapsed" id="active-layer-badge" type="button" title="Active layer" aria-label="Active layer">
+      <button class="logo-layer collapsed" id="active-layer-badge" type="button" title="Active layer" aria-label="Active layer" aria-haspopup="true" aria-expanded="false">
         <span class="mark" aria-hidden="true">{logo_mark}</span>
         <span class="logo-layer-copy"><strong id="active-name"></strong><span id="active-dataset"></span></span>
       </button>
     </header>
+
+    <section class="basemap-source-card" id="basemap-source-card" aria-hidden="true" aria-labelledby="basemap-source-heading">
+      <div class="basemap-source-head">
+        <div class="basemap-source-kicker" id="basemap-source-heading" data-i18n="source.title">Basemap source</div>
+        <button class="icon-btn panel-close" id="basemap-source-close" type="button" title="Close" aria-label="Close" data-i18n-title="tool.close">{svg_icon("close")}</button>
+      </div>
+      <div class="basemap-source-hero">
+        <span class="basemap-source-visual basemap-thumb osm" id="basemap-source-visual" aria-hidden="true"></span>
+        <div>
+          <div class="basemap-source-name" id="basemap-source-name"></div>
+          <div class="basemap-source-service" id="basemap-source-service"></div>
+        </div>
+      </div>
+      <dl class="basemap-source-grid">
+        <div class="basemap-source-row"><dt data-i18n="source.provider">Provider</dt><dd id="basemap-source-provider"></dd></div>
+        <div class="basemap-source-row" id="basemap-source-date-row" hidden><dt data-i18n="source.date">Imagery date</dt><dd id="basemap-source-date"></dd></div>
+        <div class="basemap-source-row"><dt data-i18n="source.engine">Data engine</dt><dd id="basemap-source-engine"></dd></div>
+        <div class="basemap-source-row"><dt data-i18n="source.performance">Load timing</dt><dd id="basemap-source-performance"></dd></div>
+        <div class="basemap-source-row"><dt data-i18n="source.delivery">Delivery</dt><dd id="basemap-source-delivery"></dd></div>
+        <div class="basemap-source-row"><dt data-i18n="source.nativeZoom">Native zoom</dt><dd id="basemap-source-zoom"></dd></div>
+        <div class="basemap-source-row"><dt data-i18n="source.attribution">Attribution</dt><dd id="basemap-source-attribution"></dd></div>
+      </dl>
+      <a class="basemap-source-link" id="basemap-source-link" href="#" target="_blank" rel="noopener noreferrer"><span data-i18n="source.open">Open official source</span>{svg_icon("external")}</a>
+    </section>
 
     <nav class="tool-rail" aria-label="Map tools">
       <button class="icon-btn" id="data-btn" title="Add layers" aria-label="Add layers" data-i18n-title="tool.data">{svg_icon("data")}</button>
@@ -3381,7 +3791,70 @@ def render_html(state: dict, leaflet_src: str) -> str:
         </div>
         <button class="icon-btn panel-close mobile-only" id="basemap-close-btn" title="Close" aria-label="Close" data-i18n-title="tool.close">{svg_icon("close")}</button>
       </div>
-      <div class="basemap-body" id="basemap-list"></div>
+      <div class="basemap-body">
+        <div class="basemap-toolbar">
+          <button class="basemap-add" id="basemap-add-btn" type="button">{svg_icon("add")}<span data-i18n="basemap.addCustom">Add custom basemap</span></button>
+          <span class="basemap-custom-count" id="basemap-custom-count"></span>
+        </div>
+        <section class="basemap-provider-auth" id="tianditu-auth">
+          <button class="basemap-provider-auth-toggle" id="tianditu-auth-toggle" type="button" aria-expanded="false" aria-controls="tianditu-auth-body"><span class="basemap-provider-auth-title"><span class="basemap-provider-auth-mark" aria-hidden="true">TK</span><span data-i18n="basemap.tiandituKey">Tianditu access key</span></span><span class="basemap-provider-auth-state" id="tianditu-auth-state"></span></button>
+          <div class="basemap-provider-auth-body" id="tianditu-auth-body" hidden>
+            <div class="basemap-provider-auth-summary" id="tianditu-auth-summary" hidden>
+              <span class="basemap-provider-auth-summary-copy" data-i18n="basemap.tiandituKeyConfiguredHint">Ready for Tianditu basemaps.</span>
+              <span class="basemap-provider-auth-actions"><button class="basemap-form-button" id="tianditu-token-persistence" type="button" hidden></button><button class="basemap-form-button" id="tianditu-token-change" type="button" data-i18n="basemap.tiandituKeyChange">Change key</button></span>
+            </div>
+            <div class="basemap-provider-auth-editor" id="tianditu-auth-editor">
+              <div class="basemap-provider-auth-row">
+                <input class="basemap-input code" id="tianditu-token" type="password" maxlength="256" autocomplete="off" spellcheck="false" data-i18n-placeholder="basemap.tiandituKeyPlaceholder">
+                <button class="basemap-form-button primary" id="tianditu-token-apply" type="button" data-i18n="basemap.tiandituKeyApply">Apply</button>
+              </div>
+              <label class="basemap-provider-auth-remember"><input id="tianditu-token-remember" type="checkbox"><span data-i18n="basemap.tiandituKeyRememberDevice">Remember on this device (Windows encrypted)</span></label>
+              <div class="basemap-provider-auth-help"><span data-i18n="basemap.tiandituKeyHelp">Stored only for this browser tab.</span> <a href="https://cloudcenter.tianditu.gov.cn/center/development/myApp" target="_blank" rel="noopener noreferrer" data-i18n="basemap.tiandituKeyLink">Get a key</a></div>
+            </div>
+          </div>
+        </section>
+        <form class="basemap-editor" id="basemap-editor" hidden novalidate>
+          <div class="basemap-editor-head">
+            <div>
+              <div class="basemap-editor-title" id="basemap-editor-title" data-i18n="basemap.editorAdd">New basemap</div>
+              <div class="basemap-editor-kind" data-i18n="basemap.editorHint">Local profile configuration</div>
+            </div>
+            <button class="icon-btn panel-close" id="basemap-editor-close" type="button" title="Close" aria-label="Close" data-i18n-title="tool.close">{svg_icon("close")}</button>
+          </div>
+          <div class="basemap-editor-grid">
+            <label class="basemap-field wide"><span data-i18n="basemap.fieldName">Name</span><input class="basemap-input" id="basemap-form-name" maxlength="120" autocomplete="off" required></label>
+            <label class="basemap-field"><span data-i18n="basemap.fieldType">Service type</span><select class="basemap-select" id="basemap-form-type">
+              <option value="xyz">XYZ</option><option value="tms">TMS</option><option value="arcgis">ArcGIS REST</option><option value="wms">WMS</option><option value="wmts">WMTS</option><option value="pmtiles">PMTiles (raster)</option><option value="cog">COG (MapLibre WebGL)</option>
+            </select></label>
+            <label class="basemap-field"><span data-i18n="basemap.fieldProvider">Provider</span><input class="basemap-input" id="basemap-form-provider" maxlength="240" autocomplete="off"></label>
+            <label class="basemap-field wide"><span data-i18n="basemap.fieldUrl">Service URL / tile template</span><input class="basemap-input code" id="basemap-form-url" maxlength="4096" inputmode="url" autocomplete="off" required data-i18n-placeholder="basemap.urlPlaceholder"></label>
+            <label class="basemap-field basemap-type-field wide" data-basemap-types="xyz,tms"><span data-i18n="basemap.fieldSubdomains">Subdomains</span><input class="basemap-input code" id="basemap-form-subdomains" maxlength="120" autocomplete="off" placeholder="a,b,c"></label>
+            <label class="basemap-field basemap-type-field wide" data-basemap-types="wms,wmts"><span data-i18n="basemap.fieldLayers">Layer name</span><input class="basemap-input code" id="basemap-form-layers" maxlength="500" autocomplete="off"></label>
+            <label class="basemap-field basemap-type-field" data-basemap-types="wms,wmts"><span data-i18n="basemap.fieldStyles">Style</span><input class="basemap-input code" id="basemap-form-styles" maxlength="500" autocomplete="off"></label>
+            <label class="basemap-field basemap-type-field" data-basemap-types="wms"><span data-i18n="basemap.fieldVersion">WMS version</span><select class="basemap-select" id="basemap-form-version"><option value="1.3.0">1.3.0</option><option value="1.1.1">1.1.1</option></select></label>
+            <label class="basemap-field basemap-type-field" data-basemap-types="wmts"><span data-i18n="basemap.fieldMatrixSet">Tile matrix set</span><input class="basemap-input code" id="basemap-form-matrix-set" maxlength="160" autocomplete="off" value="GoogleMapsCompatible"></label>
+            <label class="basemap-field basemap-type-field" data-basemap-types="wmts"><span data-i18n="basemap.fieldMatrixPrefix">Matrix prefix</span><input class="basemap-input code" id="basemap-form-matrix-prefix" maxlength="160" autocomplete="off" data-i18n-placeholder="basemap.matrixPrefixPlaceholder"></label>
+            <label class="basemap-field basemap-type-field" data-basemap-types="wms,wmts"><span data-i18n="basemap.fieldFormat">Image format</span><select class="basemap-select" id="basemap-form-format"><option value="image/png">PNG</option><option value="image/jpeg">JPEG</option><option value="image/webp">WebP</option></select></label>
+            <details>
+              <summary data-i18n="basemap.advanced">Attribution and zoom levels</summary>
+              <div class="basemap-advanced-grid">
+                <label class="basemap-field" style="grid-column:1/-1"><span data-i18n="basemap.fieldAttribution">Attribution</span><input class="basemap-input" id="basemap-form-attribution" maxlength="1000" autocomplete="off"></label>
+                <label class="basemap-field" style="grid-column:1/-1"><span data-i18n="basemap.fieldSourceUrl">Official source URL</span><input class="basemap-input code" id="basemap-form-source-url" maxlength="4096" inputmode="url" autocomplete="off"></label>
+                <label class="basemap-field"><span data-i18n="basemap.fieldMinZoom">Min zoom</span><input class="basemap-input" id="basemap-form-min-zoom" type="number" min="0" max="24" value="0"></label>
+                <label class="basemap-field"><span data-i18n="basemap.fieldMaxZoom">Max zoom</span><input class="basemap-input" id="basemap-form-max-zoom" type="number" min="0" max="24" value="19"></label>
+                <label class="basemap-field"><span data-i18n="basemap.fieldNativeZoom">Native max</span><input class="basemap-input" id="basemap-form-native-zoom" type="number" min="0" max="24" value="19"></label>
+              </div>
+            </details>
+            <label class="basemap-default-toggle"><input id="basemap-form-default" type="checkbox"><span data-i18n="basemap.setDefaultAfterSave">Set as default after saving</span></label>
+          </div>
+          <div class="basemap-form-status" id="basemap-form-status" aria-live="polite"></div>
+          <div class="basemap-form-actions">
+            <button class="basemap-form-button" id="basemap-test-btn" type="button">{svg_icon("refresh")}<span data-i18n="basemap.test">Test current view</span></button>
+            <button class="basemap-form-button primary" id="basemap-save-btn" type="submit" disabled><span data-i18n="basemap.save">Save basemap</span></button>
+          </div>
+        </form>
+        <div class="basemap-list" id="basemap-list"></div>
+      </div>
     </aside>
 
     <aside class="panel left layers-panel">
@@ -3452,8 +3925,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
   </div>
 
   <script src="{safe_leaflet_src}" crossorigin=""></script>
+  <script src="{safe_pmtiles_src}" crossorigin=""></script>
   <script>
     const STATE = {state_json};
+    const COG_ENGINE_ASSETS = {cog_assets_json};
     STATE.layers = Array.isArray(STATE.layers) ? STATE.layers : [];
     STATE.catalog = Array.isArray(STATE.catalog) ? STATE.catalog : [];
     STATE.tasks = Array.isArray(STATE.tasks) ? STATE.tasks : [];
@@ -3499,15 +3974,44 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "upload.notRenderable": "未加入图层：缺少可渲染几何",
         "upload.remove": "移除上传记录",
         "tool.styleLayer": "设置图层样式",
+        "tool.zoomToLayer": "缩放到图层",
         "tool.refreshLayer": "刷新图层",
         "tool.removeLayer": "移除图层",
+        "tool.basemapSource": "查看地图来源",
         "tool.clearAoi": "清除 AOI",
         "panel.data": "添加图层",
         "panel.dataSubtitle": "搜索与添加 Earth Engine 数据集",
         "panel.basemap": "底图",
+        "source.title": "底图来源",
+        "source.provider": "提供方",
+        "source.date": "影像日期",
+        "source.engine": "数据引擎",
+        "source.performance": "加载性能",
+        "source.performanceIdle": "尚未采样",
+        "source.performanceLoading": "等待首屏…",
+        "source.performanceSettling": "首屏 :first · 收尾中…",
+        "source.performanceReady": "首屏 :first · 完成 :ready",
+        "source.performanceFailed": "加载失败",
+        "source.delivery": "传输",
+        "source.deliveryIdle": "尚无本次加载数据",
+        "source.deliveryLoading": ":cache · 统计中…",
+        "source.cacheCold": "会话冷启",
+        "source.cacheWarm": "会话热启",
+        "source.cacheUnknown": "会话缓存未知",
+        "source.renderedBlocks": ":count 个绘制块",
+        "source.sourceRequests": ":count 次源请求",
+        "source.networkRestricted": "网络统计受限",
+        "source.nativeZoom": "原生层级",
+        "source.nativeZoomValue": "Z0–Z:zoom",
+        "source.attribution": "版权说明",
+        "source.open": "查看官方数据源",
+        "source.trigger": "查看当前底图来源",
         "panel.layers": "图层",
         "panel.inspector": "查看器",
         "section.layerStack": "图层栈",
+        "section.operationalLayers": "数据与叠加图层",
+        "section.primaryBasemap": "主底图",
+        "section.primaryBasemapHint": "固定在最底层",
         "placeholder.searchDatasets": "按名称、类别或 ID 搜索图层",
         "placeholder.filterOptions": "筛选类别...",
         "catalog.categories": "分类（当前类型）",
@@ -3538,6 +4042,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "label.color": "颜色",
         "label.palette": "色带",
         "layers.empty": "还没有图层。点“添加图层”搜索 GEE 数据集。",
+        "layers.emptyOperational": "还没有数据或叠加图层。",
         "tasks.empty": "暂无任务。Agent 发起的导出和后台处理会显示在这里。",
         "task.destination": "目的地",
         "task.folder": "文件夹",
@@ -3564,6 +4069,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "pill.project": "项目：:project",
         "pill.aoi": "AOI：:lat, :lon",
         "pill.layers": ":count 个图层",
+        "pill.layersWithBasemap": ":count 个图层 · 1 个底图",
         "pill.datasets": ":count 个数据集",
         "pill.datasetMatches": ":shown/:total 个数据集",
         "pill.datasetLoaded": "已加载 :shown / 共 :matches",
@@ -3629,6 +4135,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.styleBuilding": "正在更新图层样式：:layer",
         "mode.styleApplied": "图层样式已更新：:layer",
         "mode.styleFailed": "样式更新失败：:message",
+        "mode.layerZooming": "正在缩放到图层：:layer",
+        "mode.layerZoomed": "已缩放到图层：:layer",
+        "mode.layerExtentUnavailable": "无法获取图层范围：:layer",
         "quota.project": "项目：:project",
         "quota.tier": "用量层级：:tier",
         "quota.tierInferred": "用量层级：:tier",
@@ -3671,6 +4180,12 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "quota.unknown": "未知",
         "quota.usageRequired": "需要 Cloud Monitoring 用量权限",
         "mode.basemap": "底图：:basemap",
+        "mode.tiandituKeyRequired": "请先在底图面板配置天地图 Key",
+        "mode.tiandituKeySaved": "天地图 Key 已应用到当前标签页",
+        "mode.tiandituKeyRemembered": "天地图 Key 已用 Windows 加密保存在本机",
+        "mode.tiandituKeySessionOnly": "已移除本机副本，当前标签页仍可使用",
+        "mode.tiandituKeyRememberFailed": "当前标签页可继续使用，本机加密保存失败",
+        "mode.basemapOverlayAdded": "已叠加到图层：:basemap",
         "mode.measureStart": "测距：点击两个点",
         "mode.measureOff": "测距已关闭",
         "mode.measureEndpoint": "测距：选择终点",
@@ -3686,9 +4201,101 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "basemap.voyager": "彩色",
         "basemap.voyagerNote": "清爽道路与地物",
         "basemap.topo": "地形",
-        "basemap.topoNote": "等高线与地貌",
+        "basemap.topoNote": "等高线与地貌，高层级自动回退",
+        "basemap.topoCoverage": "Esri World Topographic Map · 全球原生覆盖至 z13",
         "basemap.imagery": "影像",
-        "basemap.imageryNote": "卫星底图",
+        "basemap.imageryNote": "Esri 全球影像",
+        "basemap.esriClarity": "Esri 清晰影像",
+        "basemap.esriClarityNote": "清晰度优先的备用影像",
+        "basemap.tiandituVector": "天地图·矢量",
+        "basemap.tiandituVectorNote": "国家级矢量底图与中文注记",
+        "basemap.tiandituImagery": "天地图·影像",
+        "basemap.tiandituImageryNote": "国家级卫星影像与中文注记",
+        "basemap.tiandituTerrain": "天地图·地形",
+        "basemap.tiandituTerrainNote": "地形晕渲与中文注记",
+        "basemap.tiandituKey": "天地图访问 Key",
+        "basemap.tiandituKeyMissing": "未配置",
+        "basemap.tiandituKeyReady": "已配置 · 本次会话",
+        "basemap.tiandituKeyReadyDevice": "已配置 · 本机加密",
+        "basemap.tiandituKeyConfiguredHint": "已应用，可直接使用天地图底图。",
+        "basemap.tiandituKeyChange": "更换 Key",
+        "basemap.tiandituKeyPlaceholder": "输入 tk（不会进入项目状态）",
+        "basemap.tiandituKeyApply": "应用",
+        "basemap.tiandituKeyHelp": "仅保存在当前浏览器标签页，关闭后自动清除。",
+        "basemap.tiandituKeyRememberDevice": "记住此设备（Windows 加密）",
+        "basemap.tiandituKeyRemember": "记住此设备",
+        "basemap.tiandituKeyForget": "仅本次会话",
+        "basemap.tiandituKeyLink": "申请 Key",
+        "basemap.tiandituKeyInvalid": "Key 不能为空，且不能包含空格或 URL 分隔符",
+        "basemap.addCustom": "自定义底图",
+        "basemap.addOverlay": "叠加到图层",
+        "basemap.overlayInLayers": "已在图层中",
+        "basemap.primaryRole": "主底图",
+        "basemap.overlayRole": "地图叠加",
+        "basemap.customCount": ":count 个自定义",
+        "basemap.editorAdd": "新建底图",
+        "basemap.editorEdit": "编辑底图",
+        "basemap.editorHint": "保存到本机用户档案",
+        "basemap.fieldName": "名称",
+        "basemap.fieldType": "服务类型",
+        "basemap.fieldProvider": "提供方",
+        "basemap.fieldUrl": "服务地址 / 瓦片模板",
+        "basemap.urlPlaceholder": "https://.../{{z}}/{{x}}/{{y}}.png",
+        "basemap.fieldSubdomains": "子域名",
+        "basemap.fieldLayers": "图层名称",
+        "basemap.fieldStyles": "样式",
+        "basemap.fieldVersion": "WMS 版本",
+        "basemap.fieldMatrixSet": "瓦片矩阵集",
+        "basemap.fieldMatrixPrefix": "矩阵前缀",
+        "basemap.matrixPrefixPlaceholder": "例如 EPSG:3857:",
+        "basemap.fieldFormat": "图像格式",
+        "basemap.advanced": "版权与缩放层级",
+        "basemap.fieldAttribution": "版权说明",
+        "basemap.fieldSourceUrl": "官方来源地址",
+        "basemap.fieldMinZoom": "最小层级",
+        "basemap.fieldMaxZoom": "最大层级",
+        "basemap.fieldNativeZoom": "原生最大层级",
+        "basemap.setDefaultAfterSave": "保存后设为默认底图",
+        "basemap.test": "测试当前视图",
+        "basemap.save": "保存底图",
+        "basemap.testing": "正在测试当前视图的瓦片…",
+        "basemap.pmtilesInspecting": "正在读取 PMTiles 归档索引…",
+        "basemap.testPassed": "连接成功，可以保存",
+        "basemap.testFailed": "连接失败：:message",
+        "basemap.nameRequired": "请填写底图名称",
+        "basemap.urlRequired": "请填写服务地址",
+        "basemap.urlInvalid": "服务地址必须是有效的 HTTP(S) 地址",
+        "basemap.urlCredentialsBlocked": "地址中含有 Key、Token 或账号信息；请改用专用凭据配置，避免明文写入项目状态",
+        "basemap.pmtilesUnavailable": "PMTiles 数据引擎没有加载，请刷新页面后重试",
+        "basemap.pmtilesInspectFailed": "无法读取 PMTiles 归档索引，请检查跨域与 HTTP Range 支持",
+        "basemap.pmtilesRasterOnly": "当前归档是矢量 PMTiles；底图暂时只支持栅格 PMTiles",
+        "basemap.pmtilesOutsideView": "当前视图不在 PMTiles 覆盖范围内",
+        "basemap.pmtilesZoomOutside": "当前缩放层级不在 PMTiles 原生层级范围内",
+        "basemap.pmtilesNoTile": "当前视图范围内没有实际栅格瓦片",
+        "basemap.cogLoading": "正在按需加载 MapLibre COG 引擎…",
+        "basemap.cogInspecting": "正在读取 COG 元数据与字节范围…",
+        "basemap.cogUnavailable": "MapLibre COG 引擎加载失败，请检查本地资源或网络",
+        "basemap.cogInspectFailed": "无法读取 COG，请检查跨域、HTTP Range 与文件结构",
+        "basemap.cogWebMercatorOnly": "当前轻量 COG 通道要求 EPSG:3857（Web Mercator）",
+        "basemap.cogOutsideView": "当前视图不在 COG 覆盖范围内",
+        "basemap.cogFit": "已定位到 COG 覆盖范围，正在验证可见影像…",
+        "basemap.layersRequired": "WMS/WMTS 需要填写图层名称",
+        "basemap.matrixRequired": "WMTS 需要填写瓦片矩阵集",
+        "basemap.testFirst": "请先测试连接",
+        "basemap.tileTimeout": "等待瓦片超时，请确认当前视图位于服务覆盖范围内",
+        "basemap.tileFailed": "当前视图没有加载到有效瓦片",
+        "basemap.defaultTitle": "设为默认底图",
+        "basemap.defaultCurrent": "默认底图",
+        "basemap.edit": "编辑自定义底图",
+        "basemap.moveUp": "上移",
+        "basemap.moveDown": "下移",
+        "basemap.remove": "删除自定义底图",
+        "basemap.removeConfirm": "删除自定义底图“:name”？",
+        "basemap.customNote": "自定义 :type · :provider",
+        "basemap.saved": "自定义底图已保存：:name",
+        "basemap.updated": "自定义底图已更新：:name",
+        "basemap.removed": "自定义底图已删除：:name",
+        "basemap.defaultChanged": "默认底图已设为：:name",
         "log.loaded": "EasyGEE 地图控制台已加载",
         "log.uploadSaved": "上传文件已保存：:file",
         "log.datasetSelected": "已选择数据集 :dataset",
@@ -3705,8 +4312,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.layerRefreshed": "已刷新图层：:layer",
         "log.layerStyled": "已更新图层样式：:layer",
         "log.layerStyleFailed": "图层样式更新失败：:layer",
+        "log.layerZoomed": "已缩放到图层：:layer",
+        "log.layerExtentUnavailable": "无法获取图层范围：:layer",
         "log.home": "已回到研究区",
         "log.basemap": "底图已切换为 :basemap",
+        "log.basemapOverlayAdded": "底图已叠加到图层：:basemap",
         "log.aoiOn": "AOI 绘制模式已开启",
         "log.aoiOff": "AOI 绘制模式已关闭",
         "log.aoiDrawn": "AOI 已更新：:bounds",
@@ -3769,15 +4379,44 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "upload.notRenderable": "Not added to layers: no renderable geometry",
         "upload.remove": "Remove upload record",
         "tool.styleLayer": "Style layer",
+        "tool.zoomToLayer": "Zoom to layer",
         "tool.refreshLayer": "Refresh layer",
         "tool.removeLayer": "Remove layer",
+        "tool.basemapSource": "View map source",
         "tool.clearAoi": "Clear AOI",
         "panel.data": "Add Layers",
         "panel.dataSubtitle": "Search and add Earth Engine datasets",
         "panel.basemap": "Basemap",
+        "source.title": "Basemap source",
+        "source.provider": "Provider",
+        "source.date": "Imagery date",
+        "source.engine": "Data engine",
+        "source.performance": "Load timing",
+        "source.performanceIdle": "Not sampled yet",
+        "source.performanceLoading": "Waiting for first render…",
+        "source.performanceSettling": "First :first · settling…",
+        "source.performanceReady": "First :first · ready :ready",
+        "source.performanceFailed": "Load failed",
+        "source.delivery": "Delivery",
+        "source.deliveryIdle": "No activation data yet",
+        "source.deliveryLoading": ":cache · measuring…",
+        "source.cacheCold": "Cold session",
+        "source.cacheWarm": "Warm session",
+        "source.cacheUnknown": "Session cache unknown",
+        "source.renderedBlocks": ":count rendered blocks",
+        "source.sourceRequests": ":count source requests",
+        "source.networkRestricted": "Network timing restricted",
+        "source.nativeZoom": "Native zoom",
+        "source.nativeZoomValue": "Z0–Z:zoom",
+        "source.attribution": "Attribution",
+        "source.open": "Open official source",
+        "source.trigger": "View current basemap source",
         "panel.layers": "Layers",
         "panel.inspector": "Inspector",
         "section.layerStack": "Layer Stack",
+        "section.operationalLayers": "Data and overlays",
+        "section.primaryBasemap": "Primary basemap",
+        "section.primaryBasemapHint": "Pinned to the bottom",
         "placeholder.searchDatasets": "Search layers by name, category, or id",
         "placeholder.filterOptions": "Filter options...",
         "catalog.categories": "Categories (current type)",
@@ -3808,6 +4447,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "label.color": "Color",
         "label.palette": "Palette",
         "layers.empty": "No layers yet. Use Add layers to search the GEE catalog.",
+        "layers.emptyOperational": "No data or overlay layers yet.",
         "tasks.empty": "No tasks yet. Agent-started exports and background processing appear here.",
         "task.destination": "Destination",
         "task.folder": "Folder",
@@ -3834,6 +4474,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "pill.project": "Project: :project",
         "pill.aoi": "AOI: :lat, :lon",
         "pill.layers": ":count layers",
+        "pill.layersWithBasemap": ":count layers · 1 basemap",
         "pill.datasets": ":count datasets",
         "pill.datasetMatches": ":shown/:total datasets",
         "pill.datasetLoaded": "Loaded :shown / :matches",
@@ -3899,6 +4540,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "mode.styleBuilding": "Updating layer style: :layer",
         "mode.styleApplied": "Layer style updated: :layer",
         "mode.styleFailed": "Style update failed: :message",
+        "mode.layerZooming": "Zooming to layer: :layer",
+        "mode.layerZoomed": "Zoomed to layer: :layer",
+        "mode.layerExtentUnavailable": "Layer extent unavailable: :layer",
         "quota.project": "Project: :project",
         "quota.tier": "Usage tier: :tier",
         "quota.tierInferred": "Usage tier: :tier",
@@ -3941,6 +4585,12 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "quota.unknown": "Unknown",
         "quota.usageRequired": "Cloud Monitoring usage permission required",
         "mode.basemap": "Basemap: :basemap",
+        "mode.tiandituKeyRequired": "Configure a Tianditu key in the basemap panel first",
+        "mode.tiandituKeySaved": "Tianditu key applied to this browser tab",
+        "mode.tiandituKeyRemembered": "Tianditu key saved locally with Windows encryption",
+        "mode.tiandituKeySessionOnly": "Local copy removed; this browser tab can still use the key",
+        "mode.tiandituKeyRememberFailed": "This tab can keep using the key, but encrypted local storage failed",
+        "mode.basemapOverlayAdded": "Added as overlay: :basemap",
         "mode.measureStart": "Measure: click two points",
         "mode.measureOff": "Measure off",
         "mode.measureEndpoint": "Measure: choose endpoint",
@@ -3956,9 +4606,101 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "basemap.voyager": "Voyager",
         "basemap.voyagerNote": "Balanced roads and places",
         "basemap.topo": "Topo",
-        "basemap.topoNote": "Terrain and contours",
+        "basemap.topoNote": "Terrain and contours with zoom fallback",
+        "basemap.topoCoverage": "Esri World Topographic Map · global native coverage through z13",
         "basemap.imagery": "Imagery",
-        "basemap.imageryNote": "Satellite view",
+        "basemap.imageryNote": "Esri global imagery",
+        "basemap.esriClarity": "Esri Clarity Imagery",
+        "basemap.esriClarityNote": "Clarity-first archive imagery",
+        "basemap.tiandituVector": "Tianditu Vector",
+        "basemap.tiandituVectorNote": "National vector map with Chinese labels",
+        "basemap.tiandituImagery": "Tianditu Imagery",
+        "basemap.tiandituImageryNote": "National satellite imagery with Chinese labels",
+        "basemap.tiandituTerrain": "Tianditu Terrain",
+        "basemap.tiandituTerrainNote": "Terrain shading with Chinese labels",
+        "basemap.tiandituKey": "Tianditu access key",
+        "basemap.tiandituKeyMissing": "Not configured",
+        "basemap.tiandituKeyReady": "Configured · this session",
+        "basemap.tiandituKeyReadyDevice": "Configured · encrypted locally",
+        "basemap.tiandituKeyConfiguredHint": "Ready for Tianditu basemaps.",
+        "basemap.tiandituKeyChange": "Change key",
+        "basemap.tiandituKeyPlaceholder": "Enter tk (excluded from project state)",
+        "basemap.tiandituKeyApply": "Apply",
+        "basemap.tiandituKeyHelp": "Stored only for this browser tab and cleared when it closes.",
+        "basemap.tiandituKeyRememberDevice": "Remember on this device (Windows encrypted)",
+        "basemap.tiandituKeyRemember": "Remember device",
+        "basemap.tiandituKeyForget": "This session only",
+        "basemap.tiandituKeyLink": "Get a key",
+        "basemap.tiandituKeyInvalid": "The key cannot be empty or contain spaces or URL delimiters",
+        "basemap.addCustom": "Custom basemap",
+        "basemap.addOverlay": "Add as overlay",
+        "basemap.overlayInLayers": "Already in layers",
+        "basemap.primaryRole": "Primary basemap",
+        "basemap.overlayRole": "Map overlay",
+        "basemap.customCount": ":count custom",
+        "basemap.editorAdd": "New basemap",
+        "basemap.editorEdit": "Edit basemap",
+        "basemap.editorHint": "Saved in the local user profile",
+        "basemap.fieldName": "Name",
+        "basemap.fieldType": "Service type",
+        "basemap.fieldProvider": "Provider",
+        "basemap.fieldUrl": "Service URL / tile template",
+        "basemap.urlPlaceholder": "https://.../{{z}}/{{x}}/{{y}}.png",
+        "basemap.fieldSubdomains": "Subdomains",
+        "basemap.fieldLayers": "Layer name",
+        "basemap.fieldStyles": "Style",
+        "basemap.fieldVersion": "WMS version",
+        "basemap.fieldMatrixSet": "Tile matrix set",
+        "basemap.fieldMatrixPrefix": "Matrix prefix",
+        "basemap.matrixPrefixPlaceholder": "For example EPSG:3857:",
+        "basemap.fieldFormat": "Image format",
+        "basemap.advanced": "Attribution and zoom levels",
+        "basemap.fieldAttribution": "Attribution",
+        "basemap.fieldSourceUrl": "Official source URL",
+        "basemap.fieldMinZoom": "Min zoom",
+        "basemap.fieldMaxZoom": "Max zoom",
+        "basemap.fieldNativeZoom": "Native max",
+        "basemap.setDefaultAfterSave": "Set as default after saving",
+        "basemap.test": "Test current view",
+        "basemap.save": "Save basemap",
+        "basemap.testing": "Testing tiles for the current view…",
+        "basemap.pmtilesInspecting": "Reading the PMTiles archive index…",
+        "basemap.testPassed": "Connection passed; ready to save",
+        "basemap.testFailed": "Connection failed: :message",
+        "basemap.nameRequired": "Enter a basemap name",
+        "basemap.urlRequired": "Enter a service URL",
+        "basemap.urlInvalid": "The service URL must be a valid HTTP(S) address",
+        "basemap.urlCredentialsBlocked": "The URL contains a key, token, or account credentials; use a dedicated credential field to keep secrets out of project state",
+        "basemap.pmtilesUnavailable": "The PMTiles engine did not load; reload the page and try again",
+        "basemap.pmtilesInspectFailed": "Could not read the PMTiles archive index; check CORS and HTTP Range support",
+        "basemap.pmtilesRasterOnly": "This is a vector PMTiles archive; basemaps currently support raster PMTiles only",
+        "basemap.pmtilesOutsideView": "The current view is outside the PMTiles coverage",
+        "basemap.pmtilesZoomOutside": "The current zoom is outside the native PMTiles zoom range",
+        "basemap.pmtilesNoTile": "No raster tile exists inside the current view",
+        "basemap.cogLoading": "Loading the MapLibre COG engine on demand…",
+        "basemap.cogInspecting": "Reading COG metadata and byte ranges…",
+        "basemap.cogUnavailable": "The MapLibre COG engine failed to load; check local assets or network access",
+        "basemap.cogInspectFailed": "Could not read the COG; check CORS, HTTP Range, and file structure",
+        "basemap.cogWebMercatorOnly": "This lightweight COG path requires EPSG:3857 (Web Mercator)",
+        "basemap.cogOutsideView": "The current view is outside the COG coverage",
+        "basemap.cogFit": "Moved to the COG extent; validating visible imagery…",
+        "basemap.layersRequired": "WMS/WMTS requires a layer name",
+        "basemap.matrixRequired": "WMTS requires a tile matrix set",
+        "basemap.testFirst": "Test the connection first",
+        "basemap.tileTimeout": "Tile test timed out; check whether the current view is inside the service coverage",
+        "basemap.tileFailed": "No valid tile loaded for the current view",
+        "basemap.defaultTitle": "Set as default basemap",
+        "basemap.defaultCurrent": "Default basemap",
+        "basemap.edit": "Edit custom basemap",
+        "basemap.moveUp": "Move up",
+        "basemap.moveDown": "Move down",
+        "basemap.remove": "Delete custom basemap",
+        "basemap.removeConfirm": "Delete custom basemap “:name”?",
+        "basemap.customNote": "Custom :type · :provider",
+        "basemap.saved": "Custom basemap saved: :name",
+        "basemap.updated": "Custom basemap updated: :name",
+        "basemap.removed": "Custom basemap deleted: :name",
+        "basemap.defaultChanged": "Default basemap set to: :name",
         "log.loaded": "EasyGEE Map Console loaded",
         "log.uploadSaved": "Upload saved: :file",
         "log.datasetSelected": "Selected dataset :dataset",
@@ -3975,8 +4717,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
         "log.layerRefreshed": "Refreshed layer: :layer",
         "log.layerStyled": "Updated layer style: :layer",
         "log.layerStyleFailed": "Layer style update failed: :layer",
+        "log.layerZoomed": "Zoomed to layer: :layer",
+        "log.layerExtentUnavailable": "Layer extent unavailable: :layer",
         "log.home": "Zoomed to AOI",
         "log.basemap": "Basemap switched to :basemap",
+        "log.basemapOverlayAdded": "Basemap added as overlay: :basemap",
         "log.aoiOn": "AOI draw mode on",
         "log.aoiOff": "AOI draw mode off",
         "log.aoiDrawn": "AOI updated: :bounds",
@@ -4006,7 +4751,17 @@ def render_html(state: dict, leaflet_src: str) -> str:
     let activeLayerId = STATE.layers.find(layer => layer.shown)?.id || STATE.layers[0]?.id || null;
     let activeDatasetId = null;
     let activeBadgeTimer = null;
+    let basemapSourceOpen = false;
+    let basemapSourceDetailId = null;
     let currentLang = localStorage.getItem('easygee-lang') || 'zh';
+    const TIANDITU_TOKEN_STORAGE_KEY = 'easygee-tianditu-tk';
+    let tiandituToken = readTiandituToken();
+    let tiandituTokenRemembered = false;
+    let tiandituCredentialSupported = false;
+    let tiandituKeyEditing = false;
+    let restoredProfileView = null;
+    let restoredProfileActiveLayerId = null;
+    let pendingProfileLayers = [];
     let clickStateKey = 'state.idle';
     let currentModeKey = null;
     let quotaFocus = false;
@@ -4033,13 +4788,15 @@ def render_html(state: dict, leaflet_src: str) -> str:
       agentVisible: true,
       stateKey: 'uploads',
     }};
-    const AGENT_PROTOCOL_VERSION = 2;
+    const AGENT_PROTOCOL_VERSION = 5;
     const SESSION_SYNC_INTERVAL_MS = 1200;
     const SESSION_ACTION_POLL_MS = 900;
     const ACTION_SET_AOI_STYLE = 'setAoiStyle';
     const ACTION_UPDATE_LAYER_STYLE = 'updateLayerStyle';
     const AOI_LAYER_ID = '__easygee_aoi__';
     const MEASUREMENTS_LAYER_ID = '__easygee_measurements__';
+    const PRIMARY_BASEMAP_LAYER_ID = '__easygee_primary_basemap__';
+    const PRIMARY_BASEMAP_PANE = 'easygeePrimaryBasemapPane';
     const DEFAULT_AOI_STYLE = {{ color: '#d23b3b', fillColor: '#d23b3b', opacity: 1, fillOpacity: 0.08, weight: 2, shown: true }};
     const DEFAULT_MEASUREMENTS_STYLE = {{ color: '#16734d', opacity: 1, weight: 3, shown: true }};
     const VIS_PRESETS = {{
@@ -4420,7 +5177,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const sourceUrl = localVectorSourceUrl(meta);
       if (!sourceUrl) return {{ layer: group, refresh: () => {{}} }};
       const refresh = () => refreshLocalVectorLayer({{ meta, tile: group }});
-      fetch(sourceUrl)
+      group.__vectorReady = fetch(sourceUrl)
         .then(response => {{
           if (!response.ok) throw new Error(`HTTP ${{response.status}}`);
           return response.json();
@@ -4440,9 +5197,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
           group.__vectorOverlay = overlay;
           group.addLayer(overlay);
           refresh();
+          return overlay;
         }})
         .catch(error => {{
           console.warn('EasyGEE local vector layer load failed:', meta?.name || meta?.id || 'layer', error);
+          return null;
         }});
       return {{ layer: group, refresh }};
     }}
@@ -4452,8 +5211,14 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const next = {{
         ...meta,
         shown: meta.shown !== false,
-        opacity: Number.isFinite(Number(meta.opacity)) ? Number(meta.opacity) : 0.82,
+        opacity: Number.isFinite(Number(meta.opacity)) ? Math.max(0, Math.min(1, Number(meta.opacity))) : 0.82,
       }};
+      if (isBasemapOverlayLayer(next)) {{
+        next.sourceId = String(next.sourceId || '').trim();
+        if (!next.sourceId) return null;
+        next.role = 'overlay';
+        next.styleProfile = 'basemap';
+      }}
       next.styleProfile = next.styleProfile || layerStyleProfile(next);
       if (!next.stylePreset && visualPreferences[next.styleProfile]) next.stylePreset = visualPreferences[next.styleProfile];
       return next;
@@ -4542,6 +5307,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const extension = record.extension || uploadExtension(name);
       const shapefileSidecarOnly = ['.dbf', '.shx', '.prj', '.cpg'].includes(String(extension).toLowerCase());
       const renderable = record.renderable === true || Boolean(record.previewUrl) || String(format || '').toLowerCase().includes('geojson');
+      const timestamp = new Date().toISOString();
       const next = {{
         id: String(record.id || `upload-${{Date.now()}}-${{Math.random().toString(16).slice(2, 8)}}`),
         name,
@@ -4562,8 +5328,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
         renderable,
         agentReadable: record.agentReadable !== false,
         status: record.status || 'saved',
-        createdAt: record.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: record.createdAt || timestamp,
+        updatedAt: record.updatedAt || record.createdAt || timestamp,
         layerId: renderable ? (record.layerId || null) : null,
       }};
       if (shapefileSidecarOnly && !next.renderable) {{
@@ -4861,7 +5627,26 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function currentAoiBounds() {{
       return hasAoiBounds() ? STATE.aoi.bounds : null;
     }}
+    function cogBasemapBounds(meta) {{
+      if (!meta?.custom || meta.type !== 'cog' || !Array.isArray(meta.bounds) || meta.bounds.length !== 4) return null;
+      const values = meta.bounds.map(Number);
+      if (!values.every(Number.isFinite) || values[0] >= values[2] || values[1] >= values[3]) return null;
+      return L.latLngBounds([[values[1], values[0]], [values[3], values[2]]]);
+    }}
+    function fitCogBasemapBounds(meta, force = false) {{
+      const bounds = cogBasemapBounds(meta);
+      if (!bounds || (!force && map.getBounds().intersects(bounds))) return false;
+      map.fitBounds(bounds, {{ padding: [42, 42], maxZoom: Math.min(meta.maxNativeZoom || 17, 17) }});
+      return true;
+    }}
     function resetHomeView() {{
+      const activeBasemap = BASEMAPS.find(meta => meta.id === currentBasemap);
+      const activeCogBounds = cogBasemapBounds(activeBasemap);
+      const aoiBounds = hasAoiBounds() ? L.latLngBounds(STATE.aoi.bounds) : null;
+      if (activeCogBounds && (!aoiBounds || !aoiBounds.intersects(activeCogBounds))) {{
+        fitCogBasemapBounds(activeBasemap, true);
+        return;
+      }}
       if (hasAoiBounds()) {{
         map.fitBounds(STATE.aoi.bounds, {{ padding: [24, 24] }});
       }} else {{
@@ -5082,6 +5867,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function applySessionProfile(profile) {{
       if (!profile || typeof profile !== 'object') return false;
       let changed = false;
+      let basemapProfileChanged = false;
+      let preferredBasemap = null;
       if (Array.isArray(profile.favoriteDatasets) && (profile.updatedAt || profile.favoriteDatasets.length)) {{
         const nextFavorites = normalizeFavoriteDatasetIds(profile.favoriteDatasets);
         const currentFavorites = [...favoriteDatasetIds].sort();
@@ -5095,8 +5882,45 @@ def render_html(state: dict, leaflet_src: str) -> str:
         visualPreferences = {{ ...visualPreferences, ...profile.visualPreferences }};
         changed = true;
       }}
+      if (Array.isArray(profile.customBasemaps)) {{
+        const nextCustomBasemaps = normalizeCustomBasemaps(profile.customBasemaps);
+        const currentText = JSON.stringify(customBasemaps.map(serializableCustomBasemap));
+        const nextText = JSON.stringify(nextCustomBasemaps.map(serializableCustomBasemap));
+        if (currentText !== nextText) {{
+          customBasemaps = nextCustomBasemaps;
+          basemapProfileChanged = true;
+        }}
+      }}
+      if (typeof profile.defaultBasemap === 'string' && profile.defaultBasemap.trim()) {{
+        const nextDefault = profile.defaultBasemap.trim();
+        if (nextDefault !== defaultBasemapId) basemapProfileChanged = true;
+        defaultBasemapId = nextDefault;
+        preferredBasemap = nextDefault;
+      }}
       const entry = profileProjectEntry(profile);
       if (entry) {{
+        if (entry.view && typeof entry.view === 'object') {{
+          const center = Array.isArray(entry.view.center) ? entry.view.center.map(Number) : [];
+          const zoom = Number(entry.view.zoom);
+          if (center.length === 2 && center.every(Number.isFinite) && center[0] >= -90 && center[0] <= 90 && center[1] >= -180 && center[1] <= 180 && Number.isFinite(zoom)) {{
+            restoredProfileView = {{ center, zoom: Math.max(0, Math.min(24, zoom)) }};
+            STATE.center = [...center];
+            STATE.zoom = restoredProfileView.zoom;
+            changed = true;
+          }}
+        }}
+        if (entry.view && typeof entry.view === 'object' && typeof entry.view.basemap === 'string') {{
+          preferredBasemap = entry.view.basemap;
+          basemapProfileChanged = true;
+        }}
+        if (entry.view && typeof entry.view === 'object' && typeof entry.view.basemapShown === 'boolean') {{
+          primaryBasemapShown = entry.view.basemapShown;
+          basemapProfileChanged = true;
+        }}
+        if (entry.view && typeof entry.view === 'object' && Number.isFinite(Number(entry.view.basemapOpacity))) {{
+          primaryBasemapOpacity = Math.max(0, Math.min(1, Number(entry.view.basemapOpacity)));
+          basemapProfileChanged = true;
+        }}
         const profileAoi = normalizeAoi(entry.aoi);
         if (profileAoi && JSON.stringify(profileAoi) !== JSON.stringify(STATE.aoi || null)) {{
           STATE.aoi = profileAoi;
@@ -5134,7 +5958,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         }}
         if (Array.isArray(entry.tasks)) {{
           const profileTasks = entry.tasks.map(normalizeTask).filter(Boolean);
-          if (profileTasks.length && JSON.stringify(profileTasks) !== JSON.stringify(STATE.tasks || [])) {{
+          if (JSON.stringify(profileTasks) !== JSON.stringify(STATE.tasks || [])) {{
             STATE.tasks = profileTasks;
             persistTasks();
             changed = true;
@@ -5142,40 +5966,157 @@ def render_html(state: dict, leaflet_src: str) -> str:
         }}
         if (Array.isArray(entry.uploads)) {{
           const profileUploads = entry.uploads.map(normalizeUploadRecord).filter(Boolean);
-          if (profileUploads.length && JSON.stringify(profileUploads) !== JSON.stringify(STATE.uploads || [])) {{
+          if (JSON.stringify(profileUploads) !== JSON.stringify(STATE.uploads || [])) {{
             STATE.uploads = profileUploads;
             persistUploads();
             changed = true;
           }}
         }}
-        if (Array.isArray(entry.layers)) {{
-          const describeLayers = layers => JSON.stringify((layers || []).map(layer => ({{
+        const describeLayers = layers => JSON.stringify((layers || []).map(layer => ({{
             id: layer.id,
             name: layer.name,
             dataset: layer.dataset,
             type: layer.type,
             shown: layer.shown !== false,
             opacity: layer.opacity,
+            role: layer.role || null,
+            sourceId: layer.sourceId || null,
             styleProfile: layer.styleProfile || null,
             stylePreset: layer.stylePreset || null,
             recipe: layer.recipe || null,
             summary: layer.summary || null,
-          }})));
+        }})));
+        if (Array.isArray(entry.layers)) {{
           const restoredLayers = entry.layers.map(normalizeStateLayer).filter(Boolean);
           if (describeLayers(restoredLayers) !== describeLayers(STATE.layers || [])) {{
             replaceStateLayers(restoredLayers);
             changed = true;
           }}
+        }} else if (Array.isArray(entry.recentLayers)) {{
+          const recentById = new Map(entry.recentLayers
+            .filter(layer => layer && typeof layer === 'object' && layer.id)
+            .map(layer => [String(layer.id), layer]));
+          const restoredGeneratedLayers = (STATE.layers || []).filter(layer => !isBasemapOverlayLayer(layer)).map(layer => {{
+            const recent = recentById.get(String(layer.id));
+            return recent
+              ? normalizeStateLayer({{ ...layer, ...recent, tileUrl: layer.tileUrl }})
+              : layer;
+          }}).filter(Boolean);
+          const restoredBasemapOverlays = entry.recentLayers
+            .filter(layer => isBasemapOverlayLayer(layer) && basemapMetaById(layer.sourceId))
+            .map(normalizeStateLayer)
+            .filter(Boolean);
+          const restoredLayers = [...restoredBasemapOverlays, ...restoredGeneratedLayers];
+          const restoredIds = new Set(restoredLayers.map(layer => String(layer.id)));
+          // ponytail: restore at most eight remote EE layers per startup; add a queued loader if larger workspaces become common.
+          pendingProfileLayers = entry.recentLayers
+            .filter(layer => profileLayerCanBeRebuilt(layer) && !restoredIds.has(String(layer.id)))
+            .slice(0, 8);
+          if (pendingProfileLayers.length) changed = true;
+          if (describeLayers(restoredLayers) !== describeLayers(STATE.layers || [])) {{
+            replaceStateLayers(restoredLayers);
+            changed = true;
+          }}
         }}
+        restoredProfileActiveLayerId = typeof entry.activeLayerId === 'string' && entry.activeLayerId.trim()
+          ? entry.activeLayerId.trim()
+          : null;
+      }}
+      if (basemapProfileChanged) {{
+        if (![...BUILTIN_BASEMAPS, ...customBasemaps].some(meta => meta.id === defaultBasemapId)) defaultBasemapId = 'OSM';
+        rebuildBasemapRegistry(preferredBasemap || defaultBasemapId);
+        changed = true;
       }}
       return changed;
     }}
+    function profileLayerCanBeRebuilt(layer) {{
+      if (!layer || typeof layer !== 'object' || isBasemapOverlayLayer(layer) || layer.type === 'local-upload') return false;
+      return Boolean(String(layer.dataset || '').trim() && layer.recipe && typeof layer.recipe === 'object');
+    }}
+    function profileRestorePlaceholder(saved) {{
+      return normalizeStateLayer({{
+        ...saved,
+        type: 'ee-restore-pending',
+        shown: saved.shown !== false,
+        summary: {{ ...(saved.summary || {{}}), restorePending: true }},
+      }});
+    }}
+    function restoreProfileMapView() {{
+      if (!restoredProfileView) return false;
+      map.setView(restoredProfileView.center, restoredProfileView.zoom, {{ animate: false }});
+      return true;
+    }}
+    async function rebuildProfileLayer(saved) {{
+      const datasetId = String(saved?.dataset || saved?.recipe?.datasetId || '').trim();
+      if (!datasetId) return false;
+      const item = datasetById(datasetId) || {{ id: datasetId, label: saved.name || datasetId, type: saved.type }};
+      const recipe = saved.recipe && typeof saved.recipe === 'object' ? saved.recipe : null;
+      const savedAoi = normalizeAoi(saved.aoi) || currentProcessingAoi();
+      try {{
+        const response = await fetch('/api/layer', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{
+            project: STATE.project,
+            datasetId,
+            catalogItem: item,
+            recipe,
+            aoi: savedAoi,
+            bounds: savedAoi?.bounds || currentProcessingBounds(),
+            startDate: recipe?.startDate || saved.summary?.startDate || STATE.startDate,
+            endDate: recipe?.endDate || saved.summary?.endDate || STATE.endDate,
+            cloudPct: saved.summary?.cloudPct ?? STATE.cloudPct,
+            name: saved.name,
+            visParams: saved.visParams,
+            legend: saved.legend,
+            stylePreset: saved.stylePreset,
+          }}),
+        }});
+        const payload = await response.json().catch(() => ({{ ok: false }}));
+        if (!response.ok || !payload.ok || !payload.layer) return false;
+        addGeneratedLayer({{
+          ...payload.layer,
+          id: String(saved.id || payload.layer.id),
+          name: saved.name || payload.layer.name,
+          opacity: Number.isFinite(Number(saved.opacity)) ? Number(saved.opacity) : payload.layer.opacity,
+          styleProfile: saved.styleProfile || payload.layer.styleProfile,
+          stylePreset: saved.stylePreset || payload.layer.stylePreset,
+          visParams: saved.visParams || payload.layer.visParams,
+          legend: saved.legend || payload.layer.legend,
+          recipe: recipe || payload.layer.recipe,
+          summary: saved.summary || payload.layer.summary,
+          aoi: savedAoi || payload.layer.aoi,
+        }}, {{ activate: false, sync: false, shown: saved.shown !== false }});
+        return true;
+      }} catch {{
+        return false;
+      }}
+    }}
+    async function restoreRecentProfileLayers() {{
+      const layers = pendingProfileLayers;
+      pendingProfileLayers = [];
+      let restored = 0;
+      for (const layer of layers) {{
+        if (await rebuildProfileLayer(layer)) {{
+          restored += 1;
+          continue;
+        }}
+        const placeholder = profileRestorePlaceholder(layer);
+        if (placeholder && !STATE.layers.some(item => item.id === placeholder.id)) {{
+          STATE.layers.push(placeholder);
+          registerLayer(placeholder);
+        }}
+      }}
+      return restored;
+    }}
     async function restoreProfileFromServer() {{
       try {{
+        await restoreTiandituCredential();
         const response = await fetch('/api/session/profile');
         if (!response.ok) return false;
         const payload = await response.json();
         const changed = applySessionProfile(payload.profile);
+        const restoredLayerCount = await restoreRecentProfileLayers();
         if (changed) {{
           renderAoiLayer();
           renderLayers();
@@ -5183,10 +6124,12 @@ def render_html(state: dict, leaflet_src: str) -> str:
           renderTasks();
           renderUploads();
           renderDatasets(filteredCatalog());
-          resetHomeView();
+          if (!restoreProfileMapView()) resetHomeView();
+          const desiredLayerId = restoredProfileActiveLayerId;
+          if (desiredLayerId && layerModels().some(layer => layer?.id === desiredLayerId)) setActiveLayer(desiredLayerId, {{ reveal: false }});
           syncSessionState('profile-restored');
         }}
-        return changed;
+        return changed || restoredLayerCount > 0;
       }} catch {{
         return false;
       }}
@@ -5258,6 +6201,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       renderQuota();
       renderTasks();
       renderUploads();
+      renderTiandituAuth();
       renderBasemapChoices();
       updateInspector();
       if (currentModeKey && $('mode-chip').classList.contains('show')) {{
@@ -5267,6 +6211,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function layerKind(layer) {{
       if (layer.type === 'aoi') return {{ label: 'A', className: 'aoi' }};
       if (layer.type === 'measurements') return {{ label: 'M', className: 'measurements' }};
+      if (layer.type === 'primary-basemap') return {{ label: 'B', className: 'basemap' }};
+      if (layer.type === 'basemap-overlay') return {{ label: 'O', className: 'basemap-overlay' }};
       if (String(layer.type || '').includes('vector')) return {{ label: 'V', className: 'vector' }};
       if (layer.type.includes('categorical')) return {{ label: 'C', className: 'categorical' }};
       if (layer.type.includes('derived')) return {{ label: 'D', className: 'derived' }};
@@ -5298,16 +6244,311 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
     function displayBasemapName() {{
       const meta = currentBasemapMeta();
-      return t(meta.nameKey);
+      return meta.nameKey ? t(meta.nameKey) : String(meta.name || meta.id || 'Basemap');
     }}
     function currentBasemapMeta() {{
       return BASEMAPS.find(item => item.id === currentBasemap) || BASEMAPS[0];
     }}
-    function basemapAttributionText() {{
-      const meta = currentBasemapMeta();
+    function basemapDisplayName(meta) {{
+      return meta?.nameKey ? t(meta.nameKey) : String(meta?.name || meta?.id || 'Basemap');
+    }}
+    function basemapDisplayNote(meta) {{
+      if (meta?.noteKey) return t(meta.noteKey);
+      const provider = String(meta?.provider || meta?.service || '-');
+      return t('basemap.customNote', {{ type: String(meta?.type || 'xyz').toUpperCase(), provider }});
+    }}
+    function normalizeTiandituToken(value) {{
+      const token = String(value || '').trim();
+      return token && !/[\s&?#]/.test(token) ? token.slice(0, 256) : '';
+    }}
+    function readTiandituToken() {{
+      try {{ return normalizeTiandituToken(window.sessionStorage.getItem(TIANDITU_TOKEN_STORAGE_KEY)); }} catch {{ return ''; }}
+    }}
+    function isTiandituBasemap(meta) {{
+      return Boolean(meta?.tiandituBase && meta?.tiandituLabels);
+    }}
+    function renderTiandituAuth() {{
+      const card = $('tianditu-auth');
+      const status = $('tianditu-auth-state');
+      const summary = $('tianditu-auth-summary');
+      const editor = $('tianditu-auth-editor');
+      const input = $('tianditu-token');
+      const remember = $('tianditu-token-remember');
+      const persistence = $('tianditu-token-persistence');
+      if (!card || !status) return;
+      const configured = Boolean(tiandituToken);
+      const editing = !configured || tiandituKeyEditing;
+      card.classList.toggle('configured', configured);
+      status.textContent = t(configured
+        ? (tiandituTokenRemembered ? 'basemap.tiandituKeyReadyDevice' : 'basemap.tiandituKeyReady')
+        : 'basemap.tiandituKeyMissing');
+      if (summary) summary.hidden = !configured || editing;
+      if (editor) editor.hidden = !editing;
+      if (remember) {{
+        remember.checked = tiandituTokenRemembered;
+        remember.disabled = !tiandituCredentialSupported;
+      }}
+      if (persistence) {{
+        persistence.hidden = !configured || editing || !tiandituCredentialSupported;
+        persistence.textContent = t(tiandituTokenRemembered ? 'basemap.tiandituKeyForget' : 'basemap.tiandituKeyRemember');
+      }}
+      if (configured && !editing && input) input.value = '';
+    }}
+    function setTiandituAuthOpen(open) {{
+      const card = $('tianditu-auth');
+      const body = $('tianditu-auth-body');
+      const toggle = $('tianditu-auth-toggle');
+      if (!card || !body || !toggle) return false;
+      card.classList.toggle('open', Boolean(open));
+      body.hidden = !open;
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      return true;
+    }}
+    function requestTiandituToken() {{
+      document.querySelector('.basemap-panel')?.classList.add('open');
+      tiandituKeyEditing = true;
+      renderTiandituAuth();
+      setTiandituAuthOpen(true);
+      $('tianditu-token')?.focus();
+      showModeKey('mode.tiandituKeyRequired', {{}}, true);
+      syncToolState();
+      return false;
+    }}
+    function editTiandituToken() {{
+      if (!tiandituToken) return false;
+      tiandituKeyEditing = true;
+      renderTiandituAuth();
+      $('tianditu-token')?.focus();
+      return true;
+    }}
+    async function restoreTiandituCredential() {{
+      try {{
+        const response = await fetch('/api/session/credentials/tianditu', {{ cache: 'no-store' }});
+        if (!response.ok) return false;
+        const payload = await response.json();
+        tiandituCredentialSupported = payload.supported === true;
+        const token = payload.remembered ? normalizeTiandituToken(payload.token) : '';
+        if (token) {{
+          tiandituToken = token;
+          tiandituTokenRemembered = true;
+          try {{ window.sessionStorage.setItem(TIANDITU_TOKEN_STORAGE_KEY, token); }} catch {{}}
+          rebuildBasemapRegistry(currentBasemap);
+          renderBasemapChoices();
+        }}
+        renderTiandituAuth();
+        return Boolean(token);
+      }} catch {{
+        renderTiandituAuth();
+        return false;
+      }}
+    }}
+    async function persistTiandituCredential(token, remember) {{
+      if (!tiandituCredentialSupported) return !remember;
+      try {{
+        const response = await fetch('/api/session/credentials/tianditu', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{ token: remember ? token : '', remember: remember === true }}),
+        }});
+        const payload = await response.json().catch(() => ({{ ok: false }}));
+        if (!response.ok || !payload.ok) return false;
+        tiandituTokenRemembered = payload.remembered === true;
+        return true;
+      }} catch {{
+        return false;
+      }}
+    }}
+    async function toggleTiandituPersistence() {{
+      if (!tiandituToken || !tiandituCredentialSupported) return false;
+      const remember = !tiandituTokenRemembered;
+      const saved = await persistTiandituCredential(tiandituToken, remember);
+      renderTiandituAuth();
+      showModeKey(saved
+        ? (remember ? 'mode.tiandituKeyRemembered' : 'mode.tiandituKeySessionOnly')
+        : 'mode.tiandituKeyRememberFailed', {{}}, !saved);
+      return saved;
+    }}
+    async function applyTiandituToken() {{
+      const input = $('tianditu-token');
+      const token = normalizeTiandituToken(input?.value);
+      if (!token) {{
+        showModeKey('basemap.tiandituKeyInvalid', {{}}, true);
+        input?.focus();
+        return false;
+      }}
+      try {{ window.sessionStorage.setItem(TIANDITU_TOKEN_STORAGE_KEY, token); }} catch {{}}
+      tiandituToken = token;
+      const remember = $('tianditu-token-remember')?.checked === true && tiandituCredentialSupported;
+      const persistenceUpdated = remember || tiandituTokenRemembered
+        ? await persistTiandituCredential(token, remember)
+        : true;
+      tiandituKeyEditing = false;
+      if (input) input.value = '';
+      rebuildBasemapRegistry(currentBasemap);
+      [...new Set(STATE.layers
+        .filter(layer => isBasemapOverlayLayer(layer) && isTiandituBasemap(basemapMetaById(layer.sourceId)))
+        .map(layer => layer.sourceId))]
+        .forEach(sourceId => reloadBasemapOverlays(sourceId));
+      renderTiandituAuth();
+      renderBasemapChoices();
+      setTiandituAuthOpen(false);
+      showModeKey(persistenceUpdated
+        ? (tiandituTokenRemembered ? 'mode.tiandituKeyRemembered' : 'mode.tiandituKeySaved')
+        : 'mode.tiandituKeyRememberFailed', {{}}, !persistenceUpdated);
+      return true;
+    }}
+    function basemapThumbSvg(meta) {{
+      switch (meta.thumb) {{
+        case 'osm':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#f1eed8"/><path d="M0 32C13 28 22 31 31 38C40 44 52 43 64 36V48H0Z" fill="#b8d4a4"/><path d="M-5 8 69 43" stroke="#fff9e7" stroke-width="9"/><path d="M-5 8 69 43" stroke="#cf6b60" stroke-width="3"/><path d="M47-6C44 12 37 29 24 54" stroke="#fff9e7" stroke-width="8"/><path d="M47-6C44 12 37 29 24 54" stroke="#d7a14d" stroke-width="2.6"/><circle cx="40" cy="22" r="3.2" fill="#fff9e7" stroke="#526e61" stroke-width="1.2"/></svg>`;
+        case 'light':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#f5f7f4"/><path d="M8 0v48M25 0v48M46 0v48M0 13h64M0 31h64" stroke="#dce3de" stroke-width="1"/><path d="M-4 42C14 31 23 21 35 5C42-4 51-7 68-6" fill="none" stroke="#a9c7ba" stroke-width="5"/><path d="M-4 42C14 31 23 21 35 5C42-4 51-7 68-6" fill="none" stroke="#f9fbf9" stroke-width="2"/><path d="M17-4 55 52" stroke="#cbd5cf" stroke-width="2"/><circle cx="32" cy="9" r="2.7" fill="#6b9e85"/></svg>`;
+        case 'dark':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#172425"/><path d="M9 0v48M23 0v48M43 0v48M56 0v48M0 11h64M0 27h64M0 40h64" stroke="#314142" stroke-width="1"/><path d="M-8 44C9 33 18 31 30 19C40 9 47 5 70 4" fill="none" stroke="#59c8ad" stroke-width="3.2"/><path d="M16-6 48 55" stroke="#6577c4" stroke-width="3.4"/><circle cx="30" cy="19" r="3.2" fill="#d0f1e6" stroke="#172425" stroke-width="1.5"/></svg>`;
+        case 'voyager':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#eee3c9"/><path d="M0 32C11 26 23 27 32 35C42 43 52 44 64 40V48H0Z" fill="#b9d4b2"/><path d="M-5 7 69 39" stroke="#fff3d8" stroke-width="8"/><path d="M-5 7 69 39" stroke="#e78663" stroke-width="3"/><path d="M48-5C43 12 34 29 19 52" fill="none" stroke="#f8edcf" stroke-width="7"/><path d="M48-5C43 12 34 29 19 52" fill="none" stroke="#75a9b8" stroke-width="2.8"/><path d="M5 16h13v10H5zM48 27h12v9H48z" fill="#e4cda6" stroke="#c9b58f" stroke-width="1"/></svg>`;
+        case 'topo':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#e9e4c7"/><path d="M-5 36C6 18 17 10 31 12C44 14 51 28 69 20" fill="none" stroke="#a99365" stroke-width="1.4"/><path d="M-4 42C8 22 18 16 31 18C43 20 51 33 68 27" fill="none" stroke="#b29c6e" stroke-width="1.25"/><path d="M4 47C14 30 22 24 32 25C42 26 49 38 61 34" fill="none" stroke="#b9a678" stroke-width="1.1"/><path d="M11 0C17 8 20 11 29 8C38 4 45 3 55 10C59 13 62 15 67 14" fill="none" stroke="#8da27c" stroke-width="2.2"/><path d="m31 17 5 9H26Z" fill="#7d6c4b"/><circle cx="31" cy="17" r="2" fill="#f7f0d5"/></svg>`;
+        case 'imagery':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#284336"/><path d="M0 0h30L18 22 0 19Z" fill="#3f6b47"/><path d="m30 0 20 0 4 20-19 7-17-5Z" fill="#6d7645"/><path d="m50 0 14 0v28l-10-8Z" fill="#947b50"/><path d="M0 19 18 22l7 26H0Z" fill="#4f7a4b"/><path d="m18 22 17 5 8 21H25Z" fill="#8b8258"/><path d="m35 27 19-7 10 8v20H43Z" fill="#45634b"/><path d="M42-5C37 9 38 24 47 53" fill="none" stroke="#366779" stroke-width="4"/><path d="M42-5C37 9 38 24 47 53" fill="none" stroke="#7aa3a5" stroke-opacity=".55" stroke-width="1"/></svg>`;
+        case 'clarity':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#858d69"/><path d="M0 0h24L19 18 0 14ZM24 0h22l-6 16-21 2ZM46 0h18v20l-24-4ZM0 14l19 4 5 18-24 7ZM19 18l21-2 5 19-21 1ZM40 16l24 4v20l-19-5ZM0 43l24-7 4 12H0ZM24 36l21-1 9 13H28ZM45 35l19 5v8H54Z" fill="none" stroke="#dfe2bd" stroke-opacity=".66" stroke-width="1.1"/><path d="M8 7h17v10H8z" fill="#cbd8a3"/><path d="M35 25h20v12H35z" fill="#687b58"/><path d="M-3 31 68 8" stroke="#e8e0b8" stroke-width="2.2"/></svg>`;
+        case 'tianditu-vector':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#edf2de"/><path d="M0 34c12-8 22-8 32-1s20 8 32 3v12H0Z" fill="#c5ddae"/><path d="M-5 9 69 40" stroke="#fff9df" stroke-width="7"/><path d="M-5 9 69 40" stroke="#d46f5e" stroke-width="2.2"/><path d="M49-5C44 10 37 26 21 53" fill="none" stroke="#f9f6dc" stroke-width="7"/><path d="M49-5C44 10 37 26 21 53" fill="none" stroke="#6ba8bd" stroke-width="2.4"/><circle cx="36" cy="21" r="2.8" fill="#fff" stroke="#507461"/></svg>`;
+        case 'tianditu-imagery':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#315342"/><path d="M0 0h25L17 21 0 17ZM25 0h21l-7 18-22 3ZM46 0h18v22l-25-4ZM0 17l17 4 7 27H0ZM17 21l22-3 7 30H24ZM39 18l25 4v26H46Z" fill="none" stroke="#8fa56b" stroke-width="1.2"/><path d="M-4 39C15 31 23 19 34 21c11 2 15 12 34-4" fill="none" stroke="#8bc9c4" stroke-width="3"/><path d="M-4 39C15 31 23 19 34 21c11 2 15 12 34-4" fill="none" stroke="#e8df9c" stroke-width="1"/></svg>`;
+        case 'tianditu-terrain':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#ded8b7"/><path d="M-7 39C8 18 20 11 34 15c12 3 17 15 37 5" fill="none" stroke="#9c8b5f" stroke-width="1.5"/><path d="M-6 45C10 25 21 18 34 21c12 3 18 15 36 10" fill="none" stroke="#aa986b" stroke-width="1.25"/><path d="M5 49c11-15 20-21 30-20 11 1 17 11 27 11" fill="none" stroke="#b7a779" stroke-width="1"/><path d="M4 4c12 9 19 11 27 6 9-6 17-6 30 3" fill="none" stroke="#7f9f7b" stroke-width="2.4"/><path d="m33 15 5 9H28Z" fill="#766445"/></svg>`;
+        case 'custom-xyz':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#dcebe2"/><path d="M0 13h64M0 34h64M17 0v48M45 0v48" stroke="#aac7b7" stroke-width="1"/><path d="M-6 41C12 30 22 17 34 18c10 1 18 12 36-8" fill="none" stroke="#3f8c69" stroke-width="4"/><circle cx="34" cy="18" r="3.5" fill="#f4c968" stroke="#fff" stroke-width="1.5"/></svg>`;
+        case 'custom-tms':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#ebe3cf"/><path d="M8 6h17v15H8zM39 6h17v15H39zM8 27h17v15H8zM39 27h17v15H39z" fill="#d8c89e" stroke="#9c8962"/><path d="m32 9 5 6h-3v18h3l-5 6-5-6h3V15h-3Z" fill="#6f947d"/></svg>`;
+        case 'custom-arcgis':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#dce7ef"/><path d="M7 36 21 12l11 18L43 7l14 29Z" fill="#6d9a86" opacity=".78"/><path d="M5 39h54" stroke="#426f87" stroke-width="2"/><circle cx="44" cy="13" r="6" fill="none" stroke="#f2b84b" stroke-width="2"/><path d="m48 17 6 6" stroke="#f2b84b" stroke-width="2"/></svg>`;
+        case 'custom-wms':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#dfe8ec"/><path d="M7 10h35v24H7z" fill="#b8d3c5" stroke="#5f8975"/><path d="M15 17c7-7 15 9 23 0v11c-8 9-16-8-23 0Z" fill="#5f9eb1" opacity=".85"/><path d="m38 31 9 9 11-18" fill="none" stroke="#d2a847" stroke-width="4"/></svg>`;
+        case 'custom-wmts':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#e1e8dc"/><g fill="#aac5b3" stroke="#668774"><path d="M7 6h15v15H7zM25 6h15v15H25zM43 6h14v15H43zM7 24h15v18H7zM25 24h15v18H25zM43 24h14v18H43z"/></g><path d="M11 35c11-11 19-5 27-14 6-6 11-5 19-10" fill="none" stroke="#f5e8bd" stroke-width="3"/></svg>`;
+        case 'custom-pmtiles':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" rx="7" fill="#193342"/><path d="M7 11h22v14H7zM35 7h22v14H35zM10 30h19v11H10zM35 27h22v14H35z" fill="#315464" stroke="#7894a0" stroke-width=".8"/><path d="M-4 38C9 32 15 19 27 20c11 1 15 10 24 7 7-2 10-9 17-11" fill="none" stroke="#63c6aa" stroke-width="3.1"/><path d="M4 42C17 35 21 24 31 25c10 1 16 8 29-2" fill="none" stroke="#f2bc72" stroke-width="1.4"/><circle cx="49" cy="13" r="4.5" fill="#e9f2ee"/><path d="M47 13h4M49 11v4" stroke="#315464" stroke-width="1.2"/></svg>`;
+        case 'custom-cog':
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><defs><linearGradient id="cog-g" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#17343c"/><stop offset=".52" stop-color="#27685f"/><stop offset="1" stop-color="#d6a960"/></linearGradient></defs><rect width="64" height="48" rx="7" fill="url(#cog-g)"/><path d="M-5 39C8 28 18 33 28 22S45 6 69 13" fill="none" stroke="#d9f0d5" stroke-opacity=".78" stroke-width="2.2"/><path d="M-4 44C11 34 20 39 31 28S49 12 68 19" fill="none" stroke="#f2cf83" stroke-opacity=".8" stroke-width="1.2"/><g fill="none" stroke="#f4faf6" stroke-width="1.1"><path d="M9 9h13v10H9zM26 9h13v10H26zM43 9h12v10H43zM9 23h13v10H9z"/></g><circle cx="49" cy="34" r="7" fill="#102f35" fill-opacity=".78"/><path d="M46 34h6M49 31v6" stroke="#eaf7f1" stroke-width="1.4"/></svg>`;
+        default:
+          return `<svg viewBox="0 0 64 48" aria-hidden="true"><rect width="64" height="48" fill="#dfe8e2"/><path d="M-4 39C12 23 25 17 39 20C49 22 57 17 68 7" fill="none" stroke="#5f9278" stroke-width="4"/></svg>`;
+      }}
+    }}
+    function setBasemapVisual(element, meta) {{
+      if (!element || !meta) return;
+      if (element.dataset.thumb) element.classList.remove(element.dataset.thumb);
+      element.dataset.thumb = meta.thumb || 'custom-xyz';
+      element.classList.add(element.dataset.thumb);
+      element.innerHTML = basemapThumbSvg(meta);
+    }}
+    function setActiveBadgeLabel(label) {{
+      const badge = $('active-layer-badge');
+      if (!badge) return;
+      const sourceHint = t('source.trigger');
+      badge.title = `${{label}} · ${{sourceHint}}`;
+      badge.setAttribute('aria-label', `${{sourceHint}} · ${{label}}`);
+    }}
+    function formatBasemapDuration(value) {{
+      const milliseconds = Number(value);
+      if (!Number.isFinite(milliseconds) || milliseconds < 0) return '-';
+      if (milliseconds < 1000) return `${{Math.round(milliseconds)}} ms`;
+      return `${{(milliseconds / 1000).toFixed(milliseconds < 10000 ? 1 : 0).replace(/[.]0$/, '')}} s`;
+    }}
+    function formatBasemapBytes(value) {{
+      const bytes = Number(value);
+      if (!Number.isFinite(bytes) || bytes < 0) return '-';
+      if (bytes < 1024) return `${{Math.round(bytes)}} B`;
+      if (bytes < 1024 * 1024) return `${{(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0).replace(/[.]0$/, '')}} KB`;
+      return `${{(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0).replace(/[.]0$/, '')}} MB`;
+    }}
+    function basemapCacheLabel(cache) {{
+      if (cache === 'cold') return t('source.cacheCold');
+      if (cache === 'warm') return t('source.cacheWarm');
+      return t('source.cacheUnknown');
+    }}
+    function renderBasemapPerformanceDetails(meta) {{
+      const diagnostics = publicBasemapPerformance(meta);
+      const performanceTarget = $('basemap-source-performance');
+      const deliveryTarget = $('basemap-source-delivery');
+      if (!diagnostics) {{
+        performanceTarget.textContent = t('source.performanceIdle');
+        deliveryTarget.textContent = t('source.deliveryIdle');
+        return;
+      }}
+      const first = Number.isFinite(diagnostics.firstRenderMs) ? formatBasemapDuration(diagnostics.firstRenderMs) : null;
+      const ready = Number.isFinite(diagnostics.readyMs) ? formatBasemapDuration(diagnostics.readyMs) : null;
+      if (diagnostics.status === 'error') performanceTarget.textContent = t('source.performanceFailed');
+      else if (ready) performanceTarget.textContent = t('source.performanceReady', {{ first: first || ready, ready }});
+      else if (first) performanceTarget.textContent = t('source.performanceSettling', {{ first }});
+      else performanceTarget.textContent = t('source.performanceLoading');
+
+      const cache = basemapCacheLabel(diagnostics.cache);
+      if (diagnostics.status === 'loading') {{
+        deliveryTarget.textContent = t('source.deliveryLoading', {{ cache }});
+        return;
+      }}
+      const delivery = [cache];
+      if (Number.isFinite(diagnostics.renderedBlocks) && diagnostics.renderedBlocks > 0) {{
+        delivery.push(t('source.renderedBlocks', {{ count: diagnostics.renderedBlocks }}));
+      }}
+      if (Number.isFinite(diagnostics.sourceRequests)) {{
+        delivery.push(t('source.sourceRequests', {{ count: diagnostics.sourceRequests }}));
+      }}
+      if (Number.isFinite(diagnostics.transferredBytes)) delivery.push(formatBasemapBytes(diagnostics.transferredBytes));
+      else delivery.push(t('source.networkRestricted'));
+      deliveryTarget.textContent = delivery.join(' · ');
+    }}
+    function renderBasemapSourceDetails() {{
+      const meta = (basemapSourceDetailId && BASEMAPS.find(item => item.id === basemapSourceDetailId)) || currentBasemapMeta();
+      setBasemapVisual($('basemap-source-visual'), meta);
+      $('basemap-source-name').textContent = basemapDisplayName(meta);
+      $('basemap-source-service').textContent = meta.serviceKey ? t(meta.serviceKey) : (meta.service || basemapDisplayNote(meta));
+      $('basemap-source-provider').textContent = meta.provider || basemapAttributionText(meta);
+      $('basemap-source-engine').textContent = basemapEngineLabel(meta);
+      renderBasemapPerformanceDetails(meta);
+      const dateRow = $('basemap-source-date-row');
+      const hasDate = Boolean(meta.sourceDate);
+      dateRow.hidden = !hasDate;
+      $('basemap-source-date').textContent = hasDate ? meta.sourceDate : '';
+      const nativeZoom = Number(meta.options?.maxNativeZoom ?? meta.options?.maxZoom);
+      $('basemap-source-zoom').textContent = Number.isFinite(nativeZoom)
+        ? t('source.nativeZoomValue', {{ zoom: nativeZoom }})
+        : '-';
+      $('basemap-source-attribution').textContent = basemapAttributionText(meta) || '-';
+      const sourceLink = $('basemap-source-link');
+      sourceLink.href = meta.sourceUrl || '#';
+      sourceLink.hidden = !meta.sourceUrl;
+    }}
+    function setBasemapSourceOpen(open, sourceId = null) {{
+      basemapSourceOpen = Boolean(open);
+      basemapSourceDetailId = basemapSourceOpen ? String(sourceId || currentBasemap) : null;
+      const card = $('basemap-source-card');
+      const badge = $('active-layer-badge');
+      card.classList.toggle('open', basemapSourceOpen);
+      card.setAttribute('aria-hidden', basemapSourceOpen ? 'false' : 'true');
+      badge.setAttribute('aria-expanded', basemapSourceOpen ? 'true' : 'false');
+      badge.classList.toggle('source-open', basemapSourceOpen);
+      if (basemapSourceOpen) {{
+        renderBasemapSourceDetails();
+        revealActiveBadge(0);
+      }} else {{
+        collapseActiveBadge();
+      }}
+    }}
+    function basemapAttributionText(meta = currentBasemapMeta()) {{
       const holder = document.createElement('span');
       holder.innerHTML = String((meta.options && meta.options.attribution) || '');
       return (holder.textContent || holder.innerText || '').replace(/\s+/g, ' ').trim();
+    }}
+    function basemapEngineLabel(meta) {{
+      const type = String(meta?.type || 'xyz').toLowerCase();
+      if (meta?.custom && type === 'pmtiles') return 'PMTiles {PMTILES_VERSION} · HTTP Range';
+      if (meta?.custom && type === 'cog') return 'MapLibre {MAPLIBRE_VERSION} · COG {COG_PROTOCOL_VERSION} · WebGL / HTTP Range';
+      if (meta?.custom) return `Leaflet · ${{type.toUpperCase()}}`;
+      return 'Leaflet · XYZ tiles';
     }}
     function displayBasemapSource() {{
       const attribution = basemapAttributionText();
@@ -5329,31 +6570,521 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function renderBasemapChoices() {{
       const current = $('basemap-current');
       if (current) current.textContent = displayBasemapName();
+      const count = $('basemap-custom-count');
+      if (count) count.textContent = t('basemap.customCount', {{ count: customBasemaps.length }});
       const list = $('basemap-list');
       if (list) {{
-        list.innerHTML = BASEMAPS.map(meta => `
-          <button class="basemap-choice ${{meta.id === currentBasemap ? 'active' : ''}}" data-basemap="${{escapeHtml(meta.id)}}" type="button">
-            <span class="basemap-thumb ${{escapeHtml(meta.thumb)}}" aria-hidden="true"></span>
-            <span class="basemap-copy">
-              <span class="basemap-name">${{escapeHtml(t(meta.nameKey))}}</span>
-              <span class="basemap-note">${{escapeHtml(t(meta.noteKey))}}</span>
-            </span>
-          </button>
-        `).join('');
+        list.innerHTML = BASEMAPS.map(meta => {{
+          const customIndex = customBasemaps.findIndex(item => item.id === meta.id);
+          const isCustom = customIndex >= 0;
+          const isDefault = meta.id === defaultBasemapId;
+          const hasOverlay = STATE.layers.some(layer => isBasemapOverlayLayer(layer) && layer.sourceId === meta.id);
+          const overlayLabel = t(hasOverlay ? 'basemap.overlayInLayers' : 'basemap.addOverlay');
+          const overlayAction = `<button class="basemap-overlay-add" data-basemap-overlay="${{escapeHtml(meta.id)}}" type="button" title="${{escapeHtml(overlayLabel)}}" aria-label="${{escapeHtml(overlayLabel)}}" ${{hasOverlay ? 'disabled' : ''}}>{svg_icon("overlay-add")}<span>${{escapeHtml(overlayLabel)}}</span></button>`;
+          const customActions = isCustom ? `
+            <div class="basemap-custom-actions">
+              <button class="basemap-entry-action" data-basemap-up="${{escapeHtml(meta.id)}}" type="button" title="${{escapeHtml(t('basemap.moveUp'))}}" aria-label="${{escapeHtml(t('basemap.moveUp'))}}" ${{customIndex === 0 ? 'disabled' : ''}}>{svg_icon("up")}</button>
+              <button class="basemap-entry-action" data-basemap-down="${{escapeHtml(meta.id)}}" type="button" title="${{escapeHtml(t('basemap.moveDown'))}}" aria-label="${{escapeHtml(t('basemap.moveDown'))}}" ${{customIndex === customBasemaps.length - 1 ? 'disabled' : ''}}>{svg_icon("down")}</button>
+              <button class="basemap-entry-action" data-basemap-edit="${{escapeHtml(meta.id)}}" type="button" title="${{escapeHtml(t('basemap.edit'))}}" aria-label="${{escapeHtml(t('basemap.edit'))}}">{svg_icon("edit")}</button>
+              <button class="basemap-entry-action danger" data-basemap-remove="${{escapeHtml(meta.id)}}" type="button" title="${{escapeHtml(t('basemap.remove'))}}" aria-label="${{escapeHtml(t('basemap.remove'))}}">{svg_icon("trash")}</button>
+            </div>` : '';
+          return `
+            <div class="basemap-entry ${{meta.id === currentBasemap ? 'active' : ''}}">
+              <button class="basemap-entry-default ${{isDefault ? 'active' : ''}}" data-basemap-default="${{escapeHtml(meta.id)}}" type="button" title="${{escapeHtml(t(isDefault ? 'basemap.defaultCurrent' : 'basemap.defaultTitle'))}}" aria-label="${{escapeHtml(t(isDefault ? 'basemap.defaultCurrent' : 'basemap.defaultTitle'))}}">{svg_icon("favorite")}</button>
+              <button class="basemap-choice" data-basemap="${{escapeHtml(meta.id)}}" type="button">
+                <span class="basemap-thumb ${{escapeHtml(meta.thumb)}}" aria-hidden="true">${{basemapThumbSvg(meta)}}</span>
+                <span class="basemap-copy">
+                  <span class="basemap-name">${{escapeHtml(basemapDisplayName(meta))}}</span>
+                  <span class="basemap-note">${{escapeHtml(basemapDisplayNote(meta))}}</span>
+                  ${{isCustom ? `<span class="basemap-type-chip">${{escapeHtml(String(meta.type || 'xyz'))}}</span>` : ''}}
+                </span>
+              </button>
+              <div class="basemap-entry-footer">${{overlayAction}}${{customActions}}</div>
+            </div>`;
+        }}).join('');
         list.querySelectorAll('.basemap-choice').forEach(button => {{
           button.addEventListener('click', () => {{
-            setBasemap(button.dataset.basemap);
-            document.querySelector('.basemap-panel').classList.remove('open');
-            syncToolState();
+            if (setBasemap(button.dataset.basemap)) {{
+              document.querySelector('.basemap-panel').classList.remove('open');
+              syncToolState();
+            }}
           }});
         }});
+        list.querySelectorAll('[data-basemap-overlay]').forEach(button => {{
+          button.addEventListener('click', () => addBasemapOverlay(button.dataset.basemapOverlay));
+        }});
+        list.querySelectorAll('[data-basemap-default]').forEach(button => {{
+          button.addEventListener('click', () => setDefaultBasemap(button.dataset.basemapDefault));
+        }});
+        list.querySelectorAll('[data-basemap-edit]').forEach(button => {{
+          button.addEventListener('click', () => openBasemapEditor(button.dataset.basemapEdit));
+        }});
+        list.querySelectorAll('[data-basemap-up]').forEach(button => {{
+          button.addEventListener('click', () => moveCustomBasemap(button.dataset.basemapUp, -1));
+        }});
+        list.querySelectorAll('[data-basemap-down]').forEach(button => {{
+          button.addEventListener('click', () => moveCustomBasemap(button.dataset.basemapDown, 1));
+        }});
+        list.querySelectorAll('[data-basemap-remove]').forEach(button => {{
+          button.addEventListener('click', () => removeCustomBasemap(button.dataset.basemapRemove));
+        }});
       }}
-      document.querySelectorAll('.basemap-choice').forEach(button => {{
-        button.classList.toggle('active', button.dataset.basemap === currentBasemap);
-      }});
       const title = `${{t('tool.basemap')}} - ${{displayBasemapName()}}`;
       $('basemap-btn').title = title;
       $('basemap-btn').setAttribute('aria-label', title);
+      renderBasemapSourceDetails();
+    }}
+    function createCustomBasemapId(name) {{
+      const slug = String(name || 'basemap').trim().toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'basemap';
+      const base = customBasemapIdentifier(`custom-${{slug}}`);
+      let candidate = base;
+      let suffix = 2;
+      while (customBasemaps.some(meta => meta.id === candidate)) {{
+        candidate = `${{base.slice(0, 70)}}-${{suffix}}`;
+        suffix += 1;
+      }}
+      return candidate;
+    }}
+    function setBasemapFormStatus(key = '', vars = {{}}, tone = '') {{
+      const status = $('basemap-form-status');
+      if (!status) return;
+      status.textContent = key ? t(key, vars) : '';
+      status.className = `basemap-form-status${{tone ? ` ${{tone}}` : ''}}`;
+    }}
+    function updateBasemapTypeFields() {{
+      const type = String($('basemap-form-type')?.value || 'xyz');
+      document.querySelectorAll('.basemap-type-field').forEach(field => {{
+        const supported = String(field.dataset.basemapTypes || '').split(',');
+        field.hidden = !supported.includes(type);
+      }});
+      const url = $('basemap-form-url');
+      if (url) url.placeholder = type === 'arcgis'
+        ? 'https://.../ArcGIS/rest/services/.../MapServer'
+        : type === 'wms'
+          ? 'https://.../wms'
+          : type === 'wmts'
+            ? 'https://.../wmts'
+            : type === 'pmtiles'
+              ? 'https://.../imagery.pmtiles'
+              : type === 'cog'
+                ? 'https://.../imagery-cog.tif'
+              : 'https://.../{{z}}/{{x}}/{{y}}.png';
+    }}
+    function closeBasemapEditor() {{
+      const editor = $('basemap-editor');
+      if (editor) editor.hidden = true;
+      basemapEditorId = null;
+      testedBasemapSignature = '';
+      testedCogDetails = null;
+      if ($('basemap-save-btn')) $('basemap-save-btn').disabled = true;
+      setBasemapFormStatus();
+    }}
+    function openBasemapEditor(id = null) {{
+      const meta = id ? customBasemaps.find(item => item.id === id) : null;
+      basemapEditorId = meta?.id || null;
+      testedCogDetails = meta?.type === 'cog'
+        ? {{ url: meta.url, bounds: meta.bounds, crs: meta.crs || 'EPSG:3857', bandCount: meta.bandCount || 0 }}
+        : null;
+      $('basemap-editor').hidden = false;
+      $('basemap-editor-title').textContent = t(meta ? 'basemap.editorEdit' : 'basemap.editorAdd');
+      $('basemap-form-name').value = meta?.name || '';
+      $('basemap-form-type').value = meta?.type || 'xyz';
+      $('basemap-form-provider').value = meta?.provider || '';
+      $('basemap-form-url').value = meta?.url || '';
+      $('basemap-form-subdomains').value = meta?.subdomains || '';
+      $('basemap-form-layers').value = meta?.layers || '';
+      $('basemap-form-styles').value = meta?.styles || '';
+      $('basemap-form-version').value = meta?.type === 'wms' && meta?.version === '1.1.1' ? '1.1.1' : '1.3.0';
+      $('basemap-form-matrix-set').value = meta?.tileMatrixSet || 'GoogleMapsCompatible';
+      $('basemap-form-matrix-prefix').value = meta?.matrixPrefix || '';
+      $('basemap-form-format').value = meta?.format || 'image/png';
+      $('basemap-form-attribution').value = meta?.attribution || '';
+      $('basemap-form-source-url').value = meta?.sourceUrl || '';
+      $('basemap-form-min-zoom').value = meta?.minZoom ?? 0;
+      $('basemap-form-max-zoom').value = meta?.maxZoom ?? 19;
+      $('basemap-form-native-zoom').value = meta?.maxNativeZoom ?? 19;
+      $('basemap-form-default').checked = Boolean(meta && meta.id === defaultBasemapId);
+      testedBasemapSignature = '';
+      $('basemap-save-btn').disabled = true;
+      setBasemapFormStatus();
+      updateBasemapTypeFields();
+      $('basemap-form-name').focus();
+      $('basemap-editor').scrollIntoView({{ block: 'nearest', behavior: 'smooth' }});
+    }}
+    function readBasemapForm() {{
+      const type = String($('basemap-form-type').value || 'xyz').toLowerCase();
+      const url = $('basemap-form-url').value;
+      const cogDetails = type === 'cog' && testedCogDetails?.url === String(url || '').trim()
+        ? testedCogDetails
+        : {{}};
+      return normalizeCustomBasemap({{
+        id: basemapEditorId || createCustomBasemapId($('basemap-form-name').value),
+        name: $('basemap-form-name').value,
+        type,
+        provider: $('basemap-form-provider').value,
+        url,
+        subdomains: $('basemap-form-subdomains').value,
+        layers: $('basemap-form-layers').value,
+        styles: $('basemap-form-styles').value,
+        version: type === 'wmts' ? '1.0.0' : $('basemap-form-version').value,
+        tileMatrixSet: $('basemap-form-matrix-set').value,
+        matrixPrefix: $('basemap-form-matrix-prefix').value,
+        format: $('basemap-form-format').value,
+        attribution: $('basemap-form-attribution').value,
+        sourceUrl: $('basemap-form-source-url').value,
+        minZoom: $('basemap-form-min-zoom').value,
+        maxZoom: $('basemap-form-max-zoom').value,
+        maxNativeZoom: $('basemap-form-native-zoom').value,
+        ...cogDetails,
+        transparent: true,
+      }});
+    }}
+    function validHttpTemplate(value) {{
+      try {{
+        const parsed = new URL(String(value || '').replace(/\{{[^}}]+\}}/g, 'tile'));
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      }} catch {{
+        return false;
+      }}
+    }}
+    const SENSITIVE_URL_QUERY_NAMES = new Set(['access_key', 'access_token', 'accesskey', 'api_key', 'apikey', 'app_key', 'appkey', 'auth', 'authorization', 'client_secret', 'credential', 'key', 'passwd', 'password', 'private_key', 'secret', 'sig', 'signature', 'subscription_key', 'tk', 'token']);
+    function sensitiveUrlParameterName(value) {{
+      const name = String(value || '').trim().toLowerCase().replace(/-/g, '_');
+      return SENSITIVE_URL_QUERY_NAMES.has(name) || ['_credential', '_key', '_password', '_secret', '_signature', '_token'].some(suffix => name.endsWith(suffix));
+    }}
+    function urlContainsCredentials(value) {{
+      const text = String(value || '').trim();
+      if (!text) return false;
+      try {{
+        const parsed = new URL(text.replace(/\{{[^}}]+\}}/g, 'tile'));
+        if (parsed.username || parsed.password) return true;
+        const parameterNames = `${{parsed.search.slice(1)}}&${{parsed.hash.slice(1)}}`
+          .split(/[&;]/)
+          .map(part => part.split('=', 1)[0]);
+        return parameterNames.some(raw => {{
+          let key = String(raw || '').replace(/\+/g, ' ');
+          for (let count = 0; count < 2; count += 1) {{
+            try {{ key = decodeURIComponent(key); }} catch {{ break; }}
+          }}
+          return sensitiveUrlParameterName(key);
+        }});
+      }} catch {{
+        return false;
+      }}
+    }}
+    function validateBasemapForm(meta) {{
+      if (!String($('basemap-form-name').value || '').trim()) return 'basemap.nameRequired';
+      const url = String($('basemap-form-url').value || '').trim();
+      if (!url) return 'basemap.urlRequired';
+      if (urlContainsCredentials(url) || urlContainsCredentials($('basemap-form-source-url').value)) return 'basemap.urlCredentialsBlocked';
+      if (!meta || !validHttpTemplate(url)) return 'basemap.urlInvalid';
+      if ((meta.type === 'xyz' || meta.type === 'tms') && !['{{z}}', '{{x}}', '{{y}}'].every(token => url.includes(token))) return 'basemap.urlInvalid';
+      if ((meta.type === 'wms' || meta.type === 'wmts') && !meta.layers) return 'basemap.layersRequired';
+      if (meta.type === 'wmts' && !meta.tileMatrixSet) return 'basemap.matrixRequired';
+      return '';
+    }}
+    function invalidateBasemapTest() {{
+      testedBasemapSignature = '';
+      testedCogDetails = null;
+      if ($('basemap-save-btn')) $('basemap-save-btn').disabled = true;
+      setBasemapFormStatus();
+    }}
+    function testBasemapLayer(meta) {{
+      return new Promise(resolve => {{
+        let layer = null;
+        let finished = false;
+        let errors = 0;
+        const finish = (ok, key) => {{
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(timer);
+          window.setTimeout(() => {{
+            if (layer && map.hasLayer(layer)) map.removeLayer(layer);
+          }}, 0);
+          resolve({{ ok, key }});
+        }};
+        const timer = window.setTimeout(() => finish(false, 'basemap.tileTimeout'), meta.type === 'cog' ? 15000 : 8000);
+        try {{
+          layer = createBasemapLayer(meta, {{ opacity: 0.001, maxZoom: Math.max(meta.maxZoom || 19, map.getZoom()), zIndex: -100 }});
+          layer.on('tileload', () => finish(true, 'basemap.testPassed'));
+          layer.on('tileerror', () => {{
+            errors += 1;
+            if (errors >= 4) finish(false, 'basemap.tileFailed');
+          }});
+          layer.addTo(map);
+        }} catch {{
+          finish(false, 'basemap.tileFailed');
+        }}
+      }});
+    }}
+    function currentViewTileCoordinates(zoom) {{
+      const pixelBounds = map.getPixelBounds();
+      const min = pixelBounds.min.divideBy(256).floor();
+      const max = pixelBounds.max.divideBy(256).floor();
+      const worldWidth = Math.pow(2, zoom);
+      const coordinates = [];
+      const seen = new Set();
+      for (let y = min.y; y <= max.y; y += 1) {{
+        if (y < 0 || y >= worldWidth) continue;
+        for (let x = min.x; x <= max.x; x += 1) {{
+          const wrappedX = ((x % worldWidth) + worldWidth) % worldWidth;
+          const key = `${{zoom}}/${{wrappedX}}/${{y}}`;
+          if (!seen.has(key)) {{
+            seen.add(key);
+            coordinates.push({{ z: zoom, x: wrappedX, y }});
+          }}
+        }}
+      }}
+      return coordinates.slice(0, 64);
+    }}
+    async function pmtilesHasVisibleRasterTile(archive, zoom) {{
+      const coordinates = currentViewTileCoordinates(zoom);
+      if (!coordinates.length) return false;
+      let cursor = 0;
+      let found = false;
+      const worker = async () => {{
+        while (!found && cursor < coordinates.length) {{
+          const coordinate = coordinates[cursor];
+          cursor += 1;
+          const tile = await archive.getZxy(coordinate.z, coordinate.x, coordinate.y);
+          if (tile?.data?.byteLength > 0) found = true;
+        }}
+      }};
+      await Promise.all(Array.from({{ length: Math.min(4, coordinates.length) }}, worker));
+      return found;
+    }}
+    async function inspectPmtilesArchive(meta, options = {{}}) {{
+      if (!window.pmtiles?.PMTiles || !window.pmtiles?.leafletRasterLayer) {{
+        return {{ ok: false, key: 'basemap.pmtilesUnavailable' }};
+      }}
+      let timeoutId = null;
+      const timeout = new Promise(resolve => {{
+        timeoutId = window.setTimeout(() => resolve({{ ok: false, key: 'basemap.pmtilesInspectFailed' }}), 10000);
+      }});
+      try {{
+        const archive = getPmtilesArchive(meta.url, {{ refresh: options.refresh === true }});
+        const inspection = (async () => {{
+          const header = await archive.getHeader();
+          if (![2, 3, 4, 5].includes(Number(header?.tileType))) {{
+            return {{ ok: false, key: 'basemap.pmtilesRasterOnly' }};
+          }}
+          if (options.requireVisibleTile !== false) {{
+            const zoom = Math.round(map.getZoom());
+            if (zoom < Number(header.minZoom) || zoom > Number(header.maxZoom)) {{
+              return {{ ok: false, key: 'basemap.pmtilesZoomOutside' }};
+            }}
+            const bounds = [header?.minLat, header?.minLon, header?.maxLat, header?.maxLon].map(Number);
+            if (bounds.every(Number.isFinite)) {{
+              const coverage = L.latLngBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]]);
+              if (!map.getBounds().intersects(coverage)) return {{ ok: false, key: 'basemap.pmtilesOutsideView' }};
+            }}
+            if (!await pmtilesHasVisibleRasterTile(archive, zoom)) {{
+              return {{ ok: false, key: 'basemap.pmtilesNoTile' }};
+            }}
+          }}
+          return {{ ok: true, header }};
+        }})();
+        const result = await Promise.race([inspection, timeout]);
+        if (!result.ok) discardPmtilesArchive(meta.url);
+        return result;
+      }} catch {{
+        discardPmtilesArchive(meta.url);
+        return {{ ok: false, key: 'basemap.pmtilesInspectFailed' }};
+      }} finally {{
+        if (timeoutId !== null) window.clearTimeout(timeoutId);
+      }}
+    }}
+    async function inspectCogSource(meta, options = {{}}) {{
+      let timeoutId = null;
+      const timeout = new Promise(resolve => {{
+        timeoutId = window.setTimeout(() => resolve({{ ok: false, key: 'basemap.cogInspectFailed' }}), 20000);
+      }});
+      try {{
+        const inspection = (async () => {{
+          await ensureCogEngine();
+          const metadata = await getCogSourceMetadata(meta.url, {{ refresh: options.refresh === true }});
+          const bounds = normalizeBasemapBounds(metadata?.bbox);
+          const zooms = (Array.isArray(metadata?.images) ? metadata.images : [])
+            .filter(image => !image?.isMask)
+            .map(image => Number(image?.zoom))
+            .filter(Number.isFinite);
+          const maxZoom = zooms.length ? Math.max(...zooms) : Number(meta.maxNativeZoom || meta.maxZoom || 19);
+          const bandCount = Array.isArray(metadata?.bitsPerSample) ? metadata.bitsPerSample.length : Number(meta.bandCount || 0);
+          const details = {{
+            url: meta.url,
+            ...(bounds ? {{ bounds }} : {{}}),
+            crs: 'EPSG:3857',
+            bandCount,
+            minZoom: 0,
+            maxZoom: basemapZoom(maxZoom, 19),
+            maxNativeZoom: basemapZoom(maxZoom, 19),
+          }};
+          const checkedMeta = normalizeCustomBasemap({{ ...meta, ...details }});
+          if (!checkedMeta) return {{ ok: false, key: 'basemap.cogInspectFailed' }};
+          if (options.requireVisibleTile !== false) {{
+            if (bounds) {{
+              const coverage = L.latLngBounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]]);
+              if (!map.getBounds().intersects(coverage)) {{
+                if (options.fitBounds === false) return {{ ok: false, key: 'basemap.cogOutsideView' }};
+                await new Promise(resolve => {{
+                  let finished = false;
+                  const finish = () => {{
+                    if (finished) return;
+                    finished = true;
+                    map.off('moveend', finish);
+                    resolve();
+                  }};
+                  map.once('moveend', finish);
+                  map.fitBounds(coverage, {{ padding: [42, 42], maxZoom: Math.min(details.maxNativeZoom, 17) }});
+                  window.setTimeout(finish, 1400);
+                }});
+              }}
+            }}
+            const tileResult = await testBasemapLayer(checkedMeta);
+            if (!tileResult.ok) return tileResult;
+          }}
+          return {{ ok: true, metadata, details, meta: checkedMeta }};
+        }})();
+        return await Promise.race([inspection, timeout]);
+      }} catch (error) {{
+        discardCogSource(meta.url);
+        const message = String(error?.message || error || '').toLowerCase();
+        const key = message.includes('3857') || message.includes('projection') || message.includes('projectedcstype')
+          ? 'basemap.cogWebMercatorOnly'
+          : cogEngineStatus === 'error'
+            ? 'basemap.cogUnavailable'
+            : 'basemap.cogInspectFailed';
+        return {{ ok: false, key, error: message.slice(0, 200) }};
+      }} finally {{
+        if (timeoutId !== null) window.clearTimeout(timeoutId);
+      }}
+    }}
+    async function testBasemapForm() {{
+      let meta = readBasemapForm();
+      const validationKey = validateBasemapForm(meta);
+      testedBasemapSignature = '';
+      $('basemap-save-btn').disabled = true;
+      if (validationKey) {{
+        setBasemapFormStatus(validationKey, {{}}, 'error');
+        return false;
+      }}
+      $('basemap-test-btn').disabled = true;
+      if (meta.type === 'pmtiles') {{
+        setBasemapFormStatus('basemap.pmtilesInspecting');
+        const inspection = await inspectPmtilesArchive(meta, {{ refresh: true }});
+        if (!inspection.ok) {{
+          $('basemap-test-btn').disabled = false;
+          setBasemapFormStatus('basemap.testFailed', {{ message: t(inspection.key) }}, 'error');
+          return false;
+        }}
+        const minZoom = Number(inspection.header?.minZoom);
+        const maxZoom = Number(inspection.header?.maxZoom);
+        if (Number.isFinite(minZoom)) $('basemap-form-min-zoom').value = minZoom;
+        if (Number.isFinite(maxZoom)) {{
+          $('basemap-form-max-zoom').value = maxZoom;
+          $('basemap-form-native-zoom').value = maxZoom;
+        }}
+        meta = readBasemapForm();
+        testedBasemapSignature = customBasemapSignature(meta);
+        $('basemap-test-btn').disabled = false;
+        $('basemap-save-btn').disabled = false;
+        setBasemapFormStatus('basemap.testPassed', {{}}, 'success');
+        return true;
+      }}
+      if (meta.type === 'cog') {{
+        setBasemapFormStatus(cogEngineStatus === 'idle' ? 'basemap.cogLoading' : 'basemap.cogInspecting');
+        const inspection = await inspectCogSource(meta, {{ refresh: true, requireVisibleTile: true, fitBounds: true }});
+        if (!inspection.ok) {{
+          $('basemap-test-btn').disabled = false;
+          setBasemapFormStatus('basemap.testFailed', {{ message: t(inspection.key) }}, 'error');
+          return false;
+        }}
+        testedCogDetails = inspection.details;
+        $('basemap-form-min-zoom').value = inspection.details.minZoom;
+        $('basemap-form-max-zoom').value = inspection.details.maxZoom;
+        $('basemap-form-native-zoom').value = inspection.details.maxNativeZoom;
+        meta = readBasemapForm();
+        testedBasemapSignature = customBasemapSignature(meta);
+        $('basemap-test-btn').disabled = false;
+        $('basemap-save-btn').disabled = false;
+        setBasemapFormStatus('basemap.testPassed', {{}}, 'success');
+        return true;
+      }}
+      setBasemapFormStatus('basemap.testing');
+      const result = await testBasemapLayer(meta);
+      $('basemap-test-btn').disabled = false;
+      if (result.ok) {{
+        testedBasemapSignature = customBasemapSignature(meta);
+        $('basemap-save-btn').disabled = false;
+        setBasemapFormStatus('basemap.testPassed', {{}}, 'success');
+        return true;
+      }}
+      setBasemapFormStatus('basemap.testFailed', {{ message: t(result.key) }}, 'error');
+      return false;
+    }}
+    function saveBasemapForm() {{
+      const meta = readBasemapForm();
+      const validationKey = validateBasemapForm(meta);
+      if (validationKey) {{
+        setBasemapFormStatus(validationKey, {{}}, 'error');
+        return false;
+      }}
+      if (!testedBasemapSignature || testedBasemapSignature !== customBasemapSignature(meta)) {{
+        setBasemapFormStatus('basemap.testFirst', {{}}, 'error');
+        $('basemap-save-btn').disabled = true;
+        return false;
+      }}
+      const editing = Boolean(basemapEditorId);
+      const index = customBasemaps.findIndex(item => item.id === meta.id);
+      const previous = index >= 0 ? customBasemaps[index] : null;
+      if (previous?.type === 'pmtiles' && (meta.type !== 'pmtiles' || previous.url !== meta.url)) {{
+        discardPmtilesArchive(previous.url);
+      }}
+      if (previous?.type === 'cog' && (meta.type !== 'cog' || previous.url !== meta.url)) discardCogSource(previous.url);
+      if (index >= 0) customBasemaps.splice(index, 1, meta);
+      else customBasemaps.push(meta);
+      customBasemaps = normalizeCustomBasemaps(customBasemaps);
+      if ($('basemap-form-default').checked) defaultBasemapId = meta.id;
+      rebuildBasemapRegistry(meta.id);
+      reloadBasemapOverlays(meta.id);
+      closeBasemapEditor();
+      showMode(t(editing ? 'basemap.updated' : 'basemap.saved', {{ name: meta.name }}));
+      syncSessionState(editing ? 'custom-basemap-updated' : 'custom-basemap-added');
+      return true;
+    }}
+    function setDefaultBasemap(id) {{
+      const meta = BASEMAPS.find(item => item.id === id);
+      if (!meta) return false;
+      if (isTiandituBasemap(meta) && !tiandituToken) return requestTiandituToken();
+      defaultBasemapId = meta.id;
+      renderBasemapChoices();
+      showMode(t('basemap.defaultChanged', {{ name: basemapDisplayName(meta) }}));
+      syncSessionState('default-basemap-changed');
+      return true;
+    }}
+    function moveCustomBasemap(id, direction) {{
+      const index = customBasemaps.findIndex(meta => meta.id === id);
+      const target = index + Number(direction || 0);
+      if (index < 0 || target < 0 || target >= customBasemaps.length) return false;
+      [customBasemaps[index], customBasemaps[target]] = [customBasemaps[target], customBasemaps[index]];
+      rebuildBasemapRegistry(currentBasemap);
+      syncSessionState('custom-basemap-reordered');
+      return true;
+    }}
+    function removeCustomBasemap(id, options = {{}}) {{
+      const meta = customBasemaps.find(item => item.id === id);
+      if (!meta) return false;
+      if (options.confirm !== false && !window.confirm(t('basemap.removeConfirm', {{ name: meta.name }}))) return false;
+      if (meta.type === 'pmtiles') discardPmtilesArchive(meta.url);
+      if (meta.type === 'cog') discardCogSource(meta.url);
+      STATE.layers.filter(layer => isBasemapOverlayLayer(layer) && layer.sourceId === id).forEach(layer => removeLayer(layer.id));
+      customBasemaps = customBasemaps.filter(item => item.id !== id);
+      if (defaultBasemapId === id) defaultBasemapId = 'OSM';
+      if (basemapEditorId === id) closeBasemapEditor();
+      rebuildBasemapRegistry(currentBasemap === id ? defaultBasemapId : currentBasemap);
+      showMode(t('basemap.removed', {{ name: meta.name }}));
+      syncSessionState('custom-basemap-removed');
+      return true;
     }}
     function normalizeCatalogType(item) {{
       const raw = String(item.type || item.scale || '').toLowerCase();
@@ -6020,14 +7751,525 @@ def render_html(state: dict, leaflet_src: str) -> str:
     initializePersistentState();
     if (!activeLayerId && hasMeasurements()) activeLayerId = MEASUREMENTS_LAYER_ID;
     if (!activeLayerId && hasAoi()) activeLayerId = AOI_LAYER_ID;
+    if (!activeLayerId) activeLayerId = PRIMARY_BASEMAP_LAYER_ID;
 
     const map = L.map('map', {{ zoomControl: false, attributionControl: false }}).setView(STATE.center, STATE.zoom);
-    const BASEMAPS = [
+    map.createPane(PRIMARY_BASEMAP_PANE);
+    map.getPane(PRIMARY_BASEMAP_PANE).style.zIndex = '150';
+    map.getPane(PRIMARY_BASEMAP_PANE).style.pointerEvents = 'none';
+    const CUSTOM_BASEMAP_TYPES = new Set(['xyz', 'tms', 'arcgis', 'wms', 'wmts', 'pmtiles', 'cog']);
+    const pmtilesArchives = new Map();
+    const cogMetadataCache = new Map();
+    const basemapPerformanceSamples = new Map();
+    const seenBasemapSources = new Set();
+    const lazyAssetPromises = new Map();
+    let cogEnginePromise = null;
+    let cogEngineStatus = 'idle';
+    let cogEngineError = '';
+    function basemapPerformanceSourceKey(meta) {{
+      return `${{String(meta?.type || 'xyz').toLowerCase()}}:${{String(meta?.url || meta?.id || '')}}`;
+    }}
+    function basemapResourceMatcher(meta) {{
+      const template = String(meta?.url || '').trim();
+      if (!template) return () => false;
+      try {{
+        const replacement = '__easygee_tile__';
+        const parsed = new URL(template.replace(/[{{][^}}]+[}}]/g, replacement), window.location.href);
+        const templatedHost = parsed.hostname.startsWith(`${{replacement}}.`);
+        const hostSuffix = templatedHost ? parsed.hostname.slice(replacement.length + 1) : parsed.hostname;
+        const marker = parsed.pathname.indexOf(replacement);
+        const pathPrefix = marker >= 0 ? parsed.pathname.slice(0, marker) : parsed.pathname;
+        return name => {{
+          try {{
+            const entry = new URL(name, window.location.href);
+            const hostMatches = templatedHost ? entry.hostname.endsWith(`.${{hostSuffix}}`) : entry.hostname === hostSuffix;
+            const pathMatches = marker >= 0 ? entry.pathname.startsWith(pathPrefix) : entry.pathname === parsed.pathname;
+            return entry.protocol === parsed.protocol && hostMatches && pathMatches;
+          }} catch {{
+            return false;
+          }}
+        }};
+      }} catch {{
+        return () => false;
+      }}
+    }}
+    function collectBasemapNetworkPerformance(meta, sample) {{
+      if (!sample || typeof performance?.getEntriesByType !== 'function') return;
+      const matches = basemapResourceMatcher(meta);
+      const entries = performance.getEntriesByType('resource').filter(entry => (
+        Number(entry.startTime) >= sample.startedAt - 1 && matches(entry.name)
+      ));
+      if (!entries.length) return;
+      sample.sourceRequests = entries.length;
+      const transferredBytes = entries.reduce((total, entry) => total + Math.max(0, Number(entry.transferSize) || 0), 0);
+      if (transferredBytes > 0) sample.transferredBytes = Math.round(transferredBytes);
+    }}
+    function publicBasemapPerformance(meta) {{
+      const sample = basemapPerformanceSamples.get(meta?.id);
+      if (!sample) return null;
+      return {{
+        status: sample.status,
+        cache: sample.cache,
+        ...(Number.isFinite(sample.firstRenderMs) ? {{ firstRenderMs: Math.round(sample.firstRenderMs) }} : {{}}),
+        ...(Number.isFinite(sample.readyMs) ? {{ readyMs: Math.round(sample.readyMs) }} : {{}}),
+        renderedBlocks: Math.max(0, Math.round(sample.renderedBlocks || 0)),
+        ...(Number.isFinite(sample.sourceRequests) ? {{ sourceRequests: Math.max(0, Math.round(sample.sourceRequests)) }} : {{}}),
+        ...(Number.isFinite(sample.transferredBytes) ? {{ transferredBytes: Math.max(0, Math.round(sample.transferredBytes)) }} : {{}}),
+      }};
+    }}
+    function updateBasemapPerformance(meta, phase) {{
+      const sample = basemapPerformanceSamples.get(meta?.id);
+      if (!sample || sample.status === 'error' || sample.status === 'ready') return;
+      const elapsed = Math.max(0, performance.now() - sample.startedAt);
+      if (phase === 'tile') {{
+        sample.renderedBlocks += 1;
+        if (!Number.isFinite(sample.firstRenderMs)) sample.firstRenderMs = elapsed;
+      }}
+      if (phase === 'ready') {{
+        if (!Number.isFinite(sample.firstRenderMs)) sample.firstRenderMs = elapsed;
+        sample.readyMs = elapsed;
+        sample.status = 'ready';
+        seenBasemapSources.add(sample.sourceKey);
+        collectBasemapNetworkPerformance(meta, sample);
+      }}
+      if (meta?.id === currentBasemap) renderBasemapSourceDetails();
+    }}
+    function failBasemapPerformance(meta) {{
+      const sample = basemapPerformanceSamples.get(meta?.id);
+      if (!sample) return;
+      sample.status = 'error';
+      collectBasemapNetworkPerformance(meta, sample);
+      if (meta?.id === currentBasemap) renderBasemapSourceDetails();
+    }}
+    function beginBasemapPerformance(meta, layer) {{
+      if (!meta || !layer) return;
+      const sourceKey = basemapPerformanceSourceKey(meta);
+      const sample = {{
+        status: 'loading',
+        cache: seenBasemapSources.has(sourceKey) ? 'warm' : 'cold',
+        sourceKey,
+        startedAt: performance.now(),
+        firstRenderMs: null,
+        readyMs: null,
+        renderedBlocks: 0,
+        sourceRequests: null,
+        transferredBytes: null,
+      }};
+      basemapPerformanceSamples.set(meta.id, sample);
+      if (meta.id === currentBasemap) renderBasemapSourceDetails();
+      if (String(meta.type || '').toLowerCase() === 'cog') {{
+        window.requestAnimationFrame(() => {{
+          try {{
+            const glMap = layer._easygeeCogLayer?.getMaplibreMap?.();
+            if (basemapPerformanceSamples.get(meta.id) === sample && glMap?.getSource('easygee-cog-source') && glMap.isSourceLoaded('easygee-cog-source')) {{
+              updateBasemapPerformance(meta, 'tile');
+              updateBasemapPerformance(meta, 'ready');
+            }}
+          }} catch {{}}
+        }});
+      }}
+    }}
+    function bindBasemapPerformance(meta, layer) {{
+      if (!layer || layer._easygeePerformanceBound) return layer;
+      layer._easygeePerformanceBound = true;
+      layer.on('tileload', () => updateBasemapPerformance(meta, 'tile'));
+      layer.on('load', () => updateBasemapPerformance(meta, 'ready'));
+      return layer;
+    }}
+    function createRegisteredBasemapLayer(meta, opacity = 1) {{
+      return bindBasemapPerformance(meta, createBasemapLayer(meta, {{ pane: PRIMARY_BASEMAP_PANE, opacity }}));
+    }}
+    function loadLazyStyle(key, href) {{
+      if (document.querySelector(`link[data-easygee-engine="${{key}}"]`)) return Promise.resolve();
+      return new Promise((resolve, reject) => {{
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        link.dataset.easygeeEngine = key;
+        link.addEventListener('load', () => resolve(), {{ once: true }});
+        link.addEventListener('error', () => {{ link.remove(); reject(new Error(`Failed to load ${{key}}`)); }}, {{ once: true }});
+        document.head.appendChild(link);
+      }});
+    }}
+    function loadLazyScript(key, src, ready) {{
+      if (ready()) return Promise.resolve();
+      if (lazyAssetPromises.has(key)) return lazyAssetPromises.get(key);
+      const promise = new Promise((resolve, reject) => {{
+        let script = document.querySelector(`script[data-easygee-engine="${{key}}"]`);
+        if (script && script.dataset.easygeeLoaded === 'true') script.remove();
+        script = document.querySelector(`script[data-easygee-engine="${{key}}"]`) || document.createElement('script');
+        const finish = () => {{
+          script.dataset.easygeeLoaded = 'true';
+          if (ready()) resolve();
+          else {{ script.remove(); reject(new Error(`Invalid ${{key}} asset`)); }}
+        }};
+        const fail = () => {{ script.remove(); reject(new Error(`Failed to load ${{key}}`)); }};
+        script.addEventListener('load', finish, {{ once: true }});
+        script.addEventListener('error', fail, {{ once: true }});
+        if (!script.isConnected) {{
+          script.src = src;
+          script.crossOrigin = 'anonymous';
+          script.dataset.easygeeEngine = key;
+          document.head.appendChild(script);
+        }}
+      }});
+      const tracked = promise.catch(error => {{ lazyAssetPromises.delete(key); throw error; }});
+      lazyAssetPromises.set(key, tracked);
+      return tracked;
+    }}
+    function cogEngineReady() {{
+      return Boolean(window.maplibregl?.Map && window.MaplibreCOGProtocol?.cogProtocol && window.MaplibreCOGProtocol?.getCogMetadata && L.maplibreGL);
+    }}
+    async function ensureCogEngine() {{
+      if (cogEngineReady() && window.__easygeeCogProtocolRegistered) {{
+        cogEngineStatus = 'ready';
+        return true;
+      }}
+      if (cogEnginePromise) return cogEnginePromise;
+      cogEngineStatus = 'loading';
+      cogEngineError = '';
+      cogEnginePromise = (async () => {{
+        await Promise.all([
+          loadLazyStyle('maplibre-css', COG_ENGINE_ASSETS.maplibreCss),
+          loadLazyScript('maplibre-js', COG_ENGINE_ASSETS.maplibreJs, () => Boolean(window.maplibregl?.Map)),
+        ]);
+        await Promise.all([
+          loadLazyScript('cog-protocol', COG_ENGINE_ASSETS.cogProtocolJs, () => Boolean(window.MaplibreCOGProtocol?.cogProtocol && window.MaplibreCOGProtocol?.getCogMetadata)),
+          loadLazyScript('maplibre-leaflet', COG_ENGINE_ASSETS.leafletAdapterJs, () => Boolean(L.maplibreGL)),
+        ]);
+        if (typeof window.maplibregl.supported === 'function' && !window.maplibregl.supported()) throw new Error('WebGL unavailable');
+        if (!window.__easygeeCogProtocolRegistered) {{
+          window.maplibregl.addProtocol('cog', window.MaplibreCOGProtocol.cogProtocol);
+          window.__easygeeCogProtocolRegistered = true;
+        }}
+        cogEngineStatus = 'ready';
+        return true;
+      }})().catch(error => {{
+        cogEnginePromise = null;
+        cogEngineStatus = 'error';
+        cogEngineError = String(error?.message || error || 'COG engine unavailable').slice(0, 200);
+        throw error;
+      }});
+      return cogEnginePromise;
+    }}
+    function basemapZoom(value, fallback) {{
+      const number = Number(value);
+      return Number.isFinite(number) ? Math.max(0, Math.min(24, Math.round(number))) : fallback;
+    }}
+    function normalizeBasemapBounds(value) {{
+      if (!Array.isArray(value) || value.length !== 4) return null;
+      const bounds = value.map(Number);
+      if (!bounds.every(Number.isFinite)) return null;
+      const [west, south, east, north] = bounds;
+      if (west < -180 || east > 180 || south < -90 || north > 90 || west >= east || south >= north) return null;
+      return bounds;
+    }}
+    function customBasemapIdentifier(value, fallback = '') {{
+      let id = String(value || fallback || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+      if (!id.startsWith('custom-')) id = `custom-${{id || Date.now().toString(36)}}`;
+      return id;
+    }}
+    function normalizeCustomBasemap(raw, index = 0) {{
+      if (!raw || typeof raw !== 'object') return null;
+      const type = String(raw.type || 'xyz').trim().toLowerCase();
+      const name = String(raw.name || '').trim().slice(0, 120);
+      const url = String(raw.url || '').trim().slice(0, 4096);
+      const sourceUrl = String(raw.sourceUrl || '').trim().slice(0, 4096);
+      if (!CUSTOM_BASEMAP_TYPES.has(type) || !name || !url || urlContainsCredentials(url) || urlContainsCredentials(sourceUrl)) return null;
+      const minZoom = basemapZoom(raw.minZoom, 0);
+      const maxZoom = Math.max(minZoom, basemapZoom(raw.maxZoom, 19));
+      const maxNativeZoom = Math.max(minZoom, Math.min(maxZoom, basemapZoom(raw.maxNativeZoom, maxZoom)));
+      const id = customBasemapIdentifier(raw.id, `custom-${{index + 1}}`);
+      const subdomains = String(raw.subdomains || '').trim().slice(0, 120);
+      const attribution = String(raw.attribution || '').trim().slice(0, 1000);
+      const bounds = normalizeBasemapBounds(raw.bounds);
+      const bandCount = Math.max(0, Math.min(1024, Math.round(Number(raw.bandCount) || 0)));
+      const options = {{ minZoom, maxZoom, maxNativeZoom, attribution, tms: type === 'tms' }};
+      if (subdomains) options.subdomains = subdomains.split(/[\s,]+/).filter(Boolean);
+      return {{
+        id,
+        name,
+        type,
+        custom: true,
+        thumb: `custom-${{type}}`,
+        url,
+        provider: String(raw.provider || '').trim().slice(0, 240),
+        service: String(raw.service || (type === 'pmtiles'
+          ? 'PMTiles raster archive · HTTP Range'
+          : type === 'cog'
+            ? 'Cloud Optimized GeoTIFF · HTTP Range'
+            : `${{type.toUpperCase()}} service`)).trim().slice(0, 240),
+        attribution,
+        sourceUrl,
+        note: String(raw.note || '').trim().slice(0, 240),
+        subdomains,
+        layers: String(raw.layers || '').trim().slice(0, 500),
+        styles: String(raw.styles || '').trim().slice(0, 500),
+        format: String(raw.format || 'image/png').trim().slice(0, 80),
+        version: String(raw.version || (type === 'wmts' ? '1.0.0' : '1.3.0')).trim().slice(0, 20),
+        tileMatrixSet: String(raw.tileMatrixSet || 'GoogleMapsCompatible').trim().slice(0, 160),
+        matrixPrefix: String(raw.matrixPrefix || '').trim().slice(0, 160),
+        minZoom,
+        maxZoom,
+        maxNativeZoom,
+        ...(bounds ? {{ bounds }} : {{}}),
+        ...(type === 'cog' ? {{ crs: String(raw.crs || 'EPSG:3857').trim().slice(0, 80), bandCount }} : {{}}),
+        transparent: raw.transparent !== false,
+        options,
+      }};
+    }}
+    function normalizeCustomBasemaps(value) {{
+      const seen = new Set();
+      return (Array.isArray(value) ? value : []).slice(0, 100).map(normalizeCustomBasemap).filter(meta => {{
+        if (!meta || seen.has(meta.id)) return false;
+        seen.add(meta.id);
+        return true;
+      }});
+    }}
+    function serializableCustomBasemap(meta) {{
+      const fields = ['id', 'name', 'type', 'url', 'provider', 'attribution', 'sourceUrl', 'note', 'subdomains', 'layers', 'styles', 'format', 'version', 'tileMatrixSet', 'matrixPrefix', 'minZoom', 'maxZoom', 'maxNativeZoom', 'bounds', 'crs', 'bandCount', 'transparent'];
+      return Object.fromEntries(fields.map(key => [key, meta?.[key]]).filter(([, value]) => value !== undefined && value !== ''));
+    }}
+    function customBasemapSignature(meta) {{
+      return JSON.stringify(serializableCustomBasemap(meta));
+    }}
+    function appendTilePath(url, path) {{
+      const parts = String(url || '').split('?');
+      const base = parts.shift().replace(/\/+$/, '');
+      const query = parts.join('?');
+      return `${{base}}${{path}}${{query ? `?${{query}}` : ''}}`;
+    }}
+    function arcgisTileUrl(meta) {{
+      const url = String(meta.url || '').trim();
+      return /\/tile\/\{{z\}}\/\{{y\}}\/\{{x\}}/i.test(url) ? url : appendTilePath(url, '/tile/{{z}}/{{y}}/{{x}}');
+    }}
+    function wmtsTileUrl(meta) {{
+      const source = String(meta.url || '').trim();
+      if (/\{{(?:TileMatrix|TileRow|TileCol)\}}/i.test(source)) {{
+        return source
+          .replace(/\{{TileMatrix\}}/gi, `${{meta.matrixPrefix || ''}}{{z}}`)
+          .replace(/\{{TileRow\}}/gi, '{{y}}')
+          .replace(/\{{TileCol\}}/gi, '{{x}}');
+      }}
+      const separator = source.includes('?') ? '&' : '?';
+      const params = [
+        'service=WMTS',
+        'request=GetTile',
+        `version=${{encodeURIComponent(meta.version || '1.0.0')}}`,
+        `layer=${{encodeURIComponent(meta.layers || '')}}`,
+        `style=${{encodeURIComponent(meta.styles || '')}}`,
+        `tilematrixset=${{encodeURIComponent(meta.tileMatrixSet || 'GoogleMapsCompatible')}}`,
+        `format=${{encodeURIComponent(meta.format || 'image/png')}}`,
+        `tilematrix=${{encodeURIComponent(meta.matrixPrefix || '')}}{{z}}`,
+        'tilerow={{y}}',
+        'tilecol={{x}}',
+      ];
+      return `${{source}}${{separator}}${{params.join('&')}}`;
+    }}
+    function discardPmtilesArchive(url) {{
+      const key = String(url || '').trim();
+      if (key) pmtilesArchives.delete(key);
+    }}
+    function getPmtilesArchive(url, options = {{}}) {{
+      if (!window.pmtiles?.PMTiles || !window.pmtiles?.leafletRasterLayer) {{
+        throw new Error('PMTiles engine unavailable');
+      }}
+      const key = String(url || '').trim();
+      if (options.refresh === true) pmtilesArchives.delete(key);
+      if (!pmtilesArchives.has(key)) pmtilesArchives.set(key, new window.pmtiles.PMTiles(key));
+      return pmtilesArchives.get(key);
+    }}
+    function discardCogSource(url) {{
+      const key = String(url || '').trim();
+      if (key) cogMetadataCache.delete(key);
+    }}
+    async function getCogSourceMetadata(url, options = {{}}) {{
+      const key = String(url || '').trim();
+      if (!key) throw new Error('COG URL is required');
+      await ensureCogEngine();
+      if (options.refresh === true) cogMetadataCache.delete(key);
+      if (!cogMetadataCache.has(key)) {{
+        const request = window.MaplibreCOGProtocol.getCogMetadata(key).catch(error => {{
+          cogMetadataCache.delete(key);
+          throw error;
+        }});
+        cogMetadataCache.set(key, request);
+      }}
+      return cogMetadataCache.get(key);
+    }}
+    function cogMapStyle(meta, overrideOptions = {{}}) {{
+      const sourceId = 'easygee-cog-source';
+      const layerId = 'easygee-cog-raster';
+      const opacity = Math.max(0, Math.min(1, Number(overrideOptions.opacity ?? 1)));
+      return {{
+        version: 8,
+        sources: {{
+          [sourceId]: {{
+            type: 'raster',
+            url: `cog://${{meta.url}}`,
+            tileSize: 256,
+            ...(meta.attribution ? {{ attribution: meta.attribution }} : {{}}),
+          }},
+        }},
+        layers: [{{
+          id: layerId,
+          source: sourceId,
+          type: 'raster',
+          paint: {{
+            'raster-opacity': opacity,
+            'raster-fade-duration': 0,
+            'raster-resampling': 'linear',
+          }},
+        }}],
+      }};
+    }}
+    function bindCogLayerEvents(group, glLayer) {{
+      const glMap = glLayer?.getMaplibreMap?.();
+      if (!glMap || glMap.__easygeeCogBound) return;
+      glMap.__easygeeCogBound = true;
+      let loaded = false;
+      let ready = false;
+      const markLoaded = event => {{
+        if (loaded) return;
+        if (event?.sourceId && event.sourceId !== 'easygee-cog-source') return;
+        if (event?.sourceDataType && event.sourceDataType !== 'content') return;
+        loaded = true;
+        group.fire('tileload', {{ source: 'cog', event }});
+      }};
+      glMap.on('sourcedata', markLoaded);
+      glMap.on('idle', () => {{
+        try {{
+          if (!glMap.getSource('easygee-cog-source') || !glMap.isSourceLoaded('easygee-cog-source')) return;
+          markLoaded({{ sourceId: 'easygee-cog-source', sourceDataType: 'content' }});
+          if (!ready) {{
+            ready = true;
+            group.fire('load', {{ source: 'cog' }});
+          }}
+        }} catch {{}}
+      }});
+      glMap.on('error', event => group.fire('tileerror', {{ source: 'cog', error: event?.error || event }}));
+    }}
+    function createCogBasemapLayer(meta, overrideOptions = {{}}) {{
+      const group = L.layerGroup();
+      group._easygeeCogLayer = null;
+      group._easygeeCogMount = null;
+      group._easygeeOpacity = Math.max(0, Math.min(1, Number(overrideOptions.opacity ?? 1)));
+      const mount = async () => {{
+        if (group._easygeeCogLayer) {{
+          window.requestAnimationFrame(() => bindCogLayerEvents(group, group._easygeeCogLayer));
+          return group._easygeeCogLayer;
+        }}
+        if (group._easygeeCogMount) return group._easygeeCogMount;
+        group._easygeeCogMount = ensureCogEngine().then(() => {{
+          const glLayer = L.maplibreGL({{
+            style: cogMapStyle(meta, {{ ...overrideOptions, opacity: group._easygeeOpacity }}),
+            interactive: false,
+            pane: overrideOptions.pane || 'tilePane',
+            attributionControl: false,
+            className: 'easygee-cog-canvas',
+            fadeDuration: 0,
+          }});
+          group._easygeeCogLayer = glLayer;
+          group.addLayer(glLayer);
+          if (map.hasLayer(group)) window.requestAnimationFrame(() => bindCogLayerEvents(group, glLayer));
+          return glLayer;
+        }}).catch(error => {{
+          group._easygeeCogMount = null;
+          group.fire('tileerror', {{ source: 'cog', error }});
+          if (currentBasemap === meta.id && map.hasLayer(group)) handleBasemapRuntimeFailure(meta, error);
+          throw error;
+        }});
+        return group._easygeeCogMount;
+      }};
+      group.on('add', () => {{ mount().catch(() => {{}}); }});
+      group.setOpacity = value => {{
+        group._easygeeOpacity = Math.max(0, Math.min(1, Number(value)));
+        const glMap = group._easygeeCogLayer?.getMaplibreMap?.();
+        try {{
+          if (glMap?.getLayer('easygee-cog-raster')) glMap.setPaintProperty('easygee-cog-raster', 'raster-opacity', group._easygeeOpacity);
+        }} catch {{}}
+        return group;
+      }};
+      return group;
+    }}
+    function tiandituWmtsUrl(layer, token) {{
+      return `https://t{{s}}.tianditu.gov.cn/${{layer}}_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${{layer}}&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={{z}}&TILEROW={{y}}&TILECOL={{x}}&tk=${{encodeURIComponent(token)}}`;
+    }}
+    function createTiandituBasemapLayer(meta, overrideOptions = {{}}) {{
+      if (!tiandituToken) throw new Error('Tianditu key required');
+      const options = {{ ...(meta.options || {{}}), ...overrideOptions, subdomains: '01234567' }};
+      const base = L.tileLayer(tiandituWmtsUrl(meta.tiandituBase, tiandituToken), {{ ...options, zIndex: 0 }});
+      const labels = L.tileLayer(tiandituWmtsUrl(meta.tiandituLabels, tiandituToken), {{ ...options, zIndex: 1 }});
+      const group = L.layerGroup([base, labels]);
+      [base, labels].forEach(layer => {{
+        layer.on('tileload', event => group.fire('tileload', event));
+        layer.on('load', event => group.fire('load', event));
+        layer.on('tileerror', event => group.fire('tileerror', event));
+      }});
+      group.setOpacity = value => {{
+        const opacity = Math.max(0, Math.min(1, Number(value)));
+        base.setOpacity(opacity);
+        labels.setOpacity(opacity);
+        return group;
+      }};
+      return group;
+    }}
+    function createBasemapLayer(meta, overrideOptions = {{}}) {{
+      const options = {{ ...(meta.options || {{}}), ...overrideOptions }};
+      if (isTiandituBasemap(meta)) return createTiandituBasemapLayer(meta, options);
+      if (meta.custom && meta.type === 'pmtiles') {{
+        return window.pmtiles.leafletRasterLayer(getPmtilesArchive(meta.url), options);
+      }}
+      if (meta.custom && meta.type === 'cog') return createCogBasemapLayer(meta, options);
+      if (meta.custom && meta.type === 'wms') {{
+        return L.tileLayer.wms(meta.url, {{
+          ...options,
+          layers: meta.layers,
+          styles: meta.styles || '',
+          format: meta.format || 'image/png',
+          version: meta.version || '1.3.0',
+          transparent: meta.transparent !== false,
+        }});
+      }}
+      const tileUrl = meta.custom && meta.type === 'arcgis'
+        ? arcgisTileUrl(meta)
+        : meta.custom && meta.type === 'wmts'
+          ? wmtsTileUrl(meta)
+          : meta.url;
+      return L.tileLayer(tileUrl, options);
+    }}
+    function tryCreateBasemapLayer(meta, overrideOptions = {{}}) {{
+      try {{
+        return createBasemapLayer(meta, overrideOptions);
+      }} catch {{
+        return null;
+      }}
+    }}
+    function setRasterLayerOpacity(layer, value) {{
+      const opacity = Math.max(0, Math.min(1, Number(value)));
+      if (!layer || !Number.isFinite(opacity)) return false;
+      if (typeof layer.setOpacity === 'function') {{
+        layer.setOpacity(opacity);
+        return true;
+      }}
+      if (typeof layer.eachLayer === 'function') {{
+        layer.eachLayer(child => {{
+          if (typeof child?.setOpacity === 'function') child.setOpacity(opacity);
+        }});
+        return true;
+      }}
+      return false;
+    }}
+
+    const BUILTIN_BASEMAPS = [
       {{
         id: 'OSM',
         nameKey: 'basemap.osm',
         noteKey: 'basemap.osmNote',
         thumb: 'osm',
+        provider: 'OpenStreetMap contributors',
+        service: 'OpenStreetMap Standard',
+        sourceUrl: 'https://www.openstreetmap.org/copyright',
         url: 'https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',
         options: {{ maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }}
       }},
@@ -6036,6 +8278,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         nameKey: 'basemap.light',
         noteKey: 'basemap.lightNote',
         thumb: 'light',
+        provider: 'CARTO · OpenStreetMap contributors',
+        service: 'CARTO Positron',
+        sourceUrl: 'https://carto.com/basemaps/',
         url: 'https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}.png',
         options: {{ maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }}
       }},
@@ -6044,6 +8289,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         nameKey: 'basemap.dark',
         noteKey: 'basemap.darkNote',
         thumb: 'dark',
+        provider: 'CARTO · OpenStreetMap contributors',
+        service: 'CARTO Dark Matter',
+        sourceUrl: 'https://carto.com/basemaps/',
         url: 'https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}.png',
         options: {{ maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }}
       }},
@@ -6052,6 +8300,9 @@ def render_html(state: dict, leaflet_src: str) -> str:
         nameKey: 'basemap.voyager',
         noteKey: 'basemap.voyagerNote',
         thumb: 'voyager',
+        provider: 'CARTO · OpenStreetMap contributors',
+        service: 'CARTO Voyager',
+        sourceUrl: 'https://carto.com/basemaps/',
         url: 'https://{{s}}.basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}.png',
         options: {{ maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }}
       }},
@@ -6060,26 +8311,194 @@ def render_html(state: dict, leaflet_src: str) -> str:
         nameKey: 'basemap.topo',
         noteKey: 'basemap.topoNote',
         thumb: 'topo',
+        provider: 'Esri',
+        serviceKey: 'basemap.topoCoverage',
+        sourceUrl: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer',
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{{z}}/{{y}}/{{x}}',
-        options: {{ maxZoom: 19, attribution: 'Tiles &copy; Esri' }}
+        options: {{ maxZoom: 19, maxNativeZoom: 13, attribution: 'Tiles &copy; Esri' }}
       }},
       {{
         id: 'Imagery',
         nameKey: 'basemap.imagery',
         noteKey: 'basemap.imageryNote',
         thumb: 'imagery',
+        provider: 'Esri',
+        service: 'World Imagery',
+        sourceUrl: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',
         options: {{ maxZoom: 19, attribution: 'Tiles &copy; Esri' }}
+      }},
+      {{
+        id: 'EsriClarity',
+        nameKey: 'basemap.esriClarity',
+        noteKey: 'basemap.esriClarityNote',
+        thumb: 'clarity',
+        provider: 'Esri',
+        service: 'World Imagery Clarity',
+        sourceUrl: 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer',
+        url: 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',
+        options: {{ maxZoom: 19, attribution: 'Tiles &copy; Esri (World Imagery Clarity)' }}
+      }},
+      {{
+        id: 'TiandituVector',
+        nameKey: 'basemap.tiandituVector',
+        noteKey: 'basemap.tiandituVectorNote',
+        thumb: 'tianditu-vector',
+        provider: '国家基础地理信息中心 · 天地图',
+        service: 'WMTS vec_w + cva_w',
+        sourceUrl: 'https://lbs.tianditu.gov.cn/server/MapService.html',
+        tiandituBase: 'vec',
+        tiandituLabels: 'cva',
+        options: {{ maxZoom: 22, maxNativeZoom: 18, attribution: '&copy; 天地图' }}
+      }},
+      {{
+        id: 'TiandituImagery',
+        nameKey: 'basemap.tiandituImagery',
+        noteKey: 'basemap.tiandituImageryNote',
+        thumb: 'tianditu-imagery',
+        provider: '国家基础地理信息中心 · 天地图',
+        service: 'WMTS img_w + cia_w',
+        sourceUrl: 'https://lbs.tianditu.gov.cn/server/MapService.html',
+        tiandituBase: 'img',
+        tiandituLabels: 'cia',
+        options: {{ maxZoom: 22, maxNativeZoom: 18, attribution: '&copy; 天地图' }}
+      }},
+      {{
+        id: 'TiandituTerrain',
+        nameKey: 'basemap.tiandituTerrain',
+        noteKey: 'basemap.tiandituTerrainNote',
+        thumb: 'tianditu-terrain',
+        provider: '国家基础地理信息中心 · 天地图',
+        service: 'WMTS ter_w + cta_w',
+        sourceUrl: 'https://lbs.tianditu.gov.cn/server/MapService.html',
+        tiandituBase: 'ter',
+        tiandituLabels: 'cta',
+        options: {{ maxZoom: 22, maxNativeZoom: 18, attribution: '&copy; 天地图' }}
       }}
     ];
-    const basemapLayers = new Map(BASEMAPS.map(meta => [meta.id, L.tileLayer(meta.url, meta.options)]));
+    let customBasemaps = [];
+    let defaultBasemapId = 'OSM';
+    let BASEMAPS = [...BUILTIN_BASEMAPS];
+    let primaryBasemapShown = STATE.basemapShown !== false;
+    let primaryBasemapOpacity = Number.isFinite(Number(STATE.basemapOpacity))
+      ? Math.max(0, Math.min(1, Number(STATE.basemapOpacity)))
+      : 1;
+    const basemapLayers = new Map();
+    BASEMAPS.forEach(meta => {{
+      const layer = tryCreateBasemapLayer(meta, {{ pane: PRIMARY_BASEMAP_PANE, opacity: primaryBasemapOpacity }});
+      if (layer) basemapLayers.set(meta.id, bindBasemapPerformance(meta, layer));
+    }});
     let currentBasemap = 'OSM';
-    basemapLayers.get(currentBasemap).addTo(map);
+    let basemapEditorId = null;
+    let testedBasemapSignature = '';
+    let testedCogDetails = null;
+    beginBasemapPerformance(BASEMAPS.find(meta => meta.id === currentBasemap), basemapLayers.get(currentBasemap));
+    if (primaryBasemapShown) basemapLayers.get(currentBasemap).addTo(map);
+    function handleBasemapRuntimeFailure(meta, error) {{
+      if (!meta || currentBasemap !== meta.id) return false;
+      failBasemapPerformance(meta);
+      const failedLayer = basemapLayers.get(meta.id);
+      if (failedLayer && map.hasLayer(failedLayer)) map.removeLayer(failedLayer);
+      const fallbackId = defaultBasemapId !== meta.id && basemapLayers.has(defaultBasemapId) ? defaultBasemapId : 'OSM';
+      const fallbackLayer = basemapLayers.get(fallbackId);
+      if (!fallbackLayer) return false;
+      const fallbackMeta = BASEMAPS.find(item => item.id === fallbackId);
+      beginBasemapPerformance(fallbackMeta, fallbackLayer);
+      setRasterLayerOpacity(fallbackLayer, primaryBasemapOpacity);
+      if (primaryBasemapShown && !map.hasLayer(fallbackLayer)) fallbackLayer.addTo(map);
+      currentBasemap = fallbackId;
+      cogEngineError = String(error?.message || error || 'COG layer failed').slice(0, 200);
+      renderBasemapChoices();
+      renderLayers();
+      updateInspector();
+      showModeKey('basemap.testFailed', {{ message: t('basemap.cogUnavailable') }}, true);
+      syncSessionState('cog-basemap-fallback');
+      return true;
+    }}
+    function rebuildBasemapRegistry(preferredBasemap = currentBasemap) {{
+      const nextBasemaps = [...BUILTIN_BASEMAPS, ...customBasemaps];
+      const nextLayers = new Map();
+      nextBasemaps.forEach(meta => {{
+        const layer = tryCreateBasemapLayer(meta, {{ pane: PRIMARY_BASEMAP_PANE, opacity: primaryBasemapOpacity }});
+        bindBasemapPerformance(meta, layer);
+        if (layer) nextLayers.set(meta.id, layer);
+      }});
+      const fallback = nextLayers.has(defaultBasemapId) ? defaultBasemapId : 'OSM';
+      let nextBasemap = nextLayers.has(preferredBasemap) ? preferredBasemap : fallback;
+      let nextLayer = nextLayers.get(nextBasemap) || nextLayers.get('OSM');
+      if (!nextLayer) return currentBasemap;
+      let nextMeta = nextBasemaps.find(item => item.id === nextBasemap);
+      beginBasemapPerformance(nextMeta, nextLayer);
+      fitCogBasemapBounds(nextMeta);
+      try {{
+        if (primaryBasemapShown) nextLayer.addTo(map);
+      }} catch {{
+        failBasemapPerformance(nextMeta);
+        nextBasemap = 'OSM';
+        nextLayer = nextLayers.get('OSM');
+        if (!nextLayer) return currentBasemap;
+        nextMeta = nextBasemaps.find(item => item.id === nextBasemap);
+        beginBasemapPerformance(nextMeta, nextLayer);
+        if (primaryBasemapShown) nextLayer.addTo(map);
+      }}
+      basemapLayers.forEach(layer => {{
+        if (layer !== nextLayer && map.hasLayer(layer)) map.removeLayer(layer);
+      }});
+      BASEMAPS = nextBasemaps;
+      basemapLayers.clear();
+      nextLayers.forEach((layer, id) => basemapLayers.set(id, layer));
+      currentBasemap = nextBasemap;
+      if ($('basemap-list')) renderBasemapChoices();
+      if ($('detail-name')) updateInspector();
+      return currentBasemap;
+    }}
     let aoiLayer = null;
+
+    function basemapMetaById(id) {{
+      const sourceId = String(id || '');
+      return [...BUILTIN_BASEMAPS, ...customBasemaps].find(meta => meta.id === sourceId) || null;
+    }}
+    function isBasemapOverlayLayer(meta) {{
+      return String(meta?.type || '').toLowerCase() === 'basemap-overlay';
+    }}
+    function basemapLayerDataset(meta) {{
+      if (!meta) return '';
+      const service = meta.serviceKey ? t(meta.serviceKey) : (meta.service || basemapDisplayNote(meta));
+      return [meta.provider, service].filter(Boolean).join(' · ');
+    }}
+    function primaryBasemapLayerModel() {{
+      const meta = currentBasemapMeta();
+      return {{
+        id: PRIMARY_BASEMAP_LAYER_ID,
+        name: basemapDisplayName(meta),
+        dataset: basemapLayerDataset(meta),
+        type: 'primary-basemap',
+        role: 'base',
+        sourceId: meta?.id || currentBasemap,
+        shown: primaryBasemapShown,
+        opacity: primaryBasemapOpacity,
+        styleProfile: 'basemap',
+      }};
+    }}
 
     function registerLayer(meta) {{
       const normalized = normalizeStateLayer(meta);
       if (!normalized) return null;
+      if (isBasemapOverlayLayer(normalized)) {{
+        const source = basemapMetaById(normalized.sourceId);
+        if (!source) return null;
+        const tile = tryCreateBasemapLayer(source, {{ opacity: normalized.opacity, pane: 'tilePane' }});
+        if (!tile) return null;
+        layerRegistry.set(normalized.id, {{ meta: normalized, tile, sourceId: source.id }});
+        if (normalized.shown) tile.addTo(map);
+        return tile;
+      }}
+      if (normalized.type === 'ee-restore-pending') {{
+        const group = L.layerGroup();
+        layerRegistry.set(normalized.id, {{ meta: normalized, tile: group }});
+        if (normalized.shown) group.addTo(map);
+        return group;
+      }}
       if (isUploadPlaceholderLayer(normalized)) {{
         const group = L.layerGroup();
         layerRegistry.set(normalized.id, {{ meta: normalized, tile: group, refresh: () => {{}} }});
@@ -6101,22 +8520,79 @@ def render_html(state: dict, leaflet_src: str) -> str:
       registerLayer(meta);
     }});
 
-    function addGeneratedLayer(meta) {{
+    function addGeneratedLayer(meta, options = {{}}) {{
       const existingIndex = STATE.layers.findIndex(layer => layer.id === meta.id);
       if (existingIndex >= 0) {{
         const existing = layerRegistry.get(meta.id);
         if (existing && map.hasLayer(existing.tile)) map.removeLayer(existing.tile);
         STATE.layers.splice(existingIndex, 1);
       }}
-      const nextMeta = normalizeStateLayer({{ ...meta, shown: true }});
+      const nextMeta = normalizeStateLayer({{ ...meta, shown: options.shown === undefined ? true : options.shown !== false }});
       STATE.layers.unshift(nextMeta);
       const tile = registerLayer(nextMeta);
-      if (!map.hasLayer(tile)) tile.addTo(map);
+      if (nextMeta.shown && !map.hasLayer(tile)) tile.addTo(map);
       $('layer-count').textContent = t('pill.layers', {{ count: layerCount() }});
       renderLayers();
       renderDatasets(filteredCatalog());
-      setActiveLayer(nextMeta.id);
-      syncSessionState('layer-added');
+      if (options.activate !== false) setActiveLayer(nextMeta.id);
+      if (options.sync !== false) syncSessionState('layer-added');
+      return nextMeta;
+    }}
+
+    function revealLayerPanel(id) {{
+      document.querySelector('.data-panel').classList.remove('open');
+      document.querySelector('.upload-panel').classList.remove('open');
+      document.querySelector('.basemap-panel').classList.remove('open');
+      document.querySelector('.right').classList.remove('open');
+      document.querySelector('.bottom').classList.remove('open');
+      document.querySelector('.layers-panel').classList.add('open');
+      syncToolState();
+      if (id) setActiveLayer(id);
+    }}
+    function addBasemapOverlay(sourceId) {{
+      const meta = basemapMetaById(sourceId);
+      if (!meta) return false;
+      if (isTiandituBasemap(meta) && !tiandituToken) return requestTiandituToken();
+      const existing = STATE.layers.find(layer => isBasemapOverlayLayer(layer) && layer.sourceId === meta.id);
+      if (existing) {{
+        setLayerVisibility(existing.id, true, {{ reveal: false, reason: 'basemap-overlay-visible' }});
+        revealLayerPanel(existing.id);
+        renderBasemapChoices();
+        return existing.id;
+      }}
+      const safeSourceId = String(meta.id || 'basemap').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'basemap';
+      const nextMeta = normalizeStateLayer({{
+        id: `basemap-overlay-${{safeSourceId}}-${{Date.now().toString(36)}}`,
+        name: basemapDisplayName(meta),
+        dataset: basemapLayerDataset(meta),
+        type: 'basemap-overlay',
+        role: 'overlay',
+        sourceId: meta.id,
+        shown: true,
+        opacity: 1,
+        styleProfile: 'basemap',
+      }});
+      const tile = registerLayer(nextMeta);
+      if (!tile) return false;
+      STATE.layers.unshift(nextMeta);
+      renderLayers();
+      renderBasemapChoices();
+      revealLayerPanel(nextMeta.id);
+      showModeKey('mode.basemapOverlayAdded', {{ basemap: nextMeta.name }});
+      logMsg('log.basemapOverlayAdded', {{ basemap: nextMeta.name }});
+      syncSessionState('basemap-overlay-added');
+      return nextMeta.id;
+    }}
+    function reloadBasemapOverlays(sourceId) {{
+      const overlays = STATE.layers.filter(layer => isBasemapOverlayLayer(layer) && layer.sourceId === sourceId);
+      overlays.forEach(meta => {{
+        const record = layerRegistry.get(meta.id);
+        if (record && map.hasLayer(record.tile)) map.removeLayer(record.tile);
+        layerRegistry.delete(meta.id);
+        registerLayer(meta);
+      }});
+      if (overlays.length) renderLayers();
+      return overlays.length;
     }}
 
     function aoiLayerModel() {{
@@ -6150,8 +8626,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
         summary,
       }};
     }}
-    function layerModels() {{
+    function operationalLayerModels() {{
       return [measurementsLayerModel(), aoiLayerModel(), ...STATE.layers].filter(Boolean);
+    }}
+    function layerModels() {{
+      return [...operationalLayerModels(), primaryBasemapLayerModel()];
     }}
     function layerCount() {{
       return layerModels().length;
@@ -6416,12 +8895,13 @@ def render_html(state: dict, leaflet_src: str) -> str:
       persistAoi();
       renderAoiLayer();
       renderLayers();
-      if (activeLayerId === AOI_LAYER_ID) setActiveLayer(STATE.layers[0]?.id || null, {{ reveal: false }});
+      if (activeLayerId === AOI_LAYER_ID) setActiveLayer(STATE.layers[0]?.id || PRIMARY_BASEMAP_LAYER_ID, {{ reveal: false }});
       syncSessionState('aoi-cleared');
       logMsg('log.aoiCleared');
       return true;
     }}
     function removeLayer(id) {{
+      if (id === PRIMARY_BASEMAP_LAYER_ID) return false;
       if (id === AOI_LAYER_ID) return clearAoi();
       if (id === MEASUREMENTS_LAYER_ID) return clearMeasurements();
       const index = STATE.layers.findIndex(layer => layer.id === id);
@@ -6432,7 +8912,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       layerRegistry.delete(id);
       let nextActive = null;
       if (activeLayerId === id) {{
-        nextActive = measurementsLayerModel()?.id || aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null;
+        nextActive = measurementsLayerModel()?.id || aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || PRIMARY_BASEMAP_LAYER_ID;
         activeLayerId = null;
       }}
       renderLayers();
@@ -6446,6 +8926,13 @@ def render_html(state: dict, leaflet_src: str) -> str:
 
     function refreshLayer(id, options = {{}}) {{
       if (!id) return false;
+      if (id === PRIMARY_BASEMAP_LAYER_ID) {{
+        rebuildBasemapRegistry(currentBasemap);
+        renderLayers();
+        if (activeLayerId === id) updateInspector();
+        syncSessionState(options.reason || 'basemap-refreshed');
+        return true;
+      }}
       if (id === AOI_LAYER_ID) {{
         if (!hasAoi()) return false;
         const layer = aoiLayerModel();
@@ -6469,6 +8956,20 @@ def render_html(state: dict, leaflet_src: str) -> str:
       const index = STATE.layers.findIndex(layer => layer.id === id);
       if (index < 0) return false;
       const meta = STATE.layers[index];
+      if (meta.type === 'ee-restore-pending') {{
+        showModeKey('mode.datasetBuilding', {{ dataset: meta.dataset || meta.name }}, true);
+        rebuildProfileLayer(meta).then(restored => {{
+          if (restored) {{
+            renderLayers();
+            setActiveLayer(id, {{ reveal: false }});
+            showModeKey('mode.datasetAdded', {{ count: 1 }});
+            syncSessionState('layer-restored');
+          }} else {{
+            showModeKey('mode.datasetFailed', {{ message: String(meta.dataset || meta.name).slice(0, 90) }}, true);
+          }}
+        }});
+        return true;
+      }}
       const previousRecord = layerRegistry.get(id);
       const shouldShow = previousRecord ? map.hasLayer(previousRecord.tile) : meta.shown !== false;
       if (previousRecord && map.hasLayer(previousRecord.tile)) map.removeLayer(previousRecord.tile);
@@ -6491,6 +8992,24 @@ def render_html(state: dict, leaflet_src: str) -> str:
 
     function setLayerVisibility(id, shown, options = {{}}) {{
       const nextShown = shown !== false;
+      if (id === PRIMARY_BASEMAP_LAYER_ID) {{
+        const layer = basemapLayers.get(currentBasemap);
+        if (!layer) return false;
+        primaryBasemapShown = nextShown;
+        if (nextShown) {{
+          setRasterLayerOpacity(layer, primaryBasemapOpacity);
+          if (!map.hasLayer(layer)) layer.addTo(map);
+          logMsg('log.layerOn', {{ layer: basemapDisplayName(currentBasemapMeta()) }});
+        }} else {{
+          if (map.hasLayer(layer)) map.removeLayer(layer);
+          logMsg('log.layerOff', {{ layer: basemapDisplayName(currentBasemapMeta()) }});
+        }}
+        renderLayers();
+        if (options.activate !== false) setActiveLayer(PRIMARY_BASEMAP_LAYER_ID, {{ reveal: options.reveal !== false }});
+        else updateInspector();
+        syncSessionState(options.reason || 'basemap-visibility');
+        return true;
+      }}
       if (id === AOI_LAYER_ID) {{
         if (!hasAoi()) return false;
         STATE.aoiShown = nextShown;
@@ -6500,7 +9019,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         if (nextShown && options.activate !== false) {{
           setActiveLayer(AOI_LAYER_ID, {{ reveal: options.reveal !== false }});
         }} else if (!nextShown && activeLayerId === AOI_LAYER_ID) {{
-          setActiveLayer(STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null, {{ reveal: false }});
+          setActiveLayer(STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || PRIMARY_BASEMAP_LAYER_ID, {{ reveal: false }});
         }} else {{
           updateInspector();
         }}
@@ -6515,7 +9034,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         if (nextShown && options.activate !== false) {{
           setActiveLayer(MEASUREMENTS_LAYER_ID, {{ reveal: options.reveal !== false }});
         }} else if (!nextShown && activeLayerId === MEASUREMENTS_LAYER_ID) {{
-          setActiveLayer(aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null, {{ reveal: false }});
+          setActiveLayer(aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || PRIMARY_BASEMAP_LAYER_ID, {{ reveal: false }});
         }} else {{
           updateInspector();
         }}
@@ -6524,6 +9043,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }}
       const record = layerRegistry.get(id);
       if (!record) return false;
+      const stateLayer = STATE.layers.find(item => item.id === id);
+      if (stateLayer) stateLayer.shown = nextShown;
       record.meta.shown = nextShown;
       if (nextShown) {{
         if (!map.hasLayer(record.tile)) record.tile.addTo(map);
@@ -6536,7 +9057,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       if (nextShown && options.activate !== false) {{
         setActiveLayer(id, {{ reveal: options.reveal !== false }});
       }} else if (!nextShown && activeLayerId === id) {{
-        setActiveLayer(measurementsLayerModel()?.id || aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null, {{ reveal: false }});
+        setActiveLayer(measurementsLayerModel()?.id || aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || PRIMARY_BASEMAP_LAYER_ID, {{ reveal: false }});
       }} else {{
         updateInspector();
       }}
@@ -6547,6 +9068,16 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function setLayerOpacity(id, value, options = {{}}) {{
       const opacity = Math.max(0, Math.min(1, Number(value)));
       if (!Number.isFinite(opacity)) return false;
+      if (id === PRIMARY_BASEMAP_LAYER_ID) {{
+        const layer = basemapLayers.get(currentBasemap);
+        if (!layer) return false;
+        primaryBasemapOpacity = opacity;
+        setRasterLayerOpacity(layer, opacity);
+        if (options.render !== false) renderLayers();
+        if (activeLayerId === id) updateInspector();
+        syncSessionState(options.reason || 'basemap-opacity');
+        return true;
+      }}
       if (id === AOI_LAYER_ID) {{
         if (!hasAoi()) return false;
         STATE.aoiStyle = normalizeAoiStyle({{ ...STATE.aoiStyle, opacity }});
@@ -6567,6 +9098,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }}
       const record = layerRegistry.get(id);
       if (!record) return false;
+      const stateLayer = STATE.layers.find(item => item.id === id);
+      if (stateLayer) stateLayer.opacity = opacity;
       record.meta.opacity = opacity;
       if (typeof record.tile.setOpacity === 'function') {{
         record.tile.setOpacity(opacity);
@@ -6579,7 +9112,142 @@ def render_html(state: dict, leaflet_src: str) -> str:
       return true;
     }}
 
+    function usableLayerBounds(bounds) {{
+      try {{
+        return Boolean(bounds && typeof bounds.isValid === 'function' && bounds.isValid());
+      }} catch {{
+        return false;
+      }}
+    }}
+    function layerBoundsFromValue(value) {{
+      if (usableLayerBounds(value)) return value;
+      const normalized = normalizeBounds(value);
+      if (normalized) return L.latLngBounds(normalized);
+      if (!Array.isArray(value) || value.length !== 4) return null;
+      const [west, south, east, north] = value.map(Number);
+      if (![west, south, east, north].every(Number.isFinite)) return null;
+      if (west >= east || south >= north || west < -180 || east > 180 || south < -90 || north > 90) return null;
+      return L.latLngBounds([[south, west], [north, east]]);
+    }}
+    function renderedVectorBounds(record) {{
+      const candidates = [record?.tile?.__vectorOverlay, record?.tile];
+      for (const candidate of candidates) {{
+        if (!candidate || typeof candidate.getBounds !== 'function') continue;
+        try {{
+          const bounds = candidate.getBounds();
+          if (usableLayerBounds(bounds)) return bounds;
+        }} catch {{}}
+      }}
+      const layers = typeof record?.tile?.getLayers === 'function' ? record.tile.getLayers() : [];
+      if (!layers.length) return null;
+      try {{
+        const bounds = L.featureGroup(layers).getBounds();
+        return usableLayerBounds(bounds) ? bounds : null;
+      }} catch {{
+        return null;
+      }}
+    }}
+    function measurementsLayerBounds() {{
+      const points = STATE.measurements.flatMap(item => [normalizeLatLngPair(item.start), normalizeLatLngPair(item.end)]).filter(Boolean);
+      if (!points.length) return null;
+      const bounds = L.latLngBounds(points);
+      return usableLayerBounds(bounds) ? bounds : null;
+    }}
+    function normalizedLayerZoom(value, fallback = 18) {{
+      const zoom = Number(value);
+      return Number.isFinite(zoom) ? Math.max(0, Math.min(22, zoom)) : fallback;
+    }}
+    function layerModelById(id) {{
+      if (id === PRIMARY_BASEMAP_LAYER_ID) return primaryBasemapLayerModel();
+      if (id === AOI_LAYER_ID) return aoiLayerModel();
+      if (id === MEASUREMENTS_LAYER_ID) return measurementsLayerModel();
+      return STATE.layers.find(layer => layer.id === id) || null;
+    }}
+    async function basemapLayerExtent(meta) {{
+      if (!meta) return null;
+      const explicit = layerBoundsFromValue(meta.bounds) || cogBasemapBounds(meta);
+      if (usableLayerBounds(explicit)) {{
+        return {{ bounds: explicit, maxZoom: Math.min(normalizedLayerZoom(meta.maxNativeZoom ?? meta.maxZoom), 18) }};
+      }}
+      if (meta.custom && meta.type === 'pmtiles') {{
+        const inspection = await inspectPmtilesArchive(meta, {{ requireVisibleTile: false }});
+        if (!inspection.ok) return null;
+        const header = inspection.header || {{}};
+        const values = [header.minLon, header.minLat, header.maxLon, header.maxLat].map(Number);
+        const bounds = layerBoundsFromValue(values);
+        if (!usableLayerBounds(bounds)) return null;
+        return {{ bounds, maxZoom: Math.min(normalizedLayerZoom(header.maxZoom ?? meta.maxNativeZoom), 18) }};
+      }}
+      if (meta.custom && meta.type === 'cog') return null;
+      return {{ bounds: L.latLngBounds([[-85.05112878, -180], [85.05112878, 180]]), maxZoom: 18 }};
+    }}
+    async function layerExtentById(id) {{
+      if (id === PRIMARY_BASEMAP_LAYER_ID) return basemapLayerExtent(currentBasemapMeta());
+      if (id === AOI_LAYER_ID) {{
+        const bounds = layerBoundsFromValue(STATE.aoi?.bounds);
+        return usableLayerBounds(bounds) ? {{ bounds, maxZoom: 18 }} : null;
+      }}
+      if (id === MEASUREMENTS_LAYER_ID) {{
+        const bounds = measurementsLayerBounds();
+        return usableLayerBounds(bounds) ? {{ bounds, maxZoom: 18 }} : null;
+      }}
+      const layer = STATE.layers.find(item => item.id === id);
+      if (!layer) return null;
+      if (isBasemapOverlayLayer(layer)) return basemapLayerExtent(basemapMetaById(layer.sourceId));
+      const record = layerRegistry.get(id);
+      if (isLocalVectorLayer(layer) && record?.tile?.__vectorReady) await record.tile.__vectorReady;
+      const rendered = renderedVectorBounds(record);
+      if (usableLayerBounds(rendered)) return {{ bounds: rendered, maxZoom: 18 }};
+      const candidates = [
+        layer.aoi?.bounds,
+        layer.bounds,
+        layer.recipe?.aoi?.bounds,
+        layer.recipe?.bounds,
+        layer.summary?.bounds,
+      ];
+      for (const candidate of candidates) {{
+        const bounds = layerBoundsFromValue(candidate);
+        if (usableLayerBounds(bounds)) return {{ bounds, maxZoom: 18 }};
+      }}
+      return null;
+    }}
+    async function zoomToLayer(id, options = {{}}) {{
+      const layerId = String(id || activeLayerId || '');
+      const layer = layerModelById(layerId);
+      if (!layer) return false;
+      showModeKey('mode.layerZooming', {{ layer: layer.name }}, true);
+      let extent = null;
+      try {{
+        extent = await layerExtentById(layerId);
+      }} catch {{
+        extent = null;
+      }}
+      if (!extent || !usableLayerBounds(extent.bounds)) {{
+        showModeKey('mode.layerExtentUnavailable', {{ layer: layer.name }});
+        logMsg('log.layerExtentUnavailable', {{ layer: layer.name }});
+        return false;
+      }}
+      const rawPadding = Number(options.padding ?? 36);
+      const padding = Number.isFinite(rawPadding) ? Math.max(0, Math.min(120, rawPadding)) : 36;
+      map.fitBounds(extent.bounds, {{
+        padding: [padding, padding],
+        maxZoom: normalizedLayerZoom(options.maxZoom ?? extent.maxZoom),
+        animate: options.animate !== false,
+        duration: 0.35,
+      }});
+      setActiveLayer(layerId, {{ reveal: false }});
+      updateScaleLine();
+      showModeKey('mode.layerZoomed', {{ layer: layer.name }});
+      logMsg('log.layerZoomed', {{ layer: layer.name }});
+      return true;
+    }}
+
     function selectLayer(id, options = {{}}) {{
+      if (id === PRIMARY_BASEMAP_LAYER_ID) {{
+        setActiveLayer(PRIMARY_BASEMAP_LAYER_ID, {{ reveal: options.reveal !== false }});
+        syncSessionState(options.reason || 'layer-selected');
+        return true;
+      }}
       if (id === AOI_LAYER_ID) {{
         if (!hasAoi()) return false;
         setActiveLayer(AOI_LAYER_ID, {{ reveal: options.reveal !== false }});
@@ -6676,32 +9344,39 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }}
     }}
     function renderLayers() {{
-      const models = layerModels();
-      $('layer-count').textContent = t('pill.layers', {{ count: models.length }});
-      if (!models.length) {{
-        $('layer-list').innerHTML = `<div class="empty-list">${{escapeHtml(t('layers.empty'))}}</div>`;
-        updateInspector();
-        return;
-      }}
-      $('layer-list').innerHTML = models.map(layer => {{
+      const operationalModels = operationalLayerModels();
+      const primaryModel = primaryBasemapLayerModel();
+      const models = [...operationalModels, primaryModel];
+      $('layer-count').textContent = t('pill.layersWithBasemap', {{ count: operationalModels.length }});
+      const layerCardHtml = layer => {{
         const kind = layerKind(layer);
         const isAoi = layer.id === AOI_LAYER_ID;
         const isMeasurements = layer.id === MEASUREMENTS_LAYER_ID;
-        const presets = isAoi ? [] : stylePresetOptions(layer);
+        const isPrimaryBasemap = layer.id === PRIMARY_BASEMAP_LAYER_ID;
+        const isBasemapOverlay = isBasemapOverlayLayer(layer);
+        const isBasemapLayer = isPrimaryBasemap || isBasemapOverlay;
+        const presets = isAoi || isBasemapLayer ? [] : stylePresetOptions(layer);
         let selectedPreset = layer.stylePreset || visualPreferences[layerStyleProfile(layer)] || 'default';
-        const preset = isAoi ? null : stylePresetForLayer(layer, selectedPreset);
+        const preset = isAoi || isBasemapLayer ? null : stylePresetForLayer(layer, selectedPreset);
         if (preset) selectedPreset = preset.id;
         const palette = isAoi ? [STATE.aoiStyle.color] : isMeasurements ? [DEFAULT_MEASUREMENTS_STYLE.color] : (preset?.visParams?.palette || layer.visParams?.palette || []);
-        const styleControl = isAoi
+        const styleControl = isBasemapLayer
+          ? ''
+          : isAoi
           ? `<div class="layer-style-row"><span>${{escapeHtml(t('label.color'))}}</span><input type="color" data-action="aoi-color" value="${{escapeHtml(STATE.aoiStyle.color)}}"></div>`
           : isMeasurements
             ? `<div class="layer-style-row"><span>${{escapeHtml(t('measurements.count'))}}</span><span>${{escapeHtml(t('measurements.summary', {{ count: layer.summary.count, total: layer.summary.totalLabel }}))}}</span></div>${{palettePreviewHtml(palette)}}`
-          : `<div class="layer-style-row"><span>${{escapeHtml(t('label.palette'))}}</span><select data-action="style-preset">${{presets.map(item => `<option value="${{escapeHtml(item.id)}}" ${{item.id === selectedPreset ? 'selected' : ''}}>${{escapeHtml(item.label)}}</option>`).join('')}}</select></div>${{palettePreviewHtml(palette)}}`;
+            : `<div class="layer-style-row"><span>${{escapeHtml(t('label.palette'))}}</span><select data-action="style-preset">${{presets.map(item => `<option value="${{escapeHtml(item.id)}}" ${{item.id === selectedPreset ? 'selected' : ''}}>${{escapeHtml(item.label)}}</option>`).join('')}}</select></div>${{palettePreviewHtml(palette)}}`;
         const removeTitle = isAoi ? t('tool.clearAoi') : isMeasurements ? t('tool.clearMeasurements') : t('tool.removeLayer');
         const refreshTitle = t('tool.refreshLayer');
-        const styleButton = isMeasurements ? '' : `<button class="layer-action icon-btn" data-action="style-focus" title="${{escapeHtml(t('tool.styleLayer'))}}" aria-label="${{escapeHtml(t('tool.styleLayer'))}}" type="button">{svg_icon("style")}</button>`;
+        const zoomButton = `<button class="layer-action icon-btn" data-action="zoom" title="${{escapeHtml(t('tool.zoomToLayer'))}}" aria-label="${{escapeHtml(t('tool.zoomToLayer'))}}" type="button">{svg_icon("zoom-layer")}</button>`;
+        const styleButton = isMeasurements || isBasemapLayer ? '' : `<button class="layer-action icon-btn" data-action="style-focus" title="${{escapeHtml(t('tool.styleLayer'))}}" aria-label="${{escapeHtml(t('tool.styleLayer'))}}" type="button">{svg_icon("style")}</button>`;
+        const sourceButton = isBasemapLayer ? `<button class="layer-action icon-btn" data-action="source" title="${{escapeHtml(t('tool.basemapSource'))}}" aria-label="${{escapeHtml(t('tool.basemapSource'))}}" type="button">{svg_icon("info")}</button>` : '';
+        const refreshButton = isPrimaryBasemap ? '' : `<button class="layer-action icon-btn" data-action="refresh" title="${{escapeHtml(refreshTitle)}}" aria-label="${{escapeHtml(refreshTitle)}}" type="button">{svg_icon("refresh")}</button>`;
+        const removeButton = isPrimaryBasemap ? '' : `<button class="layer-action icon-btn danger" data-action="remove" title="${{escapeHtml(removeTitle)}}" aria-label="${{escapeHtml(removeTitle)}}" type="button">{svg_icon("trash")}</button>`;
+        const itemClass = isPrimaryBasemap ? ' primary-basemap' : isBasemapOverlay ? ' basemap-overlay' : '';
         return `
-        <div class="layer-item" data-layer="${{escapeHtml(layer.id)}}">
+        <div class="layer-item${{itemClass}}${{layer.id === activeLayerId ? ' active' : ''}}" data-layer="${{escapeHtml(layer.id)}}">
           <div class="layer-top">
             <input type="checkbox" data-action="toggle" ${{layer.shown ? 'checked' : ''}} aria-label="${{escapeHtml(layer.name)}}">
             <div class="layer-copy">
@@ -6709,9 +9384,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
               <div class="layer-dataset">${{escapeHtml(layer.dataset)}}</div>
             </div>
             <div class="layer-actions">
+              ${{zoomButton}}
               ${{styleButton}}
-              <button class="layer-action icon-btn" data-action="refresh" title="${{escapeHtml(refreshTitle)}}" aria-label="${{escapeHtml(refreshTitle)}}" type="button">{svg_icon("refresh")}</button>
-              <button class="layer-action icon-btn danger" data-action="remove" title="${{escapeHtml(removeTitle)}}" aria-label="${{escapeHtml(removeTitle)}}" type="button">{svg_icon("trash")}</button>
+              ${{sourceButton}}
+              ${{refreshButton}}
+              ${{removeButton}}
             </div>
           </div>
           ${{styleControl}}
@@ -6721,31 +9398,59 @@ def render_html(state: dict, leaflet_src: str) -> str:
             <span data-opacity-label>${{Math.round(layer.opacity * 100)}}%</span>
           </div>
         </div>
-      `}}).join('');
+      `;
+      }};
+      const operationalHtml = operationalModels.length
+        ? operationalModels.map(layerCardHtml).join('')
+        : `<div class="empty-list">${{escapeHtml(t('layers.emptyOperational'))}}</div>`;
+      $('layer-list').innerHTML = `
+        <section class="layer-stack-group">
+          <div class="layer-group-heading">${{escapeHtml(t('section.operationalLayers'))}}<span>${{escapeHtml(t('pill.layers', {{ count: operationalModels.length }}))}}</span></div>
+          ${{operationalHtml}}
+        </section>
+        <section class="layer-stack-group">
+          <div class="layer-group-heading">${{escapeHtml(t('section.primaryBasemap'))}}<span>${{escapeHtml(t('section.primaryBasemapHint'))}}</span></div>
+          ${{layerCardHtml(primaryModel)}}
+        </section>`;
       document.querySelectorAll('.layer-item').forEach(item => {{
         const id = item.dataset.layer;
-        const record = layerRegistry.get(id);
         item.addEventListener('click', event => {{
-          if (event.target?.dataset?.action) return;
+          if (event.target.closest('[data-action]')) return;
           setActiveLayer(id);
         }});
         item.querySelector('[data-action="toggle"]').addEventListener('change', event => {{
-          const reason = id === AOI_LAYER_ID ? 'aoi-visibility' : id === MEASUREMENTS_LAYER_ID ? 'measurements-visibility' : 'layer-toggle';
+          const reason = id === PRIMARY_BASEMAP_LAYER_ID ? 'basemap-visibility' : id === AOI_LAYER_ID ? 'aoi-visibility' : id === MEASUREMENTS_LAYER_ID ? 'measurements-visibility' : 'layer-toggle';
           setLayerVisibility(id, event.target.checked, {{ reason }});
+        }});
+        item.querySelector('[data-action="zoom"]')?.addEventListener('click', async event => {{
+          event.stopPropagation();
+          const button = event.currentTarget;
+          button.disabled = true;
+          try {{
+            await zoomToLayer(id);
+          }} finally {{
+            button.disabled = false;
+          }}
         }});
         item.querySelector('[data-action="opacity"]').addEventListener('input', event => {{
           const value = Number(event.target.value);
-          const reason = id === AOI_LAYER_ID ? 'aoi-style' : id === MEASUREMENTS_LAYER_ID ? 'measurements-opacity' : 'layer-opacity';
+          const reason = id === PRIMARY_BASEMAP_LAYER_ID ? 'basemap-opacity' : id === AOI_LAYER_ID ? 'aoi-style' : id === MEASUREMENTS_LAYER_ID ? 'measurements-opacity' : 'layer-opacity';
           if (!setLayerOpacity(id, value, {{ render: false, reason }})) return;
           item.querySelector('[data-opacity-label]').textContent = `${{Math.round(value * 100)}}%`;
         }});
-        item.querySelector('[data-action="remove"]').addEventListener('click', event => {{
+        item.querySelector('[data-action="remove"]')?.addEventListener('click', event => {{
           event.stopPropagation();
           removeLayer(id);
         }});
-        item.querySelector('[data-action="refresh"]').addEventListener('click', event => {{
+        item.querySelector('[data-action="refresh"]')?.addEventListener('click', event => {{
           event.stopPropagation();
           refreshLayer(id);
+        }});
+        item.querySelector('[data-action="source"]')?.addEventListener('click', event => {{
+          event.stopPropagation();
+          const layer = models.find(model => model.id === id);
+          setActiveLayer(id, {{ reveal: false }});
+          setBasemapSourceOpen(true, layer?.sourceId || currentBasemap);
         }});
         item.querySelector('[data-action="style-focus"]')?.addEventListener('click', event => {{
           event.stopPropagation();
@@ -6776,21 +9481,32 @@ def render_html(state: dict, leaflet_src: str) -> str:
     function setActiveLayer(id, options = {{}}) {{
       activeLayerId = id || null;
       document.querySelectorAll('.layer-item').forEach(item => {{
-        item.style.borderColor = item.dataset.layer === id ? 'var(--accent)' : 'var(--line)';
-        item.style.background = item.dataset.layer === id ? 'var(--accent-soft)' : '#fff';
+        item.classList.toggle('active', item.dataset.layer === id);
       }});
       updateInspector();
       if (activeLayerId && options.reveal !== false) revealActiveBadge();
     }}
 
     function updateInspector() {{
+      if (activeLayerId === PRIMARY_BASEMAP_LAYER_ID) {{
+        const layer = primaryBasemapLayerModel();
+        $('active-name').textContent = layer.name;
+        $('active-dataset').textContent = layerBadgeDataset(layer.dataset);
+        setActiveBadgeLabel(layerBadgeTitle(layer.name, layer.dataset));
+        $('detail-name').textContent = layer.name;
+        $('detail-dataset').textContent = layer.dataset;
+        $('detail-type').textContent = t('basemap.primaryRole');
+        $('detail-recipe').textContent = '-';
+        $('detail-opacity').textContent = `${{Math.round(layer.opacity * 100)}}%`;
+        $('legend').innerHTML = `<div class="empty-list">${{escapeHtml(t('section.primaryBasemapHint'))}}</div>`;
+        return;
+      }}
       if (activeLayerId === AOI_LAYER_ID && hasAoi()) {{
         const layer = aoiLayerModel();
         $('active-name').textContent = layer.name;
         $('active-dataset').textContent = layerBadgeDataset(layer.dataset);
         const badgeLabel = layerBadgeTitle(layer.name, layer.dataset);
-        $('active-layer-badge').title = badgeLabel;
-        $('active-layer-badge').setAttribute('aria-label', badgeLabel);
+        setActiveBadgeLabel(badgeLabel);
         $('detail-name').textContent = layer.name;
         $('detail-dataset').textContent = layer.dataset;
         $('detail-type').textContent = 'AOI';
@@ -6805,8 +9521,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         $('active-name').textContent = layer.name;
         $('active-dataset').textContent = layerBadgeDataset(layer.dataset);
         const badgeLabel = layerBadgeTitle(layer.name, layer.dataset);
-        $('active-layer-badge').title = badgeLabel;
-        $('active-layer-badge').setAttribute('aria-label', badgeLabel);
+        setActiveBadgeLabel(badgeLabel);
         $('detail-name').textContent = layer.name;
         $('detail-dataset').textContent = t('measurements.summary', {{ count: summary.count, total: summary.totalLabel }});
         $('detail-type').textContent = 'Measurements';
@@ -6822,8 +9537,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
         $('active-name').textContent = 'EasyGEE';
         $('active-dataset').textContent = basemapLabel;
         const badgeLabel = `${{t('badge.noLayer')}} - ${{basemapLabel}}`;
-        $('active-layer-badge').title = badgeLabel;
-        $('active-layer-badge').setAttribute('aria-label', badgeLabel);
+        setActiveBadgeLabel(badgeLabel);
         $('detail-name').textContent = noLayer;
         $('detail-dataset').textContent = displayBasemapSource();
         $('detail-type').textContent = '-';
@@ -6836,16 +9550,15 @@ def render_html(state: dict, leaflet_src: str) -> str:
       $('active-name').textContent = layer.name;
       $('active-dataset').textContent = layerBadgeDataset(layer.dataset);
       const badgeLabel = layerBadgeTitle(layer.name, layer.dataset);
-      $('active-layer-badge').title = badgeLabel;
-      $('active-layer-badge').setAttribute('aria-label', badgeLabel);
+      setActiveBadgeLabel(badgeLabel);
       $('detail-name').textContent = layer.name;
       $('detail-dataset').textContent = layer.dataset;
-      $('detail-type').textContent = layer.type;
+      $('detail-type').textContent = isBasemapOverlayLayer(layer) ? t('basemap.overlayRole') : layer.type;
       $('detail-recipe').textContent = recipeSummary(layer.recipe);
       $('detail-opacity').textContent = `${{Math.round(layer.opacity * 100)}}%`;
       $('legend').innerHTML = (layer.legend || []).map(([color, label]) => `
         <div class="legend-row"><span class="swatch" style="background:${{escapeHtml(color)}}"></span><span>${{escapeHtml(label)}}</span></div>
-      `).join('');
+      `).join('') || (isBasemapOverlayLayer(layer) ? `<div class="empty-list">${{escapeHtml(layer.dataset)}}</div>` : '');
     }}
 
     function boundsFromCorners(a, b) {{
@@ -7176,7 +9889,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       measureMode = false;
       syncToolState();
       renderLayers();
-      if (activeLayerId === MEASUREMENTS_LAYER_ID) setActiveLayer(aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || null, {{ reveal: false }});
+      if (activeLayerId === MEASUREMENTS_LAYER_ID) setActiveLayer(aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || PRIMARY_BASEMAP_LAYER_ID, {{ reveal: false }});
       showModeKey('mode.measureCleared', {{}}, false);
       logMsg('log.measureCleared', {{ count }});
       syncSessionState('measurements-cleared');
@@ -7269,6 +9982,39 @@ def render_html(state: dict, leaflet_src: str) -> str:
       }}
     }}
 
+    function currentPerformanceEngine() {{
+      const meta = currentBasemapMeta();
+      const type = String(meta?.type || 'xyz').toLowerCase();
+      const diagnostics = publicBasemapPerformance(meta);
+      if (meta?.custom && type === 'cog') return {{
+        id: 'maplibre-cog',
+        renderer: `MapLibre {MAPLIBRE_VERSION}`,
+        protocol: `COG {COG_PROTOCOL_VERSION}`,
+        access: 'HTTP Range',
+        status: cogEngineStatus,
+        lazy: true,
+        crs: meta.crs || 'EPSG:3857',
+        ...(diagnostics ? {{ diagnostics }} : {{}}),
+      }};
+      if (meta?.custom && type === 'pmtiles') return {{
+        id: 'leaflet-pmtiles',
+        renderer: 'Leaflet',
+        protocol: `PMTiles {PMTILES_VERSION}`,
+        access: 'HTTP Range',
+        status: window.pmtiles?.PMTiles ? 'ready' : 'unavailable',
+        lazy: false,
+        ...(diagnostics ? {{ diagnostics }} : {{}}),
+      }};
+      return {{
+        id: 'leaflet-tiles',
+        renderer: 'Leaflet',
+        protocol: type.toUpperCase(),
+        access: 'XYZ tiles',
+        status: 'ready',
+        lazy: false,
+        ...(diagnostics ? {{ diagnostics }} : {{}}),
+      }};
+    }}
     function buildProjectState() {{
       const explicitAoi = hasAoi() ? cloneAoi(STATE.aoi) : null;
       const processingAoi = currentProcessingAoi();
@@ -7284,6 +10030,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
         center: [map.getCenter().lat, map.getCenter().lng],
         zoom: map.getZoom(),
         basemap: currentBasemap,
+        basemapShown: primaryBasemapShown,
+        basemapOpacity: primaryBasemapOpacity,
+        defaultBasemap: defaultBasemapId,
+        customBasemaps: customBasemaps.map(serializableCustomBasemap),
+        performanceEngine: currentPerformanceEngine(),
         activeLayerId,
         bounds: processingBounds,
         aoiBounds: explicitAoi ? explicitAoi.bounds : null,
@@ -7310,6 +10061,8 @@ def render_html(state: dict, leaflet_src: str) -> str:
           name: layer.name,
           dataset: layer.dataset,
           type: layer.type,
+          ...(layer.role ? {{ role: layer.role }} : {{}}),
+          ...(layer.sourceId ? {{ sourceId: layer.sourceId }} : {{}}),
           shown: layerRegistry.has(layer.id) ? map.hasLayer(layerRegistry.get(layer.id).tile) : Boolean(layer.shown),
           opacity: layer.opacity,
           styleProfile: layer.styleProfile || layerStyleProfile(layer),
@@ -7352,6 +10105,56 @@ def render_html(state: dict, leaflet_src: str) -> str:
     }}
     async function executeSessionAction(action) {{
       const type = String(action?.type || action?.action || '').toLowerCase();
+      if (type === 'setbasemap' || type === 'set-basemap') {{
+        return setBasemap(String(action.basemapId || action.id || action.basemap || ''));
+      }}
+      if (type === 'addbasemapoverlay' || type === 'add-basemap-overlay') {{
+        return addBasemapOverlay(String(action.basemapId || action.sourceId || action.id || action.basemap || ''));
+      }}
+      if (type === 'setdefaultbasemap' || type === 'set-default-basemap') {{
+        return setDefaultBasemap(String(action.basemapId || action.id || action.basemap || ''));
+      }}
+      if (type === 'addcustombasemap' || type === 'add-custom-basemap' || type === 'updatecustombasemap' || type === 'update-custom-basemap') {{
+        const raw = action.basemap && typeof action.basemap === 'object' ? action.basemap : action;
+        const requestedId = String(raw.id || action.basemapId || '').trim();
+        const editing = type.startsWith('update');
+        let meta = normalizeCustomBasemap({{ ...raw, id: requestedId || createCustomBasemapId(raw.name) }}, customBasemaps.length);
+        if (!meta || !validHttpTemplate(meta.url)) return false;
+        const index = customBasemaps.findIndex(item => item.id === meta.id);
+        if (editing && index < 0) return false;
+        const previous = index >= 0 ? customBasemaps[index] : null;
+        const willActivate = action.activate !== false || currentBasemap === meta.id;
+        if (meta.type === 'pmtiles') {{
+          const inspection = await inspectPmtilesArchive(meta, {{ refresh: true, requireVisibleTile: willActivate }});
+          if (!inspection.ok) return false;
+          meta = normalizeCustomBasemap({{
+            ...meta,
+            minZoom: inspection.header?.minZoom,
+            maxZoom: inspection.header?.maxZoom,
+            maxNativeZoom: inspection.header?.maxZoom,
+          }}, customBasemaps.length);
+          if (!meta) return false;
+        }}
+        if (meta.type === 'cog') {{
+          const inspection = await inspectCogSource(meta, {{ refresh: true, requireVisibleTile: willActivate, fitBounds: willActivate }});
+          if (!inspection.ok) return false;
+          meta = inspection.meta;
+          if (!meta) return false;
+        }}
+        if (previous?.type === 'pmtiles' && (meta.type !== 'pmtiles' || previous.url !== meta.url)) {{
+          discardPmtilesArchive(previous.url);
+        }}
+        if (previous?.type === 'cog' && (meta.type !== 'cog' || previous.url !== meta.url)) discardCogSource(previous.url);
+        if (index >= 0) customBasemaps.splice(index, 1, meta);
+        else customBasemaps.push(meta);
+        customBasemaps = normalizeCustomBasemaps(customBasemaps);
+        rebuildBasemapRegistry(action.activate === false ? currentBasemap : meta.id);
+        syncSessionState(editing ? 'custom-basemap-updated' : 'custom-basemap-added');
+        return true;
+      }}
+      if (type === 'removecustombasemap' || type === 'remove-custom-basemap') {{
+        return removeCustomBasemap(String(action.basemapId || action.id || ''), {{ confirm: false }});
+      }}
       if (type === 'addlayer' || type === 'add-layer') {{
         if (action.layer) {{
           addGeneratedLayer(action.layer);
@@ -7391,6 +10194,11 @@ def render_html(state: dict, leaflet_src: str) -> str:
         const layerId = String(action.layerId || action.id || activeLayerId || '');
         if (!layerId) return false;
         return selectLayer(layerId, {{ reveal: action.reveal !== false }});
+      }}
+      if (type === 'zoomtolayer' || type === 'zoom-to-layer' || type === 'zoomlayer' || type === 'zoom-layer') {{
+        const layerId = String(action.layerId || action.id || activeLayerId || '');
+        if (!layerId) return false;
+        return zoomToLayer(layerId, action.options || action);
       }}
       if (type === 'refreshlayer' || type === 'refresh-layer' || type === 'reloadlayer' || type === 'reload-layer') {{
         const layerId = String(action.layerId || action.id || activeLayerId || '');
@@ -7489,21 +10297,37 @@ def render_html(state: dict, leaflet_src: str) -> str:
       logMsg('log.home');
     }});
     function setBasemap(nextBasemap) {{
+      const nextMeta = BASEMAPS.find(item => item.id === nextBasemap);
+      if (!nextMeta) return false;
+      if (isTiandituBasemap(nextMeta) && !tiandituToken) return requestTiandituToken();
       const nextLayer = basemapLayers.get(nextBasemap);
-      if (!nextLayer) return;
+      if (!nextLayer) return false;
       if (nextBasemap === currentBasemap) {{
+        primaryBasemapShown = true;
+        setRasterLayerOpacity(nextLayer, primaryBasemapOpacity);
+        if (!map.hasLayer(nextLayer)) nextLayer.addTo(map);
+        fitCogBasemapBounds(nextMeta);
         renderBasemapChoices();
+        renderLayers();
         updateInspector();
-        return;
+        syncSessionState('basemap-visible');
+        return true;
       }}
+      beginBasemapPerformance(nextMeta, nextLayer);
+      fitCogBasemapBounds(nextMeta);
       const currentLayer = basemapLayers.get(currentBasemap);
       if (currentLayer && map.hasLayer(currentLayer)) map.removeLayer(currentLayer);
+      primaryBasemapShown = true;
+      setRasterLayerOpacity(nextLayer, primaryBasemapOpacity);
       if (!map.hasLayer(nextLayer)) nextLayer.addTo(map);
       currentBasemap = nextBasemap;
       renderBasemapChoices();
+      renderLayers();
       updateInspector();
       showModeKey('mode.basemap', {{ basemap: displayBasemapName() }});
       logMsg('log.basemap', {{ basemap: displayBasemapName() }});
+      syncSessionState('basemap-changed');
+      return true;
     }}
     function toggleBasemapPanel() {{
       const panel = document.querySelector('.basemap-panel');
@@ -7522,6 +10346,32 @@ def render_html(state: dict, leaflet_src: str) -> str:
     $('basemap-close-btn').addEventListener('click', () => {{
       document.querySelector('.basemap-panel').classList.remove('open');
       syncToolState();
+    }});
+    $('basemap-add-btn').addEventListener('click', () => openBasemapEditor());
+    $('tianditu-auth-toggle').addEventListener('click', () => {{
+      const opening = !$('tianditu-auth').classList.contains('open');
+      if (opening && tiandituToken) tiandituKeyEditing = false;
+      renderTiandituAuth();
+      setTiandituAuthOpen(opening);
+    }});
+    $('tianditu-token-change').addEventListener('click', editTiandituToken);
+    $('tianditu-token-persistence').addEventListener('click', toggleTiandituPersistence);
+    $('tianditu-token-apply').addEventListener('click', applyTiandituToken);
+    $('tianditu-token').addEventListener('keydown', event => {{
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      applyTiandituToken();
+    }});
+    $('basemap-editor-close').addEventListener('click', closeBasemapEditor);
+    $('basemap-form-type').addEventListener('change', updateBasemapTypeFields);
+    $('basemap-editor').querySelectorAll('input, select').forEach(field => {{
+      field.addEventListener('input', invalidateBasemapTest);
+      field.addEventListener('change', invalidateBasemapTest);
+    }});
+    $('basemap-test-btn').addEventListener('click', () => testBasemapForm());
+    $('basemap-editor').addEventListener('submit', event => {{
+      event.preventDefault();
+      saveBasemapForm();
     }});
     function toggleMeasureMode() {{
       measureMode = !measureMode;
@@ -7658,8 +10508,13 @@ def render_html(state: dict, leaflet_src: str) -> str:
     $('drive-btn').addEventListener('click', openDriveTarget);
     $('lang-btn').addEventListener('click', () => setLanguage(currentLang === 'zh' ? 'en' : 'zh'));
     $('active-layer-badge').addEventListener('click', () => {{
-      if ($('active-layer-badge').classList.contains('collapsed')) revealActiveBadge(0);
-      else collapseActiveBadge();
+      setBasemapSourceOpen(!basemapSourceOpen, currentBasemap);
+    }});
+    $('basemap-source-close').addEventListener('click', () => setBasemapSourceOpen(false));
+    document.addEventListener('pointerdown', event => {{
+      if (!basemapSourceOpen) return;
+      if ($('active-layer-badge').contains(event.target) || $('basemap-source-card').contains(event.target)) return;
+      setBasemapSourceOpen(false);
     }});
     document.querySelectorAll('[data-close-panel]').forEach(button => {{
       button.addEventListener('click', () => {{
@@ -7674,6 +10529,10 @@ def render_html(state: dict, leaflet_src: str) -> str:
         return;
       }}
       if (event.key !== 'Escape') return;
+      if (basemapSourceOpen) {{
+        setBasemapSourceOpen(false);
+        return;
+      }}
       if (drawAoiMode || drawPolygonMode) {{
         stopDrawAoiMode(true);
         return;
@@ -7710,6 +10569,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     map.on('zoomend moveend', () => {{
       $('zoom-value').textContent = map.getZoom();
       updateScaleLine();
+      renderBasemapSourceDetails();
     }});
     window.EasyGEE = {{
       getProjectState: () => buildProjectState(),
@@ -7732,6 +10592,19 @@ def render_html(state: dict, leaflet_src: str) -> str:
       getDriveUrl: () => driveTargetUrl(),
       openDrive: () => openDriveTarget(),
       getSelectedDataset: () => selectedDatasetContext(),
+      getBasemaps: () => BASEMAPS.map(meta => meta.custom
+        ? serializableCustomBasemap(meta)
+        : {{ id: meta.id, name: basemapDisplayName(meta), provider: meta.provider, service: meta.service || meta.serviceKey, minZoom: meta.options?.minZoom ?? 0, maxZoom: meta.options?.maxZoom, maxNativeZoom: meta.options?.maxNativeZoom ?? meta.options?.maxZoom, builtIn: true }}),
+      getCurrentBasemap: () => currentBasemap,
+      getDefaultBasemap: () => defaultBasemapId,
+      getPerformanceEngine: () => currentPerformanceEngine(),
+      setBasemap: id => setBasemap(String(id || '')),
+      addBasemapOverlay: id => addBasemapOverlay(String(id || currentBasemap || '')),
+      setDefaultBasemap: id => setDefaultBasemap(String(id || '')),
+      addCustomBasemap: basemap => executeSessionAction({{ type: 'addCustomBasemap', basemap }}),
+      updateCustomBasemap: basemap => executeSessionAction({{ type: 'updateCustomBasemap', basemap }}),
+      removeCustomBasemap: id => removeCustomBasemap(String(id || ''), {{ confirm: false }}),
+      openBasemapEditor: id => openBasemapEditor(id || null),
       extractNdvi: options => extractNdviForCurrentAoi(options || {{}}),
       exportNdviToDrive: options => exportNdviToDrive(options || {{}}),
       addGeneratedLayer: meta => addGeneratedLayer(meta),
@@ -7739,6 +10612,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
       hideLayer: id => setLayerVisibility(String(id || activeLayerId || ''), false),
       setLayerVisibility: (id, shown) => setLayerVisibility(String(id || activeLayerId || ''), shown !== false),
       setLayerOpacity: (id, opacity) => setLayerOpacity(String(id || activeLayerId || ''), opacity),
+      zoomToLayer: (id, options) => zoomToLayer(String(id || activeLayerId || ''), options || {{}}),
       refreshLayer: id => refreshLayer(String(id || activeLayerId || '')),
       selectLayer: id => selectLayer(String(id || activeLayerId || '')),
       syncState: reason => syncSessionState(reason || 'manual'),
@@ -7756,7 +10630,7 @@ def render_html(state: dict, leaflet_src: str) -> str:
     map.whenReady(() => {{
       setTimeout(() => {{
         map.invalidateSize(true);
-        resetHomeView();
+        if (!restoreProfileMapView()) resetHomeView();
         updateScaleLine();
       }}, 180);
     }});
@@ -7779,16 +10653,22 @@ def render_html(state: dict, leaflet_src: str) -> str:
 """
 
 
-def write_console(output: Path, state: dict, leaflet_src: str) -> None:
+def write_console(
+    output: Path,
+    state: dict,
+    leaflet_src: str,
+    pmtiles_src: str = PMTILES_CDN,
+    cog_engine_assets: dict[str, str] | None = None,
+) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(render_html(state, leaflet_src), encoding="utf-8")
+    output.write_text(render_html(state, leaflet_src, pmtiles_src, cog_engine_assets), encoding="utf-8")
 
 
 def smoke() -> int:
     with tempfile.TemporaryDirectory(prefix="easygee-map-console-") as tmp:
         output = Path(tmp) / "index.html"
         state = sample_state("demo-project", "EasyGEE Smoke Console")
-        write_console(output, state, LEAFLET_CDN)
+        write_console(output, state, LEAFLET_CDN, PMTILES_CDN)
         text = output.read_text(encoding="utf-8")
         required = [
             "EasyGEE Smoke Console",
@@ -7802,6 +10682,29 @@ def smoke() -> int:
             "quota-stat-grid",
             "STATE =",
             ".leaflet-tile",
+            "EsriClarity",
+            "basemap-source-card",
+            "basemapThumbSvg",
+            "source.trigger",
+            "basemap-editor",
+            "addCustomBasemap",
+            "customBasemaps",
+            "PMTiles (raster)",
+            "pmtiles.leafletRasterLayer",
+            "HTTP Range",
+            "maxNativeZoom: 13",
+            "COG (MapLibre WebGL)",
+            "COG_ENGINE_ASSETS",
+            "MaplibreCOGProtocol.getCogMetadata",
+            "L.maplibreGL",
+            "maplibre-cog",
+            "basemap-source-performance",
+            "beginBasemapPerformance",
+            "TiandituImagery",
+            "TIANDITU_TOKEN_STORAGE_KEY",
+            "TILEMATRIXSET=w",
+            "collectBasemapNetworkPerformance",
+            "const AGENT_PROTOCOL_VERSION = 5;",
         ]
         missing = [item for item in required if item not in text]
         if missing:
@@ -7856,6 +10759,8 @@ def main() -> int:
     parser.add_argument("--catalog-cache-hours", type=int, default=CATALOG_CACHE_MAX_AGE_HOURS, help="Official STAC cache age")
     parser.add_argument("--catalog-fetch-seconds", type=int, default=CATALOG_FETCH_SECONDS, help="Official STAC refresh budget")
     parser.add_argument("--no-local-leaflet", action="store_true", help="Use the Leaflet CDN instead of downloading a local preview copy")
+    parser.add_argument("--no-local-pmtiles", action="store_true", help="Use the PMTiles CDN instead of downloading a local preview copy")
+    parser.add_argument("--no-local-cog-engine", action="store_true", help="Keep the lazy MapLibre COG engine on pinned CDNs instead of downloading local preview copies")
     parser.add_argument("--json", action="store_true", help="Print a credential-safe output summary as JSON")
     parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args()
@@ -7886,7 +10791,9 @@ def main() -> int:
         minutes=args.quota_minutes,
     )
     leaflet_src = LEAFLET_CDN if args.no_local_leaflet else ensure_leaflet_js(args.output.parent)
-    write_console(args.output, state, leaflet_src)
+    pmtiles_src = PMTILES_CDN if args.no_local_pmtiles else ensure_pmtiles_js(args.output.parent)
+    cog_assets = cog_engine_cdn_assets() if args.no_local_cog_engine else ensure_cog_engine_assets(args.output.parent)
+    write_console(args.output, state, leaflet_src, pmtiles_src, cog_assets)
     plan = ConsolePlan(
         output=str(args.output),
         project=args.project,
