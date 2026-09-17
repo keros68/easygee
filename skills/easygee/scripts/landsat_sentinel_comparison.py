@@ -279,7 +279,8 @@ def _make_html(case: dict[str, Any], output: Path) -> dict[str, Any]:
     const center = {json.dumps([CENTER[1], CENTER[0]])};
     const panels = {json.dumps(panel_data, ensure_ascii=False)};
     panels.forEach((panel) => {{
-      const map = L.map(panel.id, {{ zoomControl: false, scrollWheelZoom: false }}).setView(center, 12);
+      const map = L.map(panel.id, {{ zoomControl: false, scrollWheelZoom: false, attributionControl: false }}).setView(center, 12);
+      L.control.attribution({{ prefix: false }}).addTo(map);
       L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
         maxZoom: 19, attribution: '&copy; OpenStreetMap contributors', opacity: 0.55
       }}).addTo(map);

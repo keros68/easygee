@@ -21,7 +21,7 @@ EasyGEE 把 Google Earth Engine、geemap、GeoMaster 方法知识和本地浏览
 - 把完整任务拆成数据角色组合，例如洪水风险的灾情、长期基线、地形、降雨和人口/建筑暴露，并支持候选比较与最终资产核验。
 - 标准化 Earth Engine / geemap 授权流程，不暴露 OAuth token、验证码、凭据文件或 service account key。
 - 查询 Earth Engine 项目配额和用量，并把结果转成 Agent 可读的摘要。
-- 生成可持久化的 EasyGEE Map Console，用于 AOI 绘制、图层叠加、底图配置和视觉检查；地图视图、收藏、自定义底图与近期图层按本机用户和项目恢复。
+- 生成可持久化的 EasyGEE 地图工作台（Map Console），用于 AOI 绘制、图层叠加、底图配置和视觉检查；地图视图、收藏、自定义底图与近期图层按本机用户和项目恢复。在 EasyGEE 语境下，“打开地图”“地图工作台”和“地图控制台”都指向它。
 - 支持 XYZ、TMS、ArcGIS、WMS、WMTS、栅格 PMTiles 与 COG 数据源，并内置天地图矢量、影像和地形预设；底图可叠加到图层后调整顺序、可见性和不透明度。
 - 使用 HTTP Range、会话缓存和按需加载的 MapLibre WebGL 引擎加速 PMTiles/COG，并只向 Agent 同步精简性能摘要，影像字节与瓦片日志留在本地数据平面。
 - 内置 GeoMaster skill，覆盖 CRS、本地 GIS、遥感、机器学习、STAC/COG、科学领域方法和排错经验。
@@ -43,7 +43,7 @@ easygee/
 ├── hooks/               # Hook 配置与轻量脚本
 ├── scripts/             # EasyGEE MCP server 启动入口
 ├── skills/
-│   ├── easygee/         # GEE / geemap / 地图控制台与遥感方法工作流
+│   ├── easygee/         # GEE / geemap / 地图工作台与遥感方法工作流
 │   │   ├── references/  # QA、HLS、SAR、时间合成和 GeoAI 方法资料
 │   │   └── scripts/     # 数据检索、任务路由、案例和离线评测
 │   ├── geomaster/       # 本地 GIS 与遥感方法知识
@@ -96,7 +96,7 @@ python C:\Users\Liang\.codex\skills\.system\plugin-creator\scripts\validate_plug
 ```text
 帮我授权 geemap 到 example-ee-project-123456
 
-打开 EasyGEE 地图，我想先看看北京朝阳公园附近，然后手动画一个 AOI
+打开地图工作台，我想先看看北京朝阳公园附近，然后手动画一个 AOI
 
 我想做北京朝阳公园 2024 年夏季 NDVI，帮我选择合适的 GEE 数据集并解释为什么
 

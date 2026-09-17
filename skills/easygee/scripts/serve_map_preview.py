@@ -29,6 +29,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from xml.etree import ElementTree
 
+from easygee_project import write_text_atomic_with_fallback
+
 
 @dataclass(frozen=True)
 class PreviewPlan:
@@ -384,10 +386,13 @@ def read_secret_store_unlocked() -> dict[str, object]:
 
 def write_secret_store_unlocked(store: dict[str, object]) -> None:
     path = secret_store_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f"{path.name}.tmp")
-    temporary.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(temporary, path)
+    write_text_atomic_with_fallback(
+        path,
+        json.dumps(store, ensure_ascii=False, indent=2),
+        temporary=temporary,
+        replace=os.replace,
+    )
 
 
 def load_tianditu_secret() -> str:
@@ -1072,10 +1077,13 @@ def read_profile_unlocked() -> dict[str, object]:
 
 def write_profile_unlocked(profile: dict[str, object]) -> None:
     path = profile_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f"{path.name}.tmp")
-    temporary.write_text(json.dumps(normalize_profile(profile), ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(temporary, path)
+    write_text_atomic_with_fallback(
+        path,
+        json.dumps(normalize_profile(profile), ensure_ascii=False, indent=2),
+        temporary=temporary,
+        replace=os.replace,
+    )
 
 
 def load_profile() -> dict[str, object]:
@@ -1147,6 +1155,21 @@ def sanitize_recent_layers(value: object) -> list[dict[str, object]]:
         if safe:
             layers.append(safe)  # type: ignore[arg-type]
     return layers[:50]
+
+
+def sanitize_layer_order(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in value[:100]:
+        if not isinstance(item, str):
+            continue
+        layer_id = item.strip()[:160]
+        if layer_id and layer_id not in seen:
+            seen.add(layer_id)
+            result.append(layer_id)
+    return result
 
 
 def sanitize_recent_tasks(value: object) -> list[dict[str, object]]:
@@ -1295,6 +1318,8 @@ def merge_profile_with_state(state: dict[str, object]) -> dict[str, object]:
         layers = sanitize_recent_layers(layers_value)
         if isinstance(layers_value, list):
             entry["recentLayers"] = layers
+        if isinstance(state.get("layerOrder"), list):
+            entry["layerOrder"] = sanitize_layer_order(state.get("layerOrder"))
         tasks_value = state.get("tasks")
         if isinstance(tasks_value, list):
             entry["tasks"] = sanitize_recent_tasks(tasks_value)

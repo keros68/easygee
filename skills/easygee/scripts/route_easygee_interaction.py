@@ -86,6 +86,17 @@ MAP_KEYWORDS = (
     "批注",
 )
 
+MAP_CONSOLE_KEYWORDS = (
+    "map console",
+    "map workbench",
+    "open map",
+    "open the map",
+    "打开地图",
+    "打开 easygee 地图",
+    "地图工作台",
+    "地图控制台",
+)
+
 AOI_KEYWORDS = (
     "draw",
     "aoi",
@@ -189,6 +200,7 @@ def route(prompt: str) -> Route:
     text = prompt.strip().lower()
     compute_hits = hits(text, COMPUTE_KEYWORDS)
     map_hits = hits(text, MAP_KEYWORDS)
+    map_console_hits = hits(text, MAP_CONSOLE_KEYWORDS)
     aoi_hits = hits(text, AOI_KEYWORDS)
     table_hits = hits(text, TABLE_KEYWORDS)
     export_hits = hits(text, EXPORT_KEYWORDS)
@@ -213,6 +225,9 @@ def route(prompt: str) -> Route:
     if map_hits:
         add_unique(artifacts, "map_layer")
         triggers.append("map")
+    if map_console_hits:
+        add_unique(artifacts, "map_console")
+        triggers.append("map_console")
     if aoi_hits:
         add_unique(artifacts, "aoi_needed")
         triggers.append("aoi")
@@ -237,19 +252,19 @@ def route(prompt: str) -> Route:
         next_actions = [
             "Run the smallest reliable computation first.",
             "Prepare a map layer only for spatial QA, anomalies, thresholds, or user-facing inspection.",
-            "Open or update the browser map after the computation produces something worth seeing.",
+            "Open or update the EasyGEE 地图工作台 (Map Console) after the computation produces something worth seeing.",
         ]
-        note = "Compute first, then hand off to the browser when visual inspection improves the answer."
+        note = "Compute first, then hand off to the EasyGEE 地图工作台 when visual inspection improves the answer."
     elif map_hits or aoi_hits:
         mode = "map_first"
         browser_policy = "open_for_aoi" if aoi_hits and not map_hits else "open_or_update"
         add_unique(artifacts, "map_layer")
         next_actions = [
-            "Open or update the EasyGEE Map Console.",
+            "Open or update the EasyGEE 地图工作台 (Map Console).",
             "Use the browser as the visible map state and interaction surface.",
             "Keep analytical claims separate from visual tile confirmation.",
         ]
-        note = "The user is asking to see, draw, inspect, or interact with map state."
+        note = "Map requests, including 打开地图 and 地图工作台, use the EasyGEE 地图工作台."
     else:
         mode = "compute_first"
         browser_policy = "defer_and_offer"
@@ -302,6 +317,8 @@ def smoke() -> None:
             "compute_then_handoff_if_useful",
             {"source_imagery", "visual_annotations", "vector_file", "qa_preview"},
         ),
+        ("打开地图", "map_first", "open_or_update", {"map_layer", "map_console"}),
+        ("打开地图工作台", "map_first", "open_or_update", {"map_layer", "map_console"}),
     ]
     for prompt, mode, policy, artifacts in cases:
         result = route(prompt)
