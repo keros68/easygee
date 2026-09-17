@@ -2,6 +2,7 @@
   "mcpServers": {
     "easygee": {
       "command": "powershell",
+      "cwd": ".",
       "args": [
         "-NoProfile",
         "-ExecutionPolicy",

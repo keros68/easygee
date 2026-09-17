@@ -2,6 +2,9 @@ param()
 
 $ErrorActionPreference = "Stop"
 
+# Codex reads launcher stderr as UTF-8; the console default (e.g. GBK) is not.
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+
 $pluginRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $server = Join-Path $pluginRoot "scripts\easygee_mcp_server.py"
 
