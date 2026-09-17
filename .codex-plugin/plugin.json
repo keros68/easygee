@@ -1,6 +1,6 @@
 {
   "name": "easygee",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Google Earth Engine, geemap, GeoMaster, GeoAI Encyclopedia, and GEE Growth Diary workflows with bilingual 5,000+ dataset discovery, auth guidance, quota checks, and a persistent high-performance Map Console.",
   "author": {
     "name": "Liang"
@@ -35,7 +35,7 @@
     "defaultPrompt": [
       "帮我授权 geemap 到 Earth Engine 项目",
       "从 5000 多个 GEE 数据集中推荐适合当前任务的数据组合",
-      "打开 EasyGEE 地图控制台"
+      "打开 EasyGEE 地图工作台（Map Console）"
     ],
     "brandColor": "#0F766E",
     "composerIcon": "./assets/icon.png",

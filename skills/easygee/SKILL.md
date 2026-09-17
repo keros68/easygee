@@ -16,8 +16,9 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
      inline for small requests.
    - **compute_first**: run GEE/API/local work headlessly and return
      stats/tables/files/exports without opening the browser by default.
-   - **map_first**: open or update the EasyGEE Map Console when the user asks
-     to see, display, map, draw, inspect, or annotate.
+   - **map_first**: open or update the persistent EasyGEE 地图工作台 (Map
+     Console) when the user asks to open a map, says 地图工作台/地图控制台,
+     or asks to see, display, draw, inspect, or annotate.
    - **mixed**: compute first, then hand off meaningful layers, anomalies, AOIs,
      or QA targets to the browser.
 2. Route the geospatial method backend when the request has data/method
@@ -224,7 +225,7 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
   printed localhost URL there.
 - Use `scripts/create_map_console.py --project <project> --output <index.html>`
   when the user wants a fixed browser UI rather than a one-off map page. This
-  creates the viewer-first EasyGEE Map Console: the map fills the browser by
+  creates the viewer-first EasyGEE 地图工作台 (Map Console): the map fills the browser by
   default, while layer/catalog, inspector, measure, basemap, task/log, and
   project/quota controls stay compressed behind a small Calcite-inspired icon
   tool rail and floating drawers. Its Add Layers catalog defaults to official
@@ -338,6 +339,9 @@ Python client, and `geemap` in a way that is reproducible and credential-safe.
 - For hybrid workflows, make the GEE-to-local handoff explicit: AOI, bands,
   scale, projection, masks, nodata, export status, local file path, and which
   backend owns each step.
+- In the EasyGEE Chinese context, “打开地图”, “地图工作台”, “地图控制台”, and
+  “Map Console” all refer to the same persistent EasyGEE 地图工作台. Route these
+  requests to the existing Map Console and reuse its browser session when possible.
 - For persistent exploratory sessions, prefer the EasyGEE Map Console generated
   by `create_map_console.py` over ad hoc Leaflet/geemap HTML. Treat it as a
   local diagnostic workbench inspired by GEE Code Editor and GeoLibre patterns,

@@ -18,7 +18,7 @@ import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 DEFAULT_PROJECT = "YOUR_EE_PROJECT"
@@ -73,14 +73,32 @@ def load_settings(path: Path | None = None) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {"version": 1}
 
 
+def write_text_atomic_with_fallback(
+    target: Path,
+    text: str,
+    *,
+    temporary: Path | None = None,
+    replace: Callable[[Path, Path], object] | None = None,
+) -> None:
+    """Write UTF-8 text atomically when possible, with a redirect-safe fallback."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = temporary or target.with_suffix(target.suffix + ".tmp")
+    temporary.write_text(text, encoding="utf-8")
+    try:
+        if replace is None:
+            temporary.replace(target)
+        else:
+            replace(temporary, target)
+    except OSError:
+        target.write_text(text, encoding="utf-8")
+        temporary.unlink(missing_ok=True)
+
+
 def save_settings(payload: dict[str, Any], path: Path | None = None) -> None:
     target = path or settings_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
     payload = dict(payload)
     payload["version"] = 1
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(target)
+    write_text_atomic_with_fallback(target, json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def remember_project(project: str, source: str = "manual", path: Path | None = None) -> ResolvedProject:

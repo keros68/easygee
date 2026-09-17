@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.1 - 2026-09-17
+
+### Added
+
+- Chinese EasyGEE routing aliases: “打开地图”, “地图工作台”, “地图控制台”,
+  and “Map Console” now open the persistent Map Console workbench.
+- Regression coverage for Windows MCP stdio startup and redirected-AppData
+  persistence writes.
+
+### Changed
+
+- Map Console layer ordering, measurement workflows, accessibility/i18n,
+  and Sentinel-2 NDVI styling were refined.
+- The cloud-mask comparison now uses controlled single-scene conditions,
+  valid-source-pixel denominators, toggleable mask layers, consensus output,
+  and clearer metric semantics.
+- Windows MCP launching now pins the project working directory and emits
+  UTF-8 diagnostics.
+
+### Fixed
+
+- Settings, profile, and secret writes now fall back safely when Windows
+  redirected AppData rejects an atomic cross-device rename.
+- Landsat/Sentinel comparison map attribution handling was corrected.
+
+### Validation
+
+- Added focused persistence and MCP launcher regression tests.
+
 ## 0.4.0 - 2026-08-30
 
 ### Added

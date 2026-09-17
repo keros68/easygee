@@ -1540,6 +1540,7 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         cloud_pct = 80.0
     catalog_item = payload.get("catalogItem") if isinstance(payload.get("catalogItem"), dict) else {}
+    style_profile_hint = str(payload.get("styleProfile") or "").strip().lower()
     explicit_recipe = normalize_layer_recipe(payload, dataset_id, start_date, end_date)
 
     ee.Initialize(project=project)
@@ -1556,6 +1557,16 @@ def build_catalog_layer(payload: dict[str, Any]) -> dict[str, Any]:
         asset = {}
     asset_type = str(asset.get("type") or catalog_item.get("type") or "").upper()
     known = None if explicit_recipe else known_catalog_image(ee, dataset_id, roi, start_date, end_date, cloud_pct, warnings)
+    if not explicit_recipe and style_profile_hint == "ndvi" and dataset_id == "COPERNICUS/S2_SR_HARMONIZED":
+        ndvi_image, _, ndvi_method = sentinel2_ndvi_image(ee, roi, start_date, end_date, cloud_pct, warnings)
+        known = (
+            ndvi_image,
+            {"min": 0, "max": 0.8, "palette": ["#2c105c", "#4856a5", "#31a354", "#addd8e", "#f7fcb9"]},
+            "Sentinel-2 NDVI",
+            "ee-derived",
+            [["#2c105c", "Low"], ["#31a354", "Medium"], ["#f7fcb9", "High"]],
+            ndvi_method,
+        )
     image: Any
     vis: dict[str, Any]
     name: str
@@ -2235,6 +2246,7 @@ def shell_css() -> str:
       appearance: none;
       text-align: left;
       overflow: hidden;
+      position: relative;
       transition: width 160ms ease, max-width 160ms ease, padding 160ms ease, background 160ms ease;
     }
     .logo-layer:hover, .logo-layer:focus { background: rgba(251, 253, 252, 0.92); }
@@ -2324,6 +2336,78 @@ def shell_css() -> str:
       font-weight: 820;
       line-height: 1;
       box-shadow: 0 1px 4px rgba(16,24,40,0.28);
+    }
+    .logo-layer.measure-active .mark {
+      filter: saturate(1.32) hue-rotate(24deg) brightness(1.06);
+      animation: easygee-measure-breathe 1.8s ease-in-out infinite;
+    }
+    .logo-layer.measure-active .mark::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      border-radius: inherit;
+      background: rgba(40, 205, 132, 0.26);
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+    .logo-layer.measure-active .mark::after {
+      background: #0f8a5c;
+      box-shadow: 0 0 0 2px rgba(40, 205, 132, 0.18), 0 1px 5px rgba(16,24,40,0.30);
+    }
+    .logo-layer.measure-active::after {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border: 1px solid rgba(40, 205, 132, 0.38);
+      border-radius: inherit;
+      pointer-events: none;
+      animation: easygee-measure-ring 1.8s ease-in-out infinite;
+    }
+    .icon-btn.measurement-ready {
+      border-color: rgba(22, 115, 77, 0.55);
+      color: var(--accent);
+    }
+    .icon-btn.measurement-prompt {
+      border-color: rgba(22, 115, 77, 0.62);
+      background: var(--accent-soft);
+      color: var(--accent);
+      animation: easygee-layer-prompt 1.8s ease-in-out infinite;
+    }
+    .icon-btn.measurement-ready::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 7px;
+      height: 7px;
+      border: 1px solid #fff;
+      border-radius: 50%;
+      background: #d99724;
+      box-shadow: 0 0 0 1px rgba(217,151,36,0.18);
+      animation: easygee-measure-notice 1.35s ease-in-out infinite;
+    }
+    @keyframes easygee-measure-breathe {
+      0%, 100% { box-shadow: 0 0 0 2px rgba(40,205,132,0.28), 0 0 10px rgba(40,205,132,0.24), 0 3px 10px rgba(16,24,40,0.18); }
+      50% { box-shadow: 0 0 0 4px rgba(40,205,132,0.42), 0 0 20px rgba(40,205,132,0.42), 0 3px 10px rgba(16,24,40,0.18); }
+    }
+    @keyframes easygee-measure-ring {
+      0%, 100% { opacity: 0.32; transform: scale(1); }
+      50% { opacity: 0.82; transform: scale(1.035); }
+    }
+    @keyframes easygee-measure-notice {
+      0%, 100% { opacity: 0.58; transform: scale(0.86); }
+      50% { opacity: 1; transform: scale(1.12); }
+    }
+    @keyframes easygee-layer-prompt {
+      0%, 100% { box-shadow: 0 0 0 2px rgba(40,205,132,0.16), 0 3px 12px rgba(16,24,40,0.08); }
+      50% { box-shadow: 0 0 0 5px rgba(40,205,132,0.28), 0 0 18px rgba(40,205,132,0.26), 0 3px 12px rgba(16,24,40,0.08); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .logo-layer.measure-active .mark,
+      .logo-layer.measure-active::after,
+      .icon-btn.measurement-ready::after,
+      .icon-btn.measurement-prompt { animation: none; }
     }
     .basemap-source-card {
       position: fixed;
@@ -3005,6 +3089,9 @@ def shell_css() -> str:
     .task-link { color: var(--accent); text-decoration: none; font-size: 11px; font-weight: 700; }
     .task-link:hover { text-decoration: underline; }
     .layer-item { padding: 9px; min-width: 0; }
+    .layer-item[data-reorderable="true"] { cursor: default; }
+    .layer-item.dragging { opacity: 0.56; }
+    .layer-item.drag-over { border-color: var(--accent); box-shadow: inset 0 0 0 2px rgba(22,115,77,0.18); }
     .layer-item.active { border-color: var(--accent); background: var(--accent-soft); }
     .layer-item.primary-basemap { border-color: #c9d9d0; background: linear-gradient(145deg, #f7faf8, #eef5f1); box-shadow: inset 3px 0 0 rgba(22,115,77,0.52); }
     .layer-item.basemap-overlay { box-shadow: inset 3px 0 0 rgba(49,92,116,0.45); }
@@ -3013,6 +3100,12 @@ def shell_css() -> str:
     .layer-top input { margin-top: 3px; }
     .layer-copy { min-width: 0; flex: 1 1 auto; }
     .layer-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .layer-drag-handle { width: 15px; height: 22px; display: grid; place-items: center; flex: 0 0 15px; color: #819189; }
+    .layer-drag-handle[draggable="true"] { cursor: grab; }
+    .layer-drag-handle[draggable="true"]:active { cursor: grabbing; }
+    .layer-drag-handle svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .layer-drag-handle:not([draggable="true"]) { visibility: hidden; cursor: default; }
+    .layer-item[data-reorderable="true"]:hover .layer-drag-handle, .layer-item.dragging .layer-drag-handle { color: var(--accent); }
     .layer-name { font-size: 13px; font-weight: 700; line-height: 1.25; }
     .type-dot { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; color: #fff; font-size: 10px; font-weight: 800; flex: 0 0 auto; }
     .type-dot.aoi { background: #c2410c; }
@@ -3133,6 +3226,34 @@ def shell_css() -> str:
       backdrop-filter: blur(8px);
     }
     .mode-chip.show { display: flex; }
+    .measure-undo-btn {
+      position: absolute;
+      left: 58px;
+      bottom: 62px;
+      z-index: 1200;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 28px;
+      padding: 4px 9px;
+      border: 1px solid rgba(22, 115, 77, 0.42);
+      border-radius: 7px;
+      background: rgba(251, 253, 252, 0.94);
+      box-shadow: 0 3px 14px rgba(16, 24, 40, 0.1);
+      color: var(--accent);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 720;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+    }
+    .measure-undo-btn:hover:not(:disabled), .measure-undo-btn:focus-visible {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .measure-undo-btn:disabled { opacity: 0.46; cursor: not-allowed; }
+    .measure-undo-btn svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .measure-undo-btn[hidden] { display: none; }
     .simple-scale {
       position: absolute;
       left: 58px;
@@ -3280,6 +3401,7 @@ def shell_css() -> str:
       .upload-submit { justify-content: center; }
       .bottom { top: 46px; left: 48px; right: 6px; bottom: 8px; width: auto; max-height: none; overflow: hidden; transform: translateX(calc(100% + 12px)); }
       .mode-chip { left: 48px; max-width: calc(100% - 56px); }
+      .measure-undo-btn { left: 48px; max-width: calc(100% - 56px); }
       .simple-scale { left: 48px; }
     }
     """
@@ -3633,11 +3755,13 @@ def svg_icon(name: str) -> str:
         "zoom-layer": '<svg class="lucide lucide-scan" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></svg>',
         "zoom-in": '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M10 7v6M7 10h6M15 15l5 5"/></svg>',
         "zoom-out": '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M7 10h6M15 15l5 5"/></svg>',
+        "grip": '<svg class="lucide lucide-grip-vertical" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>',
         "language": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h9M8.5 5v2M11.5 5c-.8 4.7-3.5 7.3-7 8.8"/><path d="M5.5 9.5c1.2 2 3.1 3.5 5.5 4.4"/><path d="M14 20l4-9 4 9M15.2 17h5.6"/></svg>',
         "style": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.5a1.8 1.8 0 0 0 .7-3.4 1.8 1.8 0 0 1 .7-3.4H16a5 5 0 0 0 0-10H12Z"/><circle cx="7.5" cy="10" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="14" cy="7.5" r="1"/><circle cx="8.5" cy="14" r="1"/></svg>',
         "edit": '<svg class="lucide lucide-pencil" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>',
         "up": '<svg class="lucide lucide-chevron-up" viewBox="0 0 24 24" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>',
         "down": '<svg class="lucide lucide-chevron-down" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+        "undo": '<svg class="lucide lucide-undo-2" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg>',
         "refresh": '<svg class="lucide lucide-refresh-cw" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>',
         "trash": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg>',
         "close": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
@@ -3714,7 +3838,7 @@ def render_html(
       <button class="icon-btn" id="layers-btn" title="Layers" aria-label="Layers" data-i18n-title="tool.layers">{svg_icon("layers")}</button>
       <button class="icon-btn" id="inspector-btn" title="Inspector" aria-label="Inspector" data-i18n-title="tool.inspector">{svg_icon("inspect")}</button>
       <button class="icon-btn" id="draw-aoi-btn" title="Draw AOI" aria-label="Draw AOI" data-i18n-title="tool.drawAoi">{svg_icon("draw-aoi")}</button>
-      <button class="icon-btn" id="measure-btn" title="Measure distance" aria-label="Measure distance" data-i18n-title="tool.measure">{svg_icon("measure")}</button>
+      <button class="icon-btn" id="measure-btn" title="Measure distance" aria-label="Measure distance" aria-pressed="false" data-i18n-title="tool.measure">{svg_icon("measure")}</button>
       <div class="rail-break" aria-hidden="true"></div>
       <button class="icon-btn" id="basemap-btn" title="Basemap" aria-label="Basemap" data-i18n-title="tool.basemap">{svg_icon("basemap")}</button>
       <button class="icon-btn quota-ready" id="quota-btn" title="Quota status" aria-label="Quota status" data-i18n-title="tool.quota">{svg_icon("quota")}<span class="quota-indicator"></span></button>
@@ -3868,6 +3992,7 @@ def render_html(
     <main class="map-wrap">
       <div id="map"></div>
       <div class="mode-chip" id="mode-chip"></div>
+      <button class="measure-undo-btn" id="measure-undo-btn" type="button" hidden disabled title="Undo last step" aria-label="Undo last step" data-i18n-title="tool.measureUndo">{svg_icon("undo")}<span data-i18n="tool.measureUndo">Undo last step</span></button>
       <div class="simple-scale" id="simple-scale"><div class="scale-label" id="scale-label"></div><div class="scale-track" id="scale-track"></div></div>
     </main>
 
@@ -3930,6 +4055,7 @@ def render_html(
     const STATE = {state_json};
     const COG_ENGINE_ASSETS = {cog_assets_json};
     STATE.layers = Array.isArray(STATE.layers) ? STATE.layers : [];
+    STATE.layerOrder = Array.isArray(STATE.layerOrder) ? STATE.layerOrder.map(value => String(value)) : [];
     STATE.catalog = Array.isArray(STATE.catalog) ? STATE.catalog : [];
     STATE.tasks = Array.isArray(STATE.tasks) ? STATE.tasks : [];
     STATE.uploads = Array.isArray(STATE.uploads) ? STATE.uploads : [];
@@ -3941,9 +4067,13 @@ def render_html(
         "tool.data": "添加图层",
         "tool.upload": "上传地图数据",
         "tool.layers": "图层",
+        "tool.layersMeasurementReady": "图层：测距结果已加入",
+        "tool.layersMeasurePrompt": "图层：测距结果会自动加入",
         "tool.inspector": "查看器",
         "tool.drawAoi": "绘制 AOI",
         "tool.measure": "测距",
+        "tool.measureActive": "测距已开启 · 结果自动加入图层",
+        "tool.measureUndo": "撤回上一步",
         "tool.clearMeasurements": "清除测距",
         "tool.basemap": "底图",
         "tool.quota": "配额状态",
@@ -3976,6 +4106,7 @@ def render_html(
         "tool.styleLayer": "设置图层样式",
         "tool.zoomToLayer": "缩放到图层",
         "tool.refreshLayer": "刷新图层",
+        "tool.dragLayer": "拖动排序",
         "tool.removeLayer": "移除图层",
         "tool.basemapSource": "查看地图来源",
         "tool.clearAoi": "清除 AOI",
@@ -4010,6 +4141,7 @@ def render_html(
         "panel.inspector": "查看器",
         "section.layerStack": "图层栈",
         "section.operationalLayers": "数据与叠加图层",
+        "section.layerReorderHint": "拖动排序",
         "section.primaryBasemap": "主底图",
         "section.primaryBasemapHint": "固定在最底层",
         "placeholder.searchDatasets": "按名称、类别或 ID 搜索图层",
@@ -4137,6 +4269,7 @@ def render_html(
         "mode.styleFailed": "样式更新失败：:message",
         "mode.layerZooming": "正在缩放到图层：:layer",
         "mode.layerZoomed": "已缩放到图层：:layer",
+        "mode.layerReordered": "图层顺序已更新",
         "mode.layerExtentUnavailable": "无法获取图层范围：:layer",
         "quota.project": "项目：:project",
         "quota.tier": "用量层级：:tier",
@@ -4190,7 +4323,10 @@ def render_html(
         "mode.measureOff": "测距已关闭",
         "mode.measureEndpoint": "测距：选择终点",
         "mode.distance": "距离：:distance",
-        "mode.measureSaved": "测量已保存：:distance（共 :count 条，均值 :mean）",
+        "mode.measureSaved": "测量已加入图层：:distance（共 :count 条，均值 :mean）",
+        "mode.measureUndoDraft": "已撤回上一个测量点",
+        "mode.measureUndoSaved": "已撤回上一条测量：:distance",
+        "mode.measureUndoEmpty": "暂无可撤回的测量",
         "mode.measureCleared": "测距标记已清除",
         "basemap.osm": "OpenStreetMap",
         "basemap.osmNote": "道路与标注",
@@ -4310,6 +4446,7 @@ def render_html(
         "log.layerOff": "已隐藏图层：:layer",
         "log.layerRemoved": "已移除图层：:layer",
         "log.layerRefreshed": "已刷新图层：:layer",
+        "log.layerReordered": "已调整图层顺序：:layer",
         "log.layerStyled": "已更新图层样式：:layer",
         "log.layerStyleFailed": "图层样式更新失败：:layer",
         "log.layerZoomed": "已缩放到图层：:layer",
@@ -4334,6 +4471,7 @@ def render_html(
         "log.measureOff": "测距模式已关闭",
         "log.measured": "测得距离：:distance",
         "log.measureSummary": "测量统计：共 :count 条，均值 :mean",
+        "log.measureUndo": "已撤回测量：:distance",
         "log.measureCleared": "测距标记已清除：:count 条",
         "log.copied": "项目状态已复制",
         "log.clipboardUnavailable": "剪贴板不可用",
@@ -4346,9 +4484,13 @@ def render_html(
         "tool.data": "Add layers",
         "tool.upload": "Import file",
         "tool.layers": "Layers",
+        "tool.layersMeasurementReady": "Layers: measurement added",
+        "tool.layersMeasurePrompt": "Layers: measurement results will be added",
         "tool.inspector": "Inspector",
         "tool.drawAoi": "Draw AOI",
         "tool.measure": "Measure distance",
+        "tool.measureActive": "Measure on · results are added to Layers",
+        "tool.measureUndo": "Undo last step",
         "tool.clearMeasurements": "Clear measurements",
         "tool.basemap": "Basemap",
         "tool.quota": "Quota status",
@@ -4381,6 +4523,7 @@ def render_html(
         "tool.styleLayer": "Style layer",
         "tool.zoomToLayer": "Zoom to layer",
         "tool.refreshLayer": "Refresh layer",
+        "tool.dragLayer": "Drag to reorder",
         "tool.removeLayer": "Remove layer",
         "tool.basemapSource": "View map source",
         "tool.clearAoi": "Clear AOI",
@@ -4415,6 +4558,7 @@ def render_html(
         "panel.inspector": "Inspector",
         "section.layerStack": "Layer Stack",
         "section.operationalLayers": "Data and overlays",
+        "section.layerReorderHint": "Drag to reorder",
         "section.primaryBasemap": "Primary basemap",
         "section.primaryBasemapHint": "Pinned to the bottom",
         "placeholder.searchDatasets": "Search layers by name, category, or id",
@@ -4542,6 +4686,7 @@ def render_html(
         "mode.styleFailed": "Style update failed: :message",
         "mode.layerZooming": "Zooming to layer: :layer",
         "mode.layerZoomed": "Zoomed to layer: :layer",
+        "mode.layerReordered": "Layer order updated",
         "mode.layerExtentUnavailable": "Layer extent unavailable: :layer",
         "quota.project": "Project: :project",
         "quota.tier": "Usage tier: :tier",
@@ -4595,7 +4740,10 @@ def render_html(
         "mode.measureOff": "Measure off",
         "mode.measureEndpoint": "Measure: choose endpoint",
         "mode.distance": "Distance: :distance",
-        "mode.measureSaved": "Measurement saved: :distance (:count total, mean :mean)",
+        "mode.measureSaved": "Measurement added to Layers: :distance (:count total, mean :mean)",
+        "mode.measureUndoDraft": "Undid the last measurement point",
+        "mode.measureUndoSaved": "Undid the last measurement: :distance",
+        "mode.measureUndoEmpty": "No measurement to undo",
         "mode.measureCleared": "Measurement markers cleared",
         "basemap.osm": "OpenStreetMap",
         "basemap.osmNote": "Roads and labels",
@@ -4715,6 +4863,7 @@ def render_html(
         "log.layerOff": "Layer off: :layer",
         "log.layerRemoved": "Removed layer: :layer",
         "log.layerRefreshed": "Refreshed layer: :layer",
+        "log.layerReordered": "Reordered layer: :layer",
         "log.layerStyled": "Updated layer style: :layer",
         "log.layerStyleFailed": "Layer style update failed: :layer",
         "log.layerZoomed": "Zoomed to layer: :layer",
@@ -4739,6 +4888,7 @@ def render_html(
         "log.measureOff": "Measure mode off",
         "log.measured": "Measured distance: :distance",
         "log.measureSummary": "Measurements: :count total, mean :mean",
+        "log.measureUndo": "Measurement undone: :distance",
         "log.measureCleared": "Measurement markers cleared: :count",
         "log.copied": "Project state copied",
         "log.clipboardUnavailable": "Clipboard write unavailable",
@@ -4749,6 +4899,9 @@ def render_html(
       }}
     }};
     let activeLayerId = STATE.layers.find(layer => layer.shown)?.id || STATE.layers[0]?.id || null;
+    let draggedLayerId = null;
+    let operationalLayerOrder = [...STATE.layerOrder];
+    let operationalMapOrderDirty = true;
     let activeDatasetId = null;
     let activeBadgeTimer = null;
     let basemapSourceOpen = false;
@@ -5230,6 +5383,8 @@ def render_html(
       layerRegistry.clear();
       STATE.layers = (Array.isArray(layers) ? layers : []).map(normalizeStateLayer).filter(Boolean);
       STATE.layers.forEach(registerLayer);
+      operationalMapOrderDirty = true;
+      syncOperationalLayerOrder();
       if (activeLayerId && !layerModels().some(layer => layer?.id === activeLayerId)) {{
         activeLayerId = null;
       }}
@@ -6018,6 +6173,14 @@ def render_html(
             changed = true;
           }}
         }}
+        if (Array.isArray(entry.layerOrder)) {{
+          const nextLayerOrder = entry.layerOrder.map(value => String(value));
+          if (JSON.stringify(nextLayerOrder) !== JSON.stringify(operationalLayerOrder)) {{
+            operationalLayerOrder = nextLayerOrder;
+            operationalMapOrderDirty = true;
+            changed = true;
+          }}
+        }}
         restoredProfileActiveLayerId = typeof entry.activeLayerId === 'string' && entry.activeLayerId.trim()
           ? entry.activeLayerId.trim()
           : null;
@@ -6153,6 +6316,52 @@ def render_html(
       const button = $(id);
       if (button) button.classList.toggle('active', active);
     }}
+    function syncMeasurementIndicator() {{
+      const active = measureMode === true;
+      const badge = $('active-layer-badge');
+      if (badge) {{
+        badge.classList.toggle('measure-active', active);
+        const activeLabel = badge.dataset.activeLabel;
+        if (activeLabel) {{
+          const sourceHint = t('source.trigger');
+          const modeHint = active ? t('tool.measureActive') : '';
+          const hints = [sourceHint, modeHint].filter(Boolean).join(' · ');
+          badge.title = `${{activeLabel}} · ${{hints}}`;
+          badge.setAttribute('aria-label', `${{hints}} · ${{activeLabel}}`);
+        }}
+      }}
+      const measureButton = $('measure-btn');
+      if (measureButton) {{
+        measureButton.classList.toggle('measure-active', active);
+        measureButton.setAttribute('aria-pressed', active ? 'true' : 'false');
+        const label = t(active ? 'tool.measureActive' : 'tool.measure');
+        measureButton.title = label;
+        measureButton.setAttribute('aria-label', label);
+      }}
+      const undoButton = $('measure-undo-btn');
+      if (undoButton) {{
+        const canUndo = measurePoints.length > 0 || (Array.isArray(STATE.measurements) && STATE.measurements.length > 0);
+        undoButton.hidden = !active;
+        undoButton.disabled = !canUndo;
+        const label = t('tool.measureUndo');
+        undoButton.title = label;
+        undoButton.setAttribute('aria-label', label);
+      }}
+      const layersButton = $('layers-btn');
+      if (layersButton) {{
+        const layersOpen = document.querySelector('.layers-panel')?.classList.contains('open');
+        const prompt = !layersOpen && (active || measurementLayerNotice);
+        layersButton.classList.toggle('measurement-prompt', prompt);
+        layersButton.classList.toggle('measurement-ready', measurementLayerNotice);
+        const label = measurementLayerNotice
+          ? t('tool.layersMeasurementReady')
+          : prompt
+            ? t('tool.layersMeasurePrompt')
+            : t('tool.layers');
+        layersButton.title = label;
+        layersButton.setAttribute('aria-label', label);
+      }}
+    }}
     function collapseActiveBadge() {{
       const badge = $('active-layer-badge');
       if (!badge) return;
@@ -6177,6 +6386,7 @@ def render_html(
       setToolActive('inspector-btn', document.querySelector('.right').classList.contains('open'));
       setToolActive('draw-aoi-btn', drawAoiMode || drawPolygonMode);
       setToolActive('measure-btn', measureMode);
+      syncMeasurementIndicator();
       setToolActive('basemap-btn', document.querySelector('.basemap-panel').classList.contains('open'));
       setToolActive('quota-btn', quotaFocus && document.querySelector('.bottom').classList.contains('open'));
     }}
@@ -6447,9 +6657,12 @@ def render_html(
     function setActiveBadgeLabel(label) {{
       const badge = $('active-layer-badge');
       if (!badge) return;
+      badge.dataset.activeLabel = label;
       const sourceHint = t('source.trigger');
-      badge.title = `${{label}} · ${{sourceHint}}`;
-      badge.setAttribute('aria-label', `${{sourceHint}} · ${{label}}`);
+      const modeHint = measureMode ? t('tool.measureActive') : '';
+      const hints = [sourceHint, modeHint].filter(Boolean).join(' · ');
+      badge.title = `${{label}} · ${{hints}}`;
+      badge.setAttribute('aria-label', `${{hints}} · ${{label}}`);
     }}
     function formatBasemapDuration(value) {{
       const milliseconds = Number(value);
@@ -7572,6 +7785,7 @@ def render_html(
       renderTasks();
       setActiveLayer(activeLayerId, {{ reveal: false }});
       updateScaleLine();
+      syncToolState();
       logMsg('log.language');
     }}
     function quotaRows() {{
@@ -8484,6 +8698,7 @@ def render_html(
     function registerLayer(meta) {{
       const normalized = normalizeStateLayer(meta);
       if (!normalized) return null;
+      operationalMapOrderDirty = true;
       if (isBasemapOverlayLayer(normalized)) {{
         const source = basemapMetaById(normalized.sourceId);
         if (!source) return null;
@@ -8520,15 +8735,84 @@ def render_html(
       registerLayer(meta);
     }});
 
+    function isReorderableLayer(id) {{
+      return Boolean(id) && id !== PRIMARY_BASEMAP_LAYER_ID
+        && rawOperationalLayerModels().some(layer => String(layer.id) === String(id));
+    }}
+    function rawOperationalLayerModels() {{
+      return [measurementsLayerModel(), aoiLayerModel(), ...STATE.layers].filter(Boolean);
+    }}
+    function normalizedOperationalLayerOrder(order = operationalLayerOrder) {{
+      const available = rawOperationalLayerModels().map(layer => String(layer.id));
+      const availableSet = new Set(available);
+      const requested = Array.isArray(order) ? order.map(value => String(value)) : [];
+      const known = [...new Set(requested)].filter(id => availableSet.has(id));
+      return [...known, ...available.filter(id => !known.includes(id))];
+    }}
+    function syncOperationalLayerOrder() {{
+      const next = normalizedOperationalLayerOrder(operationalLayerOrder);
+      if (JSON.stringify(next) !== JSON.stringify(operationalLayerOrder)) operationalMapOrderDirty = true;
+      operationalLayerOrder = next;
+      return operationalLayerOrder;
+    }}
+    function placeOperationalLayer(id, position = 'front') {{
+      const next = syncOperationalLayerOrder().filter(item => item !== String(id));
+      if (position === 'front') next.unshift(String(id));
+      else next.push(String(id));
+      operationalLayerOrder = normalizedOperationalLayerOrder(next);
+      operationalMapOrderDirty = true;
+    }}
+    function removeOperationalLayerOrder(id) {{
+      operationalLayerOrder = normalizedOperationalLayerOrder(syncOperationalLayerOrder().filter(item => item !== String(id)));
+      operationalMapOrderDirty = true;
+    }}
+    function operationalMapLayer(id) {{
+      if (id === AOI_LAYER_ID) return aoiLayer;
+      if (id === MEASUREMENTS_LAYER_ID) return measureLayer;
+      return layerRegistry.get(id)?.tile || null;
+    }}
+    function syncLayerOrderToMap() {{
+      const models = operationalLayerModels();
+      if (!operationalMapOrderDirty) return;
+      models.forEach(layer => {{
+        const mapLayer = operationalMapLayer(layer.id);
+        if (mapLayer && map.hasLayer(mapLayer)) map.removeLayer(mapLayer);
+      }});
+      [...models].reverse().forEach(layer => {{
+        const mapLayer = operationalMapLayer(layer.id);
+        if (layer.shown !== false && mapLayer && !map.hasLayer(mapLayer)) mapLayer.addTo(map);
+      }});
+      operationalMapOrderDirty = false;
+    }}
+    function reorderLayer(sourceId, targetId) {{
+      if (!isReorderableLayer(sourceId) || !isReorderableLayer(targetId) || sourceId === targetId) return false;
+      const order = syncOperationalLayerOrder().filter(id => id !== String(sourceId));
+      const targetIndex = order.indexOf(String(targetId));
+      if (targetIndex < 0) return false;
+      order.splice(targetIndex, 0, String(sourceId));
+      operationalLayerOrder = normalizedOperationalLayerOrder(order);
+      operationalMapOrderDirty = true;
+      const moved = rawOperationalLayerModels().find(layer => String(layer.id) === String(sourceId));
+      syncLayerOrderToMap();
+      renderLayers();
+      setActiveLayer(sourceId, {{ reveal: false }});
+      showModeKey('mode.layerReordered');
+      logMsg('log.layerReordered', {{ layer: moved?.name || sourceId }});
+      syncSessionState('layer-reordered');
+      return true;
+    }}
+
     function addGeneratedLayer(meta, options = {{}}) {{
       const existingIndex = STATE.layers.findIndex(layer => layer.id === meta.id);
       if (existingIndex >= 0) {{
         const existing = layerRegistry.get(meta.id);
         if (existing && map.hasLayer(existing.tile)) map.removeLayer(existing.tile);
         STATE.layers.splice(existingIndex, 1);
+        removeOperationalLayerOrder(meta.id);
       }}
       const nextMeta = normalizeStateLayer({{ ...meta, shown: options.shown === undefined ? true : options.shown !== false }});
       STATE.layers.unshift(nextMeta);
+      placeOperationalLayer(nextMeta.id, 'front');
       const tile = registerLayer(nextMeta);
       if (nextMeta.shown && !map.hasLayer(tile)) tile.addTo(map);
       $('layer-count').textContent = t('pill.layers', {{ count: layerCount() }});
@@ -8575,6 +8859,7 @@ def render_html(
       const tile = registerLayer(nextMeta);
       if (!tile) return false;
       STATE.layers.unshift(nextMeta);
+      placeOperationalLayer(nextMeta.id, 'front');
       renderLayers();
       renderBasemapChoices();
       revealLayerPanel(nextMeta.id);
@@ -8627,7 +8912,8 @@ def render_html(
       }};
     }}
     function operationalLayerModels() {{
-      return [measurementsLayerModel(), aoiLayerModel(), ...STATE.layers].filter(Boolean);
+      const available = new Map(rawOperationalLayerModels().map(layer => [String(layer.id), layer]));
+      return syncOperationalLayerOrder().map(id => available.get(id)).filter(Boolean);
     }}
     function layerModels() {{
       return [...operationalLayerModels(), primaryBasemapLayerModel()];
@@ -8638,7 +8924,11 @@ def render_html(
     function renderAoiLayer() {{
       if (aoiLayer && map.hasLayer(aoiLayer)) map.removeLayer(aoiLayer);
       aoiLayer = null;
-      if (!hasAoi() || STATE.aoiShown === false) return;
+      operationalMapOrderDirty = true;
+      if (!hasAoi() || STATE.aoiShown === false) {{
+        syncLayerOrderToMap();
+        return;
+      }}
       STATE.aoiStyle = normalizeAoiStyle(STATE.aoiStyle);
       const options = {{
         color: STATE.aoiStyle.color,
@@ -8653,7 +8943,7 @@ def render_html(
       }} else {{
         aoiLayer = L.rectangle(STATE.aoi.bounds, options).addTo(map);
       }}
-      aoiLayer.bringToFront();
+      syncLayerOrderToMap();
     }}
 
     const measureLayer = L.layerGroup().addTo(map);
@@ -8666,6 +8956,7 @@ def render_html(
     let drawPolygonPoints = [];
     let polygonDoubleClickZoomWasEnabled = false;
     let measureMode = false;
+    let measurementLayerNotice = false;
     let measurePoints = [];
 
     function chooseScaleDistance(maxMeters) {{
@@ -8891,6 +9182,7 @@ def render_html(
       STATE.aoi = null;
       STATE.bounds = null;
       STATE.aoiShown = true;
+      removeOperationalLayerOrder(AOI_LAYER_ID);
       STATE.aoiStyle = normalizeAoiStyle(STATE.aoiStyle);
       persistAoi();
       renderAoiLayer();
@@ -8907,6 +9199,7 @@ def render_html(
       const index = STATE.layers.findIndex(layer => layer.id === id);
       if (index < 0) return false;
       const [layer] = STATE.layers.splice(index, 1);
+      removeOperationalLayerOrder(id);
       const record = layerRegistry.get(id);
       if (record && map.hasLayer(record.tile)) map.removeLayer(record.tile);
       layerRegistry.delete(id);
@@ -9010,6 +9303,7 @@ def render_html(
         syncSessionState(options.reason || 'basemap-visibility');
         return true;
       }}
+      operationalMapOrderDirty = true;
       if (id === AOI_LAYER_ID) {{
         if (!hasAoi()) return false;
         STATE.aoiShown = nextShown;
@@ -9301,6 +9595,7 @@ def render_html(
             startDate: record.meta.summary?.startDate || STATE.startDate,
             endDate: record.meta.summary?.endDate || STATE.endDate,
             cloudPct: record.meta.summary?.cloudPct ?? STATE.cloudPct,
+            styleProfile: profile,
             visParams: sanitizeVisParams(preset.visParams),
             legend: preset.legend,
             stylePreset: preset.id,
@@ -9355,6 +9650,9 @@ def render_html(
         const isPrimaryBasemap = layer.id === PRIMARY_BASEMAP_LAYER_ID;
         const isBasemapOverlay = isBasemapOverlayLayer(layer);
         const isBasemapLayer = isPrimaryBasemap || isBasemapOverlay;
+        const canReorder = isReorderableLayer(layer.id);
+        const dragAttrs = canReorder ? ' data-reorderable="true"' : '';
+        const dragHandle = canReorder ? `<span class="layer-drag-handle" draggable="true" title="${{escapeHtml(t('tool.dragLayer'))}}" aria-label="${{escapeHtml(t('tool.dragLayer'))}}" role="img">{svg_icon("grip")}</span>` : '';
         const presets = isAoi || isBasemapLayer ? [] : stylePresetOptions(layer);
         let selectedPreset = layer.stylePreset || visualPreferences[layerStyleProfile(layer)] || 'default';
         const preset = isAoi || isBasemapLayer ? null : stylePresetForLayer(layer, selectedPreset);
@@ -9376,11 +9674,11 @@ def render_html(
         const removeButton = isPrimaryBasemap ? '' : `<button class="layer-action icon-btn danger" data-action="remove" title="${{escapeHtml(removeTitle)}}" aria-label="${{escapeHtml(removeTitle)}}" type="button">{svg_icon("trash")}</button>`;
         const itemClass = isPrimaryBasemap ? ' primary-basemap' : isBasemapOverlay ? ' basemap-overlay' : '';
         return `
-        <div class="layer-item${{itemClass}}${{layer.id === activeLayerId ? ' active' : ''}}" data-layer="${{escapeHtml(layer.id)}}">
+        <div class="layer-item${{itemClass}}${{layer.id === activeLayerId ? ' active' : ''}}" data-layer="${{escapeHtml(layer.id)}}"${{dragAttrs}}>
           <div class="layer-top">
             <input type="checkbox" data-action="toggle" ${{layer.shown ? 'checked' : ''}} aria-label="${{escapeHtml(layer.name)}}">
             <div class="layer-copy">
-              <div class="layer-title-row"><span class="type-dot ${{kind.className}}">${{kind.label}}</span><div class="layer-name">${{escapeHtml(layer.name)}}</div></div>
+              <div class="layer-title-row">${{dragHandle}}<span class="type-dot ${{kind.className}}">${{kind.label}}</span><div class="layer-name">${{escapeHtml(layer.name)}}</div></div>
               <div class="layer-dataset">${{escapeHtml(layer.dataset)}}</div>
             </div>
             <div class="layer-actions">
@@ -9405,7 +9703,7 @@ def render_html(
         : `<div class="empty-list">${{escapeHtml(t('layers.emptyOperational'))}}</div>`;
       $('layer-list').innerHTML = `
         <section class="layer-stack-group">
-          <div class="layer-group-heading">${{escapeHtml(t('section.operationalLayers'))}}<span>${{escapeHtml(t('pill.layers', {{ count: operationalModels.length }}))}}</span></div>
+          <div class="layer-group-heading">${{escapeHtml(t('section.operationalLayers'))}}<span>${{escapeHtml(t('section.layerReorderHint'))}} · ${{escapeHtml(t('pill.layers', {{ count: operationalModels.length }}))}}</span></div>
           ${{operationalHtml}}
         </section>
         <section class="layer-stack-group">
@@ -9414,6 +9712,35 @@ def render_html(
         </section>`;
       document.querySelectorAll('.layer-item').forEach(item => {{
         const id = item.dataset.layer;
+        if (item.dataset.reorderable === 'true') {{
+          const handle = item.querySelector('.layer-drag-handle');
+          handle?.addEventListener('dragstart', event => {{
+            draggedLayerId = id;
+            item.classList.add('dragging');
+            if (event.dataTransfer) {{
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', id);
+            }}
+          }});
+          item.addEventListener('dragover', event => {{
+            if (!draggedLayerId || draggedLayerId === id || !isReorderableLayer(id)) return;
+            event.preventDefault();
+            if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+            item.classList.add('drag-over');
+          }});
+          item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+          item.addEventListener('drop', event => {{
+            event.preventDefault();
+            const sourceId = draggedLayerId || event.dataTransfer?.getData('text/plain');
+            item.classList.remove('drag-over');
+            if (sourceId) reorderLayer(sourceId, id);
+            draggedLayerId = null;
+          }});
+          handle?.addEventListener('dragend', () => {{
+            draggedLayerId = null;
+            item.classList.remove('dragging', 'drag-over');
+          }});
+        }}
         item.addEventListener('click', event => {{
           if (event.target.closest('[data-action]')) return;
           setActiveLayer(id);
@@ -9476,6 +9803,7 @@ def render_html(
           }});
         }}
       }});
+      syncLayerOrderToMap();
     }}
 
     function setActiveLayer(id, options = {{}}) {{
@@ -9645,11 +9973,13 @@ def render_html(
       else startRectangleAoiMode();
     }}
     function updateAoi(aoi, options = {{ persist: true }}) {{
+      const hadAoi = hasAoi();
       const normalized = normalizeAoi(aoi);
       if (!normalized) return false;
       STATE.aoi = normalized;
       STATE.bounds = normalized.bounds;
       STATE.aoiShown = true;
+      if (!hadAoi) placeOperationalLayer(AOI_LAYER_ID, 'front');
       renderAoiLayer();
       renderLayers();
       setActiveLayer(AOI_LAYER_ID, {{ reveal: false }});
@@ -9831,7 +10161,10 @@ def render_html(
 
     function renderMeasurements() {{
       measureLayer.clearLayers();
-      if (STATE.measurementsShown === false) return;
+      if (STATE.measurementsShown === false) {{
+        syncLayerOrderToMap();
+        return;
+      }}
       const opacity = normalizeMeasurementsOpacity(STATE.measurementsOpacity);
       (STATE.measurements || []).forEach(item => {{
         const start = L.latLng(item.start[0], item.start[1]);
@@ -9856,8 +10189,20 @@ def render_html(
           }}).addTo(measureLayer);
         }});
       }});
+      syncLayerOrderToMap();
+    }}
+    function renderMeasureDraft() {{
+      measureDraftLayer.clearLayers();
+      measurePoints.forEach(point => L.circleMarker(point, {{
+        radius: 4,
+        color: '#16734d',
+        fillColor: '#16734d',
+        fillOpacity: 1,
+        weight: 2,
+      }}).addTo(measureDraftLayer));
     }}
     function saveMeasurement(start, end) {{
+      const hadMeasurements = hasMeasurements();
       const meters = distanceMeters(start, end);
       const row = {{
         id: `measure-${{Date.now().toString(36)}}-${{Math.random().toString(36).slice(2, 7)}}`,
@@ -9869,24 +10214,60 @@ def render_html(
       }};
       STATE.measurements.push(row);
       STATE.measurementsShown = true;
+      measurementLayerNotice = true;
+      if (!hadMeasurements) placeOperationalLayer(MEASUREMENTS_LAYER_ID, 'front');
       persistMeasurements();
       renderMeasurements();
       const summary = measurementSummary();
       renderLayers();
       setActiveLayer(MEASUREMENTS_LAYER_ID, {{ reveal: false }});
+      revealActiveBadge(4200);
+      syncToolState();
       showModeKey('mode.measureSaved', {{ distance: row.lengthLabel, count: summary.count, mean: summary.meanLabel }}, true);
       logMsg('log.measureSummary', {{ count: summary.count, mean: summary.meanLabel }});
       syncSessionState('measurement');
       return row;
     }}
+    function undoLastMeasurement() {{
+      if (measurePoints.length) {{
+        measurePoints.pop();
+        renderMeasureDraft();
+        showModeKey('mode.measureUndoDraft', {{}}, true);
+        syncToolState();
+        return true;
+      }}
+      if (!Array.isArray(STATE.measurements) || !STATE.measurements.length) {{
+        showModeKey('mode.measureUndoEmpty', {{}}, true);
+        syncToolState();
+        return false;
+      }}
+      const row = STATE.measurements.pop();
+      persistMeasurements();
+      renderMeasurements();
+      measurementLayerNotice = STATE.measurements.length > 0;
+      renderLayers();
+      if (STATE.measurements.length) {{
+        setActiveLayer(MEASUREMENTS_LAYER_ID, {{ reveal: false }});
+      }} else if (activeLayerId === MEASUREMENTS_LAYER_ID) {{
+        setActiveLayer(aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || PRIMARY_BASEMAP_LAYER_ID, {{ reveal: false }});
+      }}
+      const distance = row?.lengthLabel || formatDistance(row?.lengthMeters || 0);
+      showModeKey('mode.measureUndoSaved', {{ distance }}, true);
+      logMsg('log.measureUndo', {{ distance }});
+      syncToolState();
+      syncSessionState('measurement-undo');
+      return true;
+    }}
     function clearMeasurements() {{
       const count = Array.isArray(STATE.measurements) ? STATE.measurements.length : 0;
       STATE.measurements = [];
+      removeOperationalLayerOrder(MEASUREMENTS_LAYER_ID);
       persistMeasurements();
       measureLayer.clearLayers();
       measureDraftLayer.clearLayers();
       measurePoints = [];
       measureMode = false;
+      measurementLayerNotice = false;
       syncToolState();
       renderLayers();
       if (activeLayerId === MEASUREMENTS_LAYER_ID) setActiveLayer(aoiLayerModel()?.id || STATE.layers.find(item => item.shown)?.id || STATE.layers[0]?.id || PRIMARY_BASEMAP_LAYER_ID, {{ reveal: false }});
@@ -10056,6 +10437,7 @@ def render_html(
         uploads: (STATE.uploads || []).map(item => normalizeUploadRecord(item)).filter(Boolean),
         quota: STATE.quota,
         tasks: STATE.tasks.map(item => ({{ ...item }})),
+        layerOrder: [...normalizedOperationalLayerOrder(operationalLayerOrder)],
         layers: STATE.layers.map(layer => ({{
           id: layer.id,
           name: layer.name,
@@ -10392,15 +10774,10 @@ def render_html(
     }}
     function handleMeasureClick(event) {{
       measurePoints.push(event.latlng);
-      L.circleMarker(event.latlng, {{
-        radius: 4,
-        color: '#16734d',
-        fillColor: '#16734d',
-        fillOpacity: 1,
-        weight: 2,
-      }}).addTo(measureDraftLayer);
+      renderMeasureDraft();
       if (measurePoints.length === 1) {{
         showModeKey('mode.measureEndpoint', {{}}, true);
+        syncToolState();
         return true;
       }}
       const [start, end] = measurePoints;
@@ -10408,10 +10785,12 @@ def render_html(
       measureDraftLayer.clearLayers();
       logMsg('log.measured', {{ distance: row.lengthLabel }});
       measurePoints = [];
+      syncToolState();
       return true;
     }}
     $('draw-aoi-btn').addEventListener('click', event => toggleDrawAoiMode(event.shiftKey));
     $('measure-btn').addEventListener('click', toggleMeasureMode);
+    $('measure-undo-btn').addEventListener('click', undoLastMeasurement);
     async function copyProjectState() {{
       const text = JSON.stringify(buildProjectState(), null, 2);
       try {{
@@ -10456,7 +10835,9 @@ def render_html(
         bottom.classList.remove('open');
         renderUploads();
       }} else if (which === 'layers') {{
-        layers.classList.toggle('open');
+        const opening = !layers.classList.contains('open');
+        layers.classList.toggle('open', opening);
+        if (opening) measurementLayerNotice = false;
         data.classList.remove('open');
         upload.classList.remove('open');
         right.classList.remove('open');
