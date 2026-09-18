@@ -123,12 +123,18 @@ def export_root() -> Path | None:
     return Path(str(explicit)).expanduser() if explicit else None
 
 
+LEGACY_WINDOWS_GCLOUD_ROOT = Path(r"D:\Dev\tools\google-cloud-sdk")
+
+
 def gcloud_root() -> Path:
     """Fixed install root for EasyGEE's managed Google Cloud CLI."""
-    explicit = os.environ.get("EASYGEE_GCLOUD_ROOT")
+    explicit = os.environ.get("EASYGEE_GCLOUD_ROOT") or load_settings().get("gcloudRoot")
     if explicit:
-        return Path(explicit).expanduser()
+        return Path(str(explicit)).expanduser()
     if os.name == "nt":
+        # Keep finding installs made at the pre-0.5 default location.
+        if (LEGACY_WINDOWS_GCLOUD_ROOT / "bin" / "gcloud.cmd").exists():
+            return LEGACY_WINDOWS_GCLOUD_ROOT
         return local_app_data_root() / "tools" / "google-cloud-sdk"
     return Path("~/.local/share/easygee/google-cloud-sdk").expanduser()
 

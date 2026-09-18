@@ -24,7 +24,9 @@
   variables still find the right interpreter.
 - Workspace, cache, and gcloud locations resolve from `EASYGEE_WORKSPACE`,
   `EASYGEE_CACHE_DIR`, `EASYGEE_GCLOUD_ROOT` or settings.json, with defaults
-  under the EasyGEE user directory instead of fixed `D:` paths.
+  under the EasyGEE user directory instead of fixed `D:` paths. An existing
+  gcloud install at the previous Windows default (`D:\Dev\tools\google-cloud-sdk`)
+  is still found.
 - `skills/easygee/SKILL.md` is now a short router (33 KB → 7 KB); detailed
   guidance moved verbatim into `references/`.
 - GeoMaster and GEE Growth Diary moved to `extras/` and are read on demand by
