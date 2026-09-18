@@ -8,7 +8,8 @@
   Python environment, records it as `pythonPath` in settings.json, and
   registers EasyGEE with Codex, Claude Code, Qoder, or any `--skills-dir`;
   `--print-mcp-config` for other MCP clients, `--uninstall`/`--purge`,
-  `--dry-run`.
+  `--dry-run`. Re-running it refreshes each host's cached copy, including
+  when the version number has not changed.
 - `.claude-plugin/marketplace.json` so Claude Code can install from a local
   checkout; Claude's manifest declares the MCP server with
   `${CLAUDE_PLUGIN_ROOT}`.

@@ -40,12 +40,13 @@ def step(message: str) -> None:
     print(f"==> {message}", flush=True)
 
 
-def run(command: list[str], *, check: bool = True) -> int:
+def run(command: list[str], *, check: bool = True, quiet: bool = False) -> int:
     print("    $ " + subprocess.list2cmdline(command), flush=True)
     if DRY_RUN:
         return 0
     # npm-installed CLIs are .cmd shims on Windows; resolve them explicitly.
-    code = subprocess.call([shutil.which(command[0]) or command[0], *command[1:]])
+    output = subprocess.DEVNULL if quiet else None
+    code = subprocess.call([shutil.which(command[0]) or command[0], *command[1:]], stdout=output, stderr=output)
     if check and code != 0:
         raise SystemExit(f"command failed with exit code {code}: {command[0]}")
     return code
@@ -135,6 +136,8 @@ def install_codex() -> None:
     write_json(CODEX_MARKETPLACE, marketplace)
     if CODEX_VALIDATOR.exists():
         run([sys.executable, str(CODEX_VALIDATOR), str(ROOT)])
+    # Hosts cache a copy per version; remove first so re-running refreshes it.
+    run(["codex", "plugin", "remove", f"{PLUGIN}@{marketplace['name']}"], check=False, quiet=True)
     run(["codex", "plugin", "add", f"{PLUGIN}@{marketplace['name']}"])
 
 
@@ -153,6 +156,8 @@ def uninstall_codex() -> None:
 
 def install_claude() -> None:
     step("Registering with Claude Code")
+    run(["claude", "plugin", "uninstall", f"{PLUGIN}@{PLUGIN}"], check=False, quiet=True)
+    run(["claude", "plugin", "marketplace", "remove", PLUGIN], check=False, quiet=True)
     run(["claude", "plugin", "marketplace", "add", str(ROOT)])
     run(["claude", "plugin", "install", f"{PLUGIN}@{PLUGIN}"])
 
